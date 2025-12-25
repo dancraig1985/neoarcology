@@ -1,6 +1,6 @@
 # PLAN-001: Agent Slice of Life
 
-**Status:** planned
+**Status:** in-progress
 **Priority:** P0 (critical)
 **Dependencies:** PLAN-000
 **Phase:** 1a
@@ -34,15 +34,21 @@ Agent wakes up → Goes about their day → Eats (consumes provisions) → Rests
 - [ ] Designers can tweak without code changes
 
 ```json
-// data/config/balance.json (example)
+// data/config/balance.json - Designer-tunable gameplay parameters
 {
   "agent": {
     "hungerPerPhase": 0.89,
     "hungerThreshold": 25,
     "hungerMax": 100,
-    "provisionsPerMeal": 1
+    "provisionsPerMeal": 1,
+    "startingHungerMin": 0,
+    "startingHungerMax": 24,
+    "startingProvisionsMin": 4,
+    "startingProvisionsMax": 8
   }
 }
+
+// Time structure stays in data/config/simulation.json (not balance)
 ```
 
 ### Agent Needs System

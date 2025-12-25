@@ -28,6 +28,25 @@ export interface SimulationConfig {
 }
 
 /**
+ * Balance configuration from data/config/balance.json
+ * Designer-tunable parameters for game mechanics
+ */
+export interface BalanceConfig {
+  agent: {
+    hungerPerPhase: number;
+    hungerThreshold: number;
+    hungerMax: number;
+    provisionsPerMeal: number;
+    startingHungerMin: number;
+    startingHungerMax: number;
+    startingCreditsMin: number;
+    startingCreditsMax: number;
+    startingProvisionsMin: number;
+    startingProvisionsMax: number;
+  };
+}
+
+/**
  * Entity template loaded from data/templates/
  */
 export interface EntityTemplate {
@@ -44,6 +63,7 @@ export interface EntityTemplate {
  */
 export interface LoadedConfig {
   simulation: SimulationConfig;
+  balance: BalanceConfig;
   templates: {
     orgs: EntityTemplate[];
     agents: EntityTemplate[];
@@ -60,7 +80,12 @@ export async function loadConfig(): Promise<LoadedConfig> {
   // Load simulation config
   const simulationResponse = await fetch('/data/config/simulation.json');
   const simulation = (await simulationResponse.json()) as SimulationConfig;
-  console.log('[ConfigLoader] Loaded simulation config:', simulation);
+  console.log('[ConfigLoader] Loaded simulation config');
+
+  // Load balance config
+  const balanceResponse = await fetch('/data/config/balance.json');
+  const balance = (await balanceResponse.json()) as BalanceConfig;
+  console.log('[ConfigLoader] Loaded balance config');
 
   // Load templates
   const orgTemplates = await loadTemplates('/data/templates/orgs');
@@ -73,6 +98,7 @@ export async function loadConfig(): Promise<LoadedConfig> {
 
   return {
     simulation,
+    balance,
     templates: {
       orgs: orgTemplates,
       agents: agentTemplates,

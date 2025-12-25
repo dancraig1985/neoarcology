@@ -1,0 +1,14 @@
+{
+  "agent": {
+    "hungerPerPhase": 0.89,
+    "hungerThreshold": 25,
+    "hungerMax": 100,
+    "provisionsPerMeal": 1,
+    "startingHungerMin": 0,
+    "startingHungerMax": 24,
+    "startingCreditsMin": 100,
+    "startingCreditsMax": 500,
+    "startingProvisionsMin": 4,
+    "startingProvisionsMax": 8
+  }
+}

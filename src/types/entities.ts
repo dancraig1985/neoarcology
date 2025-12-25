@@ -51,6 +51,21 @@ export interface AgentStats {
 }
 
 /**
+ * Agent Needs - survival requirements
+ */
+export interface AgentNeeds {
+  hunger: number; // 0-100, 100 = death by starvation
+  // Future: energy, health, etc.
+}
+
+/**
+ * Agent Inventory - goods held personally
+ */
+export interface AgentInventory {
+  [goodsCategory: string]: number; // e.g., { provisions: 5 }
+}
+
+/**
  * Agent - Individual actors in the simulation
  * Agents are the atomic unit - orgs don't think, their leaders do
  */
@@ -59,6 +74,12 @@ export interface Agent extends Entity {
   age: number; // In phases
 
   stats: AgentStats;
+
+  // Survival needs
+  needs: AgentNeeds;
+
+  // Personal inventory (goods held)
+  inventory: AgentInventory;
 
   // Employment
   employer?: OrgRef;
