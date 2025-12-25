@@ -13,6 +13,62 @@
 
 The city simulation is the **primary artifact**. It runs whether a player is watching or not. Every entity has autonomous behavior driven by goals, resources, and relationships.
 
+### MVP Foundation (Keep It Simple)
+
+The simulation is built on **four simple pillars**:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        MVP FOUNDATION                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  1. TAGS           Everything classified by tags, not hardcoded     │
+│                    types. Add new "types" via data files.           │
+│                                                                      │
+│  2. WALLETS        Credits flow between entities. Simple in/out.    │
+│                    Agents have wallets. Orgs have wallets.          │
+│                                                                      │
+│  3. STATS + RNG    6 agent stats determine task outcomes.           │
+│                    stat + roll = success/failure. That's it.        │
+│                                                                      │
+│  4. LOCATIONS      Everything physical exists at a location.        │
+│                    Goods, data storage, agents. Attack the          │
+│                    location to get the stuff.                       │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Behaviors require code; types don't.**
+- Adding a tag behavior (e.g., "what happens when something is 'violent'") = code
+- Adding a new entity template that uses existing tags = just data
+- Most variety comes from combining existing behaviors via tags
+
+**~16 goods categories, not 1000 items.**
+- Broad categories: small_arms, narcotics, data_storage, etc.
+- Inventory is quantity per category, not individual items
+- Differentiates orgs by what they stock without Rimworld complexity
+
+**Tangible at locations, non-tangible on data_storage.**
+- Physical goods stored at locations (can be raided)
+- Secrets/intel stored on data_storage goods (which are at locations)
+- Want the data? Steal the storage device. Cyberpunk.
+
+### Agents Drive Everything
+
+**Agents are the atomic unit of the simulation.** Organizations don't think—their leaders do. When we say "the Yakuza decided to attack," what actually happens is:
+
+1. The Yakuza's leader evaluates their personal goals + org situation
+2. Leadership council members may advise or dissent
+3. The leader makes a decision based on their personality
+4. Agents execute (or subvert) that decision
+
+This means:
+- A cautious leader makes cautious org decisions
+- A greedy lieutenant might embezzle org funds
+- A disloyal agent might leak mission details to enemies
+- Ambitious agents can found new organizations
+- Org culture emerges from agent personalities, not the other way around
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     NEOARCOLOGY ARCHITECTURE                     │
@@ -72,34 +128,49 @@ PHASE = Basic unit of simulation time
 
 ### Tick Processing Order
 
-Each phase tick processes in this order:
+Each phase tick processes in this order (agent-first):
 
 ```
-1. AGENT TICK
+1. AGENT TICK (Primary Driver)
    └─> Each agent processes their current action
    └─> Agents on missions contribute progress
    └─> Agents heal, age, gain experience
-   └─> Unemployed agents seek work
+   └─> Agent-to-agent interactions resolve
+   └─> Unemployed agents seek work or found orgs
+   └─> Personal goals evaluated and pursued
 
-2. ORGANIZATION TICK
-   └─> Each org processes income/expenses
-   └─> Orgs generate new missions based on goals
-   └─> Orgs recruit agents if needed
-   └─> Orgs evaluate mission results
-   └─> Power/influence calculations
+2. ENCOUNTER TICK
+   └─> Check for agent proximity at locations
+   └─> Mission collisions detected
+   └─> Confrontations resolved (combat/social/tech)
+   └─> Relationship changes applied
 
-3. MISSION TICK
-   └─> Active missions progress
+3. LEADERSHIP TICK (Org decisions via agents)
+   └─> Leaders evaluate org + personal goals
+   └─> Leadership council consulted (per decisionStyle)
+   └─> Missions generated based on leader decisions
+   └─> Agent assignments made by leader
+   └─> Internal politics processed (challenges, betrayals)
+
+4. MISSION TICK
+   └─> Active missions progress (team dynamics applied)
    └─> Missions resolve (success/failure)
-   └─> Rewards/penalties distributed
+   └─> Rewards/penalties distributed to agents AND orgs
 
-4. LOCATION TICK
+5. ECONOMY TICK
+   └─> Org income/expenses processed
+   └─> Agent salaries paid
+   └─> Personal wealth updated
+   └─> Business deals executed
+
+6. LOCATION TICK
    └─> Location ownership changes
    └─> Location income generated
    └─> Location security updates
+   └─> Agent presence tracked
 
-5. WORLD TICK
-   └─> Random events
+7. WORLD TICK
+   └─> Random events (affect agents, ripple to orgs)
    └─> Day/Week/Month/Year rollovers
    └─> Global stat updates
    └─> Activity log finalization
@@ -109,24 +180,282 @@ Each phase tick processes in this order:
 
 ## Entity System
 
-All simulation entities share a common base:
+### Tags Over Types
+
+Instead of hardcoded types (OrgType, LocationType, MissionType), entities use **tags**. Tags are strings defined in data files, and behaviors are attached to tags.
 
 ```typescript
+// BAD: Hardcoded types requiring code changes
+type OrgType = "corporation" | "gang" | "syndicate";  // Adding new type = code change
+
+// GOOD: Tag-based system, fully data-driven
 interface Entity {
   id: string;
   name: string;
-  created: number;        // Phase when created
-  destroyed?: number;     // Phase when destroyed (if applicable)
-  tags: string[];
+  template: string;           // "gang", "corporation" - but just a string, not an enum
+  tags: string[];             // ["criminal", "violent", "territorial", "street-level"]
+  created: number;
+  destroyed?: number;
   relationships: Relationship[];
 }
+```
 
+**Why tags?**
+- Adding a new "type" = adding a new template JSON file
+- Behaviors attach to tags, not types
+- Entities can have multiple overlapping behaviors
+- Designers can experiment without code changes
+
+### Template System
+
+Templates are JSON files that define defaults for entity creation:
+
+```typescript
+// Templates are DATA, not CODE
+interface EntityTemplate {
+  id: string;                    // "gang", "corporation", etc.
+  name: string;                  // Display name
+  description: string;
+
+  // What tags entities of this template get
+  tags: string[];
+
+  // Default values (all overridable)
+  defaults: Record<string, any>;
+
+  // Constraints (for validation)
+  constraints?: Record<string, Constraint>;
+}
+
+// The simulation doesn't know about "gangs" or "corporations"
+// It only knows about entities with tags and behaviors
+```
+
+### Behavior System
+
+Behaviors are attached to **tags**, not types:
+
+```typescript
+interface Behavior {
+  id: string;
+  name: string;
+
+  // Which tags trigger this behavior
+  triggerTags: string[];         // e.g., ["violent"] or ["criminal", "territorial"]
+  matchMode: "any" | "all";      // Any tag matches, or all tags required
+
+  // What the behavior does
+  type: "modifier" | "action" | "reaction" | "constraint";
+
+  // Behavior-specific config
+  config: Record<string, any>;
+}
+
+// Example behaviors in data/behaviors/*.json:
+const EXAMPLE_BEHAVIORS = {
+  aggressive_expansion: {
+    triggerTags: ["territorial"],
+    matchMode: "any",
+    type: "modifier",
+    config: {
+      missionPreference: { raid: 1.5, negotiate: 0.5 },
+      goalWeight: { expand_territory: 2.0 }
+    }
+  },
+
+  heat_averse: {
+    triggerTags: ["legitimate"],
+    matchMode: "any",
+    type: "constraint",
+    config: {
+      maxHeat: 30,
+      heatReductionPriority: 2.0
+    }
+  },
+
+  violent_confrontation: {
+    triggerTags: ["violent"],
+    matchMode: "any",
+    type: "reaction",
+    config: {
+      confrontationType: "combat",
+      escalationThreshold: 0.3
+    }
+  }
+};
+```
+
+### How It Works in Practice
+
+```
+DESIGNER WANTS TO ADD: "Techno-Cult" organization type
+
+OLD WAY (type-based):
+1. Add "techno_cult" to OrgType enum in code
+2. Add behavior weights in code
+3. Add location preferences in code
+4. Rebuild and deploy
+5. Hope you didn't break anything
+
+NEW WAY (tag-based):
+1. Create data/templates/orgs/techno_cult.json:
+   {
+     "id": "techno_cult",
+     "name": "Techno-Cult",
+     "tags": ["criminal", "ideological", "tech-focused", "secretive"],
+     "defaults": {
+       "decisionStyle": "consensus",
+       "startingCredits": { "min": 10000, "max": 30000 }
+     }
+   }
+2. Existing behaviors already apply:
+   - "criminal" tag → existing criminal behaviors
+   - "ideological" tag → existing loyalty/fanaticism behaviors
+   - "tech-focused" tag → existing tech preference behaviors
+3. Optionally add new behaviors specific to this combo
+4. Reload config, generate new world, see how it plays
+
+NO CODE CHANGES REQUIRED.
+```
+
+### Relationship Types Are Also Tags
+
+```typescript
 interface Relationship {
   targetId: string;
-  type: RelationType;     // "employer", "enemy", "ally", "owns", etc.
-  strength: number;       // -100 (hatred) to +100 (loyalty)
-  since: number;          // Phase when established
+  tags: string[];              // ["employer", "trusted"] or ["enemy", "blood-feud"]
+  strength: number;            // -100 to +100
+  since: number;
 }
+
+// Relationship behaviors trigger on relationship tags
+// e.g., "blood-feud" tag might prevent any negotiation
+// e.g., "mentor" tag might boost skill growth
+```
+
+### Tag Registry
+
+Designers manage all tags in a central registry:
+
+```json
+// data/registry/tags.json
+{
+  "organization": {
+    "structure": ["hierarchical", "flat", "cellular", "networked"],
+    "legality": ["legitimate", "criminal", "gray-market"],
+    "methods": ["violent", "diplomatic", "technical", "economic"],
+    "focus": ["territorial", "ideological", "profit-driven", "service-based"],
+    "scale": ["street-level", "city-wide", "regional", "global"]
+  },
+  "agent": {
+    "role": ["combat", "tech", "social", "support", "leadership"],
+    "background": ["military", "corporate", "street", "academic", "government"],
+    "traits": ["loyal", "ambitious", "cautious", "reckless", "greedy"]
+  },
+  "location": {
+    "function": ["income", "storage", "operations", "residence", "front"],
+    "security": ["fortified", "hidden", "public", "monitored"],
+    "legality": ["legal", "questionable", "illegal"]
+  },
+  "mission": {
+    "approach": ["violent", "stealth", "social", "technical"],
+    "risk": ["low-risk", "moderate-risk", "high-risk", "suicide-mission"],
+    "duration": ["quick", "extended", "ongoing"]
+  },
+  "relationship": {
+    "professional": ["employer", "employee", "contractor", "partner"],
+    "personal": ["friend", "rival", "mentor", "family"],
+    "adversarial": ["enemy", "target", "blood-feud"]
+  }
+}
+```
+
+### Designer Tools for Tags
+
+```typescript
+interface TagManager {
+  // Browse all tags
+  listTags(category?: string): Tag[];
+
+  // See what behaviors a tag triggers
+  getBehaviorsForTag(tag: string): Behavior[];
+
+  // See all entities with a tag
+  getEntitiesWithTag(tag: string): Entity[];
+
+  // Add a new tag (just data, no code)
+  addTag(category: string, tag: string, description: string): void;
+
+  // Deprecate a tag (warn if used, suggest replacement)
+  deprecateTag(tag: string, replacement?: string): void;
+
+  // Analyze tag usage
+  getTagStats(): TagUsageReport;
+}
+
+// Example: "What happens if I tag an org as 'violent'?"
+tagManager.getBehaviorsForTag("violent");
+// Returns:
+// - violent_confrontation: Prefers combat over negotiation
+// - aggressive_response: Retaliates against slights
+// - intimidation_bonus: +20% to extortion missions
+// - heat_generation: +50% heat from all activities
+```
+
+### Composable Behaviors
+
+The power of tags is **composition**. An entity's behavior emerges from its tag combination:
+
+```
+Gang "Black Dragons":
+  tags: ["criminal", "violent", "territorial", "street-level"]
+
+Behaviors applied:
+  From "criminal":     → Cannot use legal income streams, attracts heat
+  From "violent":      → Prefers combat, intimidation bonus
+  From "territorial":  → Prioritizes location control, aggressive expansion
+  From "street-level": → Lower resources, faster recruitment, local knowledge
+
+These combine to create emergent "gang behavior" without hardcoding "gang" anywhere.
+```
+
+```
+Corporation "NeoSynth":
+  tags: ["legitimate", "hierarchical", "profit-driven", "technical"]
+
+Behaviors applied:
+  From "legitimate":    → Legal income only, low heat tolerance
+  From "hierarchical":  → Clear chain of command, slower decisions
+  From "profit-driven": → Prioritizes wealth goals
+  From "technical":     → Research bonuses, tech mission preference
+
+These combine to create emergent "corp behavior" without hardcoding "corporation".
+```
+
+### Removing/Changing Types
+
+```
+DESIGNER WANTS TO: Split "gang" into "street gang" and "biker gang"
+
+1. Create two new templates:
+   data/templates/orgs/street_gang.json
+   data/templates/orgs/biker_gang.json
+
+2. Give them different tag combinations:
+   street_gang: ["criminal", "violent", "territorial", "street-level", "urban"]
+   biker_gang: ["criminal", "violent", "territorial", "mobile", "rural-capable"]
+
+3. Optionally add new behaviors for new tags:
+   "mobile": Vehicle bonuses, can relocate easily
+   "urban": City navigation bonus, public transit access
+
+4. Deprecate old template (optional):
+   Set "gang" template to deprecated, suggest replacements
+
+5. Existing "gang" entities keep working
+   New generation uses new templates
+
+NO MIGRATION REQUIRED. Old and new coexist.
 ```
 
 ---
@@ -135,11 +464,18 @@ interface Relationship {
 
 ### 1. Organizations
 
-The **most important entity**. Organizations drive the simulation.
+Organizations are **emergent structures** created and run by agents. They provide:
+- Shared resources (credits, locations, equipment)
+- Collective identity and reputation
+- Hierarchical command structure
+- Legal/illegal cover for activities
+
+**Key insight**: An org's "behavior" is actually its leader's behavior, modified by leadership dynamics and the org's tags.
 
 ```typescript
 interface Organization extends Entity {
-  type: OrgType;
+  // template: string (inherited from Entity) - e.g., "gang", "corporation"
+  // tags: string[] (inherited) - e.g., ["criminal", "violent", "territorial"]
 
   // Resources
   resources: {
@@ -159,29 +495,29 @@ interface Organization extends Entity {
   vehicles: VehicleRef[];
   locations: LocationRef[]; // Owned/controlled locations
 
-  // Behavior
-  goals: OrgGoal[];       // What the org is trying to achieve
-  enemies: OrgRef[];
+  // Behavior (derived from leadership)
+  goals: OrgGoal[];       // Set by leader, may conflict with agent goals
+  enemies: OrgRef[];      // Org-level enmity (agents may have personal enemies)
   allies: OrgRef[];
 
   // Economics
   income: IncomeSource[];
   expenses: Expense[];
 
-  // AI (replaced by player in control modes)
-  ai: OrgAI;
+  // Decision Making is determined by tags, not a separate field
+  // e.g., tags might include "autocratic" or "council-led" or "consensus-driven"
 }
 
-type OrgType =
-  | "corporation"      // Legal business, high resources, low heat tolerance
-  | "gang"             // Street-level, violent, territorial
-  | "government"       // Law enforcement, regulation, legitimate force
-  | "syndicate"        // Organized crime, balanced
-  | "fixer_crew"       // Mission runners, player-style orgs
-  | "cult"             // Ideology-driven, fanatical members
-  | "mercenary"        // For-hire, neutral
-  | "media"            // Information brokers, low violence
-  | "underground";     // Hidden, hackers, info traders
+// NOTE: Everything is tags. Templates like "gang", "corporation" are defined
+// in data/templates/orgs/ and specify which tags the org gets.
+//
+// Decision style tags (org picks one):
+//   "autocratic"      - Leader decides alone
+//   "council-led"     - Leadership votes
+//   "consensus-driven" - All leadership must agree
+//   "democratic"      - All members vote
+//
+// These are just tags with attached behaviors, not special enums.
 
 interface OrgGoal {
   type: GoalType;
@@ -201,83 +537,178 @@ type GoalType =
   | "complete_mission_chain"; // Win condition for fixer mode
 ```
 
-### Organization Behavior (AI)
+### Organization Behavior (Leader Tags + Org Tags)
 
-Each org type has default behavioral weights:
+Org behavior emerges from **combining leader agent tags with org tags**:
 
-| Org Type | Aggression | Risk Tolerance | Expansion | Loyalty Focus |
-|----------|------------|----------------|-----------|---------------|
-| Corporation | Low | Low | High | Medium |
-| Gang | High | High | Medium | Low |
-| Government | Medium | Low | Low | High |
-| Syndicate | Medium | Medium | High | Medium |
-| Fixer Crew | Low | High | Low | High |
-| Cult | High | Very High | Medium | Very High |
-| Mercenary | Medium | High | Low | Low |
+```
+EFFECTIVE BEHAVIOR = Leader Agent Tags + Org Tags
+```
+
+**Org Tags** (what the organization is):
+| Tag | Effect |
+|-----|--------|
+| `legitimate` | Legal income only, low heat tolerance |
+| `criminal` | Illegal income available, attracts heat |
+| `violent` | Combat missions available, intimidation bonus |
+| `territorial` | Prioritizes location control |
+| `tech-focused` | Research bonuses, cyber warfare |
+| `street-level` | Local knowledge, limited resources |
+
+**Leader Agent Tags** (who is running it):
+| Tag | Effect on Decisions |
+|-----|---------------------|
+| `aggressive` | +weight to violent missions, faster escalation |
+| `cautious` | -weight to risky missions, more planning |
+| `greedy` | +weight to profit goals, may embezzle |
+| `ambitious` | +weight to expansion, may overreach |
+| `loyal` | Prioritizes org goals over personal |
+| `charismatic` | Better recruitment, alliance success |
+| `paranoid` | More security spending, suspects betrayal |
+| `ruthless` | Willing to sacrifice agents, no mercy |
+
+**How they combine:**
+
+```typescript
+// Leader with "aggressive" + Org with "violent"
+// → Very high combat preference, rapid escalation
+
+// Leader with "cautious" + Org with "violent"
+// → Still capable of violence, but picks battles carefully
+
+// Leader with "greedy" + Org with "legitimate"
+// → Looks for legal profit, but might cut corners
+
+// Leader with "greedy" + Org with "criminal"
+// → Goes for big scores, high risk tolerance
+```
+
+**The simulation calculates effective weights:**
+```typescript
+function getEffectiveBehavior(org: Organization, leader: Agent): BehaviorWeights {
+  const orgBehaviors = getBehaviorsForTags(org.tags);
+  const leaderBehaviors = getBehaviorsForTags(leader.tags);
+
+  // Merge: leader modifies org baseline
+  return mergeBehaviors(orgBehaviors, leaderBehaviors);
+}
+
+// Example output:
+// {
+//   missionPreference: { violent: 1.8, stealth: 0.9, social: 0.6 },
+//   riskTolerance: 0.7,
+//   expansionDrive: 1.2,
+//   loyaltyExpectation: 0.5
+// }
+```
+
+**Leadership changes = behavior changes.** When a new leader takes over, the org's effective behavior shifts based on who they are.
 
 ### Organization Infrastructure Preferences
 
-Each org type gravitates toward specific location types based on their operations:
+Location preferences are determined by **tag matching**, not hardcoded tables:
 
-| Org Type | Primary Locations | Secondary Locations | Avoids |
-|----------|-------------------|---------------------|--------|
-| **Corporation** | Office, Research Lab, Factory | Warehouse, Server Farm | Street Corner, Safehouse |
-| **Gang** | Street Corner, Safehouse, Nightclub | Warehouse, Chop Shop | Office, Research Lab |
-| **Government** | Government Building, Office | Precinct, Courthouse | Safehouse, Brothel |
-| **Syndicate** | Nightclub, Casino, Office | Warehouse, Safehouse, Docks | Government Building |
-| **Fixer Crew** | Safehouse, Garage, Bar | Warehouse, Apartment | Office, Factory |
-| **Cult** | Temple, Compound, Safehouse | Residence, Warehouse | Government, Corporate |
-| **Mercenary** | Armory, Barracks, Garage | Safehouse, Warehouse | Retail, Office |
-| **Media** | Office, Server Farm, Studio | Safehouse, Apartment | Factory, Warehouse |
-| **Underground** | Server Farm, Safehouse, Bunker | Warehouse, Apartment | Street Corner, Office |
-
-### Location Types by Category
-
-**Legitimate Front**:
-- Office, Retail, Restaurant, Nightclub, Casino, Factory
-
-**Criminal Operations**:
-- Safehouse, Warehouse, Chop Shop, Brothel, Drug Lab, Smuggling Dock
-
-**Technical Infrastructure**:
-- Server Farm, Research Lab, Workshop, Armory
-
-**Residential/Social**:
-- Apartment, Compound, Temple, Barracks
-
-**Government/Civic**:
-- Government Building, Precinct, Courthouse, Hospital
-
-**Organization Decision Loop** (each tick):
+```json
+// data/behaviors/location_preferences.json
+{
+  "legitimate_locations": {
+    "triggerTags": ["legitimate"],
+    "config": {
+      "preferred": ["office", "retail", "factory", "research-lab"],
+      "avoided": ["safehouse", "drug-lab", "chop-shop"],
+      "bonus": 1.2  // 20% efficiency bonus at preferred locations
+    }
+  },
+  "criminal_hideouts": {
+    "triggerTags": ["criminal"],
+    "config": {
+      "preferred": ["safehouse", "warehouse", "nightclub"],
+      "avoided": ["government-building", "precinct"],
+      "bonus": 1.2
+    }
+  },
+  "tech_infrastructure": {
+    "triggerTags": ["tech-focused"],
+    "config": {
+      "preferred": ["server-farm", "research-lab", "workshop"],
+      "bonus": 1.5  // Higher bonus for specialized infrastructure
+    }
+  },
+  "territorial_presence": {
+    "triggerTags": ["territorial"],
+    "config": {
+      "preferred": ["street-corner", "bar", "nightclub"],
+      "reason": "visible_presence"
+    }
+  }
+}
 ```
-1. Evaluate current goals
-2. Check resource levels
-3. Generate missions to achieve goals
+
+**Locations are also tag-based.** A location template might have:
+```json
+{
+  "id": "nightclub",
+  "tags": ["income", "front", "social", "public", "legal"],
+  "defaults": { "baseIncome": 500, "security": 20 }
+}
+```
+
+The simulation matches org tags to location tags for compatibility.
+
+**Organization Decision Loop** (each tick, driven by leader):
+```
+1. LEADER evaluates org goals vs personal goals
+   └─> Leader's personality affects priority weighting
+   └─> High-ambition leaders may prioritize personal gain
+
+2. LEADERSHIP COUNCIL consulted (based on decisionStyle)
+   └─> autocratic: Leader decides alone
+   └─> council: Lieutenants vote, leader breaks ties
+   └─> Dissenters may reduce execution quality or leak info
+
+3. Generate missions to achieve chosen goals
+   └─> Mission type influenced by leader's preferred stats
+   └─> Aggressive leaders favor combat missions
+
 4. Assign agents to missions
+   └─> Leader's relationships affect assignments
+   └─> Favorites get plum jobs, rivals get dangerous ones
+
 5. Process completed missions
+   └─> Success/failure affects leader's standing
+   └─> Repeated failures may trigger leadership challenges
+
 6. Update relationships based on events
+   └─> Leader tracks who succeeded/failed
+   └─> Grudges and favorites emerge
+
 7. Recruit if understaffed
-8. Adjust goals based on situation
+   └─> Leader's Social stat affects recruitment success
+
+8. Handle internal politics
+   └─> Ambitious lieutenants may scheme
+   └─> Low-loyalty agents may defect
+   └─> Leadership challenges if leader is weak/unpopular
 ```
 
 ### 2. Agents
 
-Individual actors in the simulation.
+Individual actors in the simulation. Agents have **stats** (capabilities) and **tags** (personality/traits).
 
 ```typescript
 interface Agent extends Entity {
-  // Status
-  status: AgentStatus;
+  // template: string (inherited) - e.g., "combat_specialist", "hacker", "executive"
+  // tags: string[] (inherited) - personality + role tags like ["aggressive", "greedy", "combat"]
+
+  // Status (could also be a tag, but kept as field for quick filtering)
+  status: string;         // "available", "employed", "on_mission", "wounded", etc.
   age: number;            // In phases (or years for display)
 
-  // Stats - two categories
+  // Stats - 6 numbers that determine task outcomes
   stats: {
-    // Operations stats (missions, combat, infiltration)
     force: number;        // Combat, intimidation, physical power
     mobility: number;     // Stealth, infiltration, agility, escape
     tech: number;         // Hacking, electronics, digital systems
-
-    // Enterprise stats (business, politics, development)
     social: number;       // Negotiation, leadership, manipulation
     business: number;     // Economics, trade, management, logistics
     engineering: number;  // Research, manufacturing, repair, construction
@@ -285,60 +716,63 @@ interface Agent extends Entity {
 
   // Employment
   employer?: OrgRef;
-  role?: string;          // "soldier", "hacker", "lieutenant", "accountant", etc.
   salary: number;
+
+  // Wallet (personal finances)
+  wallet: Wallet;
 
   // Current activity
   currentAction?: Action;
-  actionQueue: Action[];
 
-  // History
-  history: HistoryEntry[];
-
-  // AI
-  ai: AgentAI;
+  // Mood (simple numbers, not personality - personality is in tags)
+  morale: number;         // -100 to +100
 }
 ```
 
-**Agent Stat Categories**:
+**Stats** (capabilities - what they CAN do):
+| Stat | Used For |
+|------|----------|
+| Force | Combat, intimidation, physical tasks |
+| Mobility | Stealth, escape, infiltration |
+| Tech | Hacking, electronics, cyber |
+| Social | Negotiation, leadership, recruitment |
+| Business | Trade, economics, management |
+| Engineering | R&D, manufacturing, repair |
 
-| Category | Stats | Used For |
-|----------|-------|----------|
-| **Operations** | Force, Mobility, Tech | Heists, hits, infiltration, sabotage, extraction |
-| **Enterprise** | Social, Business, Engineering | Negotiation, trade, manufacturing, research, politics |
+**Tags** (personality - what they WANT to do, how they do it):
+| Tag | Effect on Agent Behavior |
+|-----|--------------------------|
+| `aggressive` | Prefers violent solutions, quick to fight |
+| `cautious` | Avoids risk, plans carefully |
+| `greedy` | Prioritizes money, may steal from employer |
+| `ambitious` | Wants advancement, may scheme for leadership |
+| `loyal` | Sticks with employer, resists bribes |
+| `reckless` | Takes big risks, ignores danger |
+| `paranoid` | Suspects everyone, hard to recruit |
+| `charismatic` | Influences others, good at recruitment |
+| `ruthless` | No moral limits, will do anything |
+| `idealistic` | Driven by beliefs, may refuse certain jobs |
 
-**Stat Details**:
-- **Force**: Combat, intimidation, physical confrontation, security
-- **Mobility**: Stealth, infiltration, escape, surveillance, agility
-- **Tech**: Hacking, electronics, digital systems, cyberware
-- **Social**: Negotiation, leadership, manipulation, diplomacy, recruitment
-- **Business**: Economics, trade, logistics, management, accounting
-- **Engineering**: R&D, manufacturing, repair, construction, vehicle/gear maintenance
+**Role tags** (what they specialize in):
+| Tag | Meaning |
+|-----|---------|
+| `combat` | Specialist in violence |
+| `infiltrator` | Specialist in stealth |
+| `hacker` | Specialist in tech |
+| `face` | Specialist in social |
+| `fixer` | Generalist, can do many things |
+| `leadership` | Can run an org or team |
 
-type AgentStatus =
-  | "available"    // Free agent, seeking work
-  | "employed"     // Working for an org
-  | "on_mission"   // Currently on a mission
-  | "wounded"      // Recovering
-  | "captured"     // Held by another org
-  | "dead"         // Deceased
-  | "retired";     // Left the life
+**Combining stats and tags:**
+```typescript
+// Agent with high Force stat + "aggressive" tag
+// → Very effective in combat AND prefers combat solutions
 
-interface AgentAI {
-  // Personality drives decisions
-  personality: {
-    greed: number;        // Money motivation
-    ambition: number;     // Power motivation
-    violence: number;     // Willingness to use force
-    loyalty: number;      // Stick with employer
-    survival: number;     // Self-preservation
-  };
+// Agent with high Force stat + "cautious" tag
+// → Very effective in combat BUT avoids fights unless necessary
 
-  // Current mood/state
-  morale: number;
-  fear: number;
-  satisfaction: number;
-}
+// Agent with low Force stat + "aggressive" tag
+// → Prefers fighting but not good at it (dangerous to self)
 ```
 
 **Agent Decision Loop** (when unemployed):
@@ -349,14 +783,346 @@ interface AgentAI {
 4. OR become freelance (take odd jobs)
 5. OR retire if old/wealthy enough
 6. OR turn to crime if desperate
+7. OR found own organization (if high ambition + resources)
+```
+
+### Agent Founding Organizations
+
+Agents can found new orgs if they have the right **tags** and **resources**:
+
+```typescript
+// Requirements defined in data, checked via tags
+interface OrgFoundingCheck {
+  // Must have these tags
+  requiredTags: ["ambitious", "leadership"];
+
+  // Must have minimum stats
+  minStats: { social: 40 };
+
+  // Must have resources
+  minCredits: 10000;
+
+  // Must be free
+  status: "available";
+
+  // Must have contacts (positive relationships)
+  minPositiveRelationships: 3;
+}
+
+// Different org templates may have different requirements (in data):
+// gang template: requiredTags includes "violent" or "street"
+// corp template: minStats.business >= 50
+// fixer_crew template: completedMissions >= 10
+```
+
+The new org inherits some tags from its founder's personality.
+
+---
+
+## Agent Interaction System
+
+Agents interact through multiple channels. Every interaction affects relationships and can trigger cascading effects.
+
+### Interaction Types
+
+```typescript
+type InteractionType =
+  // Cooperative
+  | "mission_teamwork"     // Working together on a mission
+  | "negotiation"          // Business deal, treaty, trade
+  | "mentorship"           // Senior teaching junior
+  | "collaboration"        // Joint research/project
+  | "social"               // Casual interaction at location
+
+  // Competitive
+  | "mission_opposition"   // On opposing sides of a mission
+  | "confrontation"        // Direct conflict (combat or social)
+  | "rivalry"              // Competing for same goal/position
+  | "negotiation_adversarial" // Hostile negotiation
+
+  // Hierarchical
+  | "command"              // Leader giving orders
+  | "report"               // Subordinate reporting to leader
+  | "recruitment"          // Trying to hire/poach agent
+  | "challenge"            // Challenging for leadership position
+
+  // Information
+  | "intel_share"          // Sharing information
+  | "intel_trade"          // Trading secrets
+  | "betrayal"             // Leaking info to enemies
+  | "deception";           // Lying in negotiation
+
+interface Interaction {
+  id: string;
+  phase: number;
+  type: InteractionType;
+  participants: AgentRef[];      // All agents involved
+  initiator: AgentRef;           // Who started it
+  location?: LocationRef;        // Where it happened
+  context?: MissionRef | OrgRef; // What prompted it
+
+  outcome: InteractionOutcome;
+  relationshipChanges: RelationshipDelta[];
+}
+
+interface InteractionOutcome {
+  success: boolean;              // Did initiator achieve their goal?
+  winner?: AgentRef;             // For competitive interactions
+  consequences: Consequence[];   // What happened as a result
+}
+```
+
+### Encounter System
+
+When agents are in proximity (same location, same mission, or through org business), encounters can occur:
+
+```typescript
+interface Encounter {
+  phase: number;
+  location: LocationRef;
+  agents: AgentRef[];
+  trigger: EncounterTrigger;
+  interactions: Interaction[];
+}
+
+type EncounterTrigger =
+  | "mission_collision"    // Opposing teams meet during mission
+  | "location_presence"    // Agents happen to be at same location
+  | "scheduled_meeting"    // Planned negotiation/trade
+  | "pursuit"              // One agent chasing another
+  | "ambush"               // Deliberate trap
+  | "random";              // Chance meeting
+
+// Example: Mission Collision
+// Agent team from Yakuza doing "theft" mission at NeoSynth warehouse
+// Agent team from NeoSynth doing "patrol" mission at same warehouse
+// → Encounter triggered with type "mission_collision"
+// → Confrontation interaction occurs
+// → Combat or social resolution based on agent stats/personality
+```
+
+### Mission Team Dynamics
+
+When multiple agents work together on a mission:
+
+```typescript
+interface MissionTeam {
+  members: AgentRef[];
+  teamLead: AgentRef;          // Highest-ranking or best Social
+
+  // Team dynamics affect mission success
+  dynamics: {
+    cohesion: number;          // Average mutual relationship strength
+    skillSynergy: number;      // How well skills complement
+    leadershipQuality: number; // Team lead's Social + relationships
+    conflictRisk: number;      // Chance of internal problems
+  };
+}
+
+// During mission execution:
+// - High cohesion → bonus to all rolls
+// - Low cohesion → chance of complications
+// - Negative relationships → may sabotage each other
+// - One agent may betray team if loyalty is low and reward is high
+```
+
+### Confrontation Resolution
+
+When agents directly oppose each other:
+
+```typescript
+interface Confrontation {
+  type: "combat" | "social" | "technical";
+  attackers: AgentRef[];
+  defenders: AgentRef[];
+
+  // Resolution based on confrontation type
+  combatResolution: {
+    attackerForce: number;      // Sum of Force stats + equipment
+    defenderForce: number;
+    environmentMod: number;     // Location security, terrain
+    // Winner determined by stat comparison + roll
+    // Losers may be: wounded, captured, killed, or flee
+  };
+
+  socialResolution: {
+    attackerSocial: number;     // Persuasion/Intimidation attempt
+    defenderSocial: number;     // Resistance
+    reputationMod: number;      // Known reputation affects leverage
+    // Winner determined by stat comparison + roll
+    // Loser may: concede, retreat, escalate to combat, or hold firm
+  };
+
+  technicalResolution: {
+    attackerTech: number;       // Hacking/counter-hacking
+    defenderTech: number;
+    systemDifficulty: number;   // Target system's security
+    // Winner gains/denies access
+    // Loser may: be traced, locked out, or data corrupted
+  };
+}
+```
+
+### Business Interactions
+
+Agents conduct business both for their org and personally:
+
+```typescript
+interface BusinessDeal {
+  parties: AgentRef[];           // Agents negotiating (may represent orgs)
+  representingOrgs?: OrgRef[];   // If acting on org's behalf
+
+  dealType:
+    | "trade"           // Exchange goods/services
+    | "contract"        // Ongoing arrangement
+    | "loan"            // Credit extended
+    | "alliance"        // Org-level agreement (requires authority)
+    | "bribe"           // Illicit payment for favor
+    | "extortion"       // Payment under duress
+    | "recruitment";    // Job offer
+
+  terms: {
+    creditFlow: number;          // Money changing hands
+    servicesExchanged: string[];
+    duration?: number;           // Phases (for ongoing deals)
+    penalties: PenaltyTerms;     // What happens on breach
+  };
+
+  // Negotiation uses Social stat
+  // High Business stat understands value better (won't get cheated)
+  // Personality affects willingness to accept terms
+  negotiationRounds: NegotiationRound[];
+  finalOutcome: "accepted" | "rejected" | "escalated";
+}
+```
+
+### Research & Collaboration
+
+Agents with high Engineering or Tech can collaborate on projects:
+
+```typescript
+interface ResearchProject {
+  id: string;
+  name: string;
+  type: "tech_development" | "intel_analysis" | "equipment_design" | "strategy_planning";
+
+  // Requirements
+  requiredSkills: {
+    engineering?: number;
+    tech?: number;
+    business?: number;  // For market research
+  };
+
+  // Team
+  leadResearcher: AgentRef;
+  collaborators: AgentRef[];
+
+  // Progress
+  progressRequired: number;
+  currentProgress: number;
+
+  // Each phase, collaborators contribute:
+  // progress += sum(relevant_stat * efficiency_modifier)
+  // Efficiency affected by:
+  // - Relationship between collaborators (friends work better together)
+  // - Location quality (research lab vs safehouse)
+  // - Interruptions (being on missions reduces contribution)
+
+  outcome?: ResearchOutcome;
+}
+
+// Collaboration can lead to:
+// - New equipment designs
+// - Intel on enemy organizations
+// - Improved processes (org efficiency bonuses)
+// - Personal bonds between researchers
+```
+
+### Relationship Evolution
+
+Relationships change through interactions:
+
+```typescript
+interface RelationshipDelta {
+  agent1: AgentRef;
+  agent2: AgentRef;
+  phase: number;
+
+  previousStrength: number;
+  newStrength: number;
+
+  cause: {
+    interaction: InteractionRef;
+    reason: RelationshipChangeReason;
+  };
+}
+
+type RelationshipChangeReason =
+  // Positive
+  | "mission_success_together"   // +5 to +15
+  | "saved_life"                 // +20 to +40
+  | "mentored"                   // +10 to +20
+  | "fair_deal"                  // +5 to +10
+  | "shared_enemy_defeated"      // +10 to +20
+  | "promoted_by"                // +15 to +25
+
+  // Negative
+  | "mission_failure_blamed"     // -10 to -30
+  | "betrayed"                   // -50 to -100
+  | "cheated_in_deal"            // -20 to -40
+  | "rival_for_position"         // -10 to -20
+  | "killed_friend"              // -40 to -80
+  | "demoted_by"                 // -15 to -25
+
+  // Decay
+  | "time_passed"                // Gradual drift toward neutral
+  | "no_contact";                // Faster drift if never interact
+
+// Strong relationships (>50) decay slowly
+// Weak relationships (<-50) can become permanent grudges
+// Neutral relationships (-20 to +20) are volatile
+```
+
+### Agent Personal Goals
+
+Agents have personal goals independent of their org:
+
+```typescript
+interface PersonalGoal {
+  type: PersonalGoalType;
+  priority: number;           // 1-100, affects decision weighting
+  target?: EntityRef;
+  progress: number;
+
+  // Goals may conflict with org goals
+  // High loyalty → suppress personal goals
+  // Low loyalty + high ambition → pursue personal goals
+}
+
+type PersonalGoalType =
+  | "wealth_accumulation"     // Save X credits personally
+  | "revenge"                 // Harm specific agent/org
+  | "protection"              // Keep specific agent/location safe
+  | "advancement"             // Rise in org hierarchy
+  | "independence"            // Leave org, go freelance
+  | "found_org"               // Start own organization
+  | "retire"                  // Leave the life safely
+  | "mastery"                 // Max out a specific stat
+  | "reputation"              // Become famous/infamous
+  | "romance"                 // Form bond with specific agent
+  | "family"                  // Protect family members (if any)
+  | "ideology";               // Advance a cause (for cult members, idealists)
 ```
 
 ### 3. Locations
 
-Physical places in the city.
+Physical places in the city. Like all entities, locations use **tags** instead of hardcoded types.
 
 ```typescript
 interface Location extends Entity {
+  // template: string (inherited) - e.g., "nightclub", "safehouse"
+  // tags: string[] (inherited) - e.g., ["income", "front", "social", "public"]
+
   // Position (no visual map, but logical positioning)
   sector: string;
   district: string;
@@ -365,9 +1131,8 @@ interface Location extends Entity {
     vertical: number;     // Building floor (0 = ground)
   };
 
-  // Properties
-  type: LocationType;
-  size: "tiny" | "small" | "medium" | "large" | "massive";
+  // Properties (from template defaults, can be overridden)
+  size: number;           // 1-5 scale, affects capacity
   security: number;       // 0-100
 
   // Ownership
@@ -379,7 +1144,7 @@ interface Location extends Entity {
   operatingCost: number;
 
   // Capacity
-  agentCapacity: number;  // How many agents can work here
+  agentCapacity: number;
   vehicleCapacity: number;
 
   // Current state
@@ -387,141 +1152,111 @@ interface Location extends Entity {
   vehicles: VehicleRef[];
 }
 
-type LocationType =
-  // Legitimate fronts
-  | "office"          // Corporate, business operations
-  | "retail"          // Shop front, public-facing
-  | "restaurant"      // Food service, meetings
-  | "nightclub"       // Entertainment, intel gathering
-  | "casino"          // Gambling, money laundering
-  | "factory"         // Manufacturing, production
-
-  // Criminal operations
-  | "safehouse"       // Hidden location, planning
-  | "warehouse"       // Storage, smuggling staging
-  | "chop_shop"       // Vehicle theft/modification
-  | "brothel"         // Vice operations
-  | "drug_lab"        // Narcotics production
-  | "smuggling_dock"  // Import/export contraband
-
-  // Technical infrastructure
-  | "server_farm"     // Data, hacking operations
-  | "research_lab"    // R&D, prototyping
-  | "workshop"        // Equipment, vehicle repair
-  | "armory"          // Weapons storage, training
-
-  // Residential/social
-  | "apartment"       // Housing, low-key meetings
-  | "compound"        // Fortified residence
-  | "temple"          // Cult/religious operations
-  | "barracks"        // Military-style housing
-
-  // Government/civic
-  | "government_bldg" // Official buildings
-  | "precinct"        // Law enforcement
-  | "courthouse"      // Legal system
-  | "hospital"        // Medical facilities
-
-  // Territorial
-  | "street_corner"   // Gang territory marker
-  | "garage"          // Vehicle storage
-  | "bar"             // Low-key meeting spot
-  | "studio";         // Media production
+// NOTE: LocationType is NOT an enum - it's a template string
+// Templates are defined in data/templates/locations/*.json
+// Example location template:
+// {
+//   "id": "nightclub",
+//   "name": "Nightclub",
+//   "tags": ["income", "front", "social", "public", "legal", "entertainment"],
+//   "defaults": {
+//     "size": 3,
+//     "security": 20,
+//     "baseIncome": 500,
+//     "operatingCost": 200,
+//     "agentCapacity": 10
+//   }
+// }
 ```
+
+**Location tags determine functionality:**
+| Tag | Effect |
+|-----|--------|
+| `income` | Generates credits each phase |
+| `front` | Provides legal cover for org activities |
+| `hidden` | Hard to find, good for safehouses |
+| `fortified` | Defense bonus, harder to raid |
+| `production` | Can manufacture goods |
+| `storage` | Can hold inventory |
+| `research` | Enables R&D projects |
+| `public` | Visible to everyone, can't hide activities |
+| `illegal` | Attracts heat if discovered |
 
 ### 4. Missions
 
-Tasks created by organizations, executed by agents.
+Tasks created by leaders, executed by agents. Missions use **tags** for classification.
 
 ```typescript
 interface Mission extends Entity {
+  // template: string (inherited) - e.g., "heist", "raid", "negotiation"
+  // tags: string[] (inherited) - e.g., ["violent", "high-risk", "stealth"]
+
   // Origin
   creator: OrgRef;
   createdPhase: number;
 
-  // Classification
-  type: MissionType;
+  // Visibility (also could be a tag)
   visibility: "public" | "private" | "secret";
 
-  // Requirements
+  // Requirements (from template, can be overridden)
   requirements: {
-    force: number;
-    stealth: number;
-    tech: number;
-    social: number;
+    stats: Record<string, number>;  // e.g., { force: 50, mobility: 30 }
     minAgents: number;
     maxAgents: number;
+    requiredTags?: string[];        // Agent must have these tags
     equipment?: EquipmentReq[];
   };
 
   // Target
   target?: {
-    type: "agent" | "organization" | "location" | "object";
-    id: string;
+    entityId: string;
+    targetTags?: string[];          // What kind of target
   };
 
   // Timing
-  deadline?: number;      // Phase when mission expires
-  estimatedDuration: number; // Phases to complete
+  deadline?: number;
+  estimatedDuration: number;
 
-  // Rewards
-  rewards: {
-    credits: number;
-    reputation: number;
-    influence: number;
-    special?: any;
-  };
-
-  // Penalties
-  failurePenalties: {
-    credits: number;
-    reputation: number;
-    heat: number;
-  };
+  // Rewards/Penalties (from template)
+  rewards: Record<string, number>;
+  failurePenalties: Record<string, number>;
 
   // Execution
-  status: MissionStatus;
+  status: string;                   // "available", "in_progress", "completed", etc.
   assignedOrg?: OrgRef;
   assignedAgents: AgentRef[];
   progress: MissionProgress;
 
-  // Outcome
   outcome?: MissionOutcome;
 }
 
-type MissionType =
-  // Combat
-  | "hit"               // Kill target
-  | "raid"              // Attack location
-  | "defense"           // Protect location
-  | "extraction"        // Rescue/kidnap person
+// NOTE: MissionType is NOT an enum - it's a template string
+// Mission templates defined in data/templates/missions/*.json
+// Example:
+// {
+//   "id": "heist",
+//   "name": "Heist",
+//   "tags": ["theft", "high-risk", "high-reward", "stealth"],
+//   "defaults": {
+//     "requirements": { "stats": { "mobility": 40, "tech": 30 }, "minAgents": 3 },
+//     "estimatedDuration": 4,
+//     "rewards": { "credits": 10000 },
+//     "failurePenalties": { "heat": 30, "reputation": -10 }
+//   }
+// }
+```
 
-  // Stealth
-  | "theft"             // Steal object
-  | "infiltration"      // Plant agent/device
-  | "sabotage"          // Damage without trace
-
-  // Tech
-  | "hack"              // Digital intrusion
-  | "surveillance"      // Gather intel
-  | "data_theft"        // Steal information
-
-  // Social
-  | "negotiate"         // Broker deal
-  | "bribe"             // Corrupt official
-  | "recruit"           // Turn enemy agent
-  | "propaganda"        // Shift public opinion
-
-  // Economic
-  | "smuggle"           // Move contraband
-  | "extortion"         // Demand payment
-  | "heist"             // Major theft
-
-  // Continuous (operations)
-  | "patrol"            // Ongoing security
-  | "investigation"     // Ongoing intel
-  | "racket"            // Ongoing income
-  | "training";         // Improve agent stats
+**Mission tags determine behavior:**
+| Tag | Effect |
+|-----|--------|
+| `violent` | Uses Force stat, may cause casualties, generates heat |
+| `stealth` | Uses Mobility stat, failure = detection |
+| `technical` | Uses Tech stat, requires equipment |
+| `social` | Uses Social stat, no direct violence |
+| `high-risk` | Greater chance of agent loss, higher rewards |
+| `ongoing` | Continuous operation, no fixed end |
+| `quick` | Resolves in 1-2 phases |
+| `extended` | Takes many phases, more complications |
 
 type MissionStatus =
   | "available"         // Posted, waiting for takers
@@ -546,11 +1281,12 @@ interface MissionProgress {
 
 ### 5. Vehicles
 
-Transportation and mobile assets.
+Transportation and mobile assets. Like all entities, vehicles use **tags** instead of hardcoded types.
 
 ```typescript
 interface Vehicle extends Entity {
-  type: VehicleType;
+  // template: string (inherited) - e.g., "sedan", "helicopter", "armored_vehicle"
+  // tags: string[] (inherited) - e.g., ["ground", "fast", "stealthy"]
 
   owner?: OrgRef;
   operator?: AgentRef;
@@ -569,64 +1305,428 @@ interface Vehicle extends Entity {
   maintenanceCost: number; // Per week
 }
 
-type VehicleType =
-  // Ground
-  | "motorcycle"
-  | "sedan"
-  | "sports_car"
-  | "suv"
-  | "van"
-  | "truck"
-  | "armored_vehicle"
+// NOTE: VehicleType is NOT an enum - it's a template string
+// Templates are defined in data/templates/vehicles/*.json
+// Example:
+// {
+//   "id": "armored_vehicle",
+//   "name": "Armored Vehicle",
+//   "tags": ["ground", "armored", "slow", "high-capacity"],
+//   "defaults": {
+//     "speed": 40, "capacity": 8, "armor": 80, "stealth": 10, "cargo": 20
+//   }
+// }
+```
 
-  // Aerial
-  | "drone"
-  | "helicopter"
-  | "vtol";
+---
+
+## Economy System
+
+The economy is the lifeblood of the simulation. Every entity needs money, and money flows through goods, services, and violence.
+
+### Currency & Wealth
+
+```typescript
+// Credits are the universal currency
+// 1 credit ≈ $100 USD equivalent for mental model
+
+interface Wallet {
+  credits: number;           // Liquid cash
+  accounts: BankAccount[];   // Can be frozen, traced
+  stashes: CashStash[];      // Hidden physical cash (can be found/stolen)
+}
+
+// Agents have personal wealth separate from org resources
+interface AgentFinances {
+  wallet: Wallet;
+  salary: number;            // Per phase from employer
+  missionCuts: number;       // Percentage of mission rewards
+  debts: Debt[];             // Money owed to others
+  assets: PersonalAsset[];   // Owned property, vehicles, gear
+}
+```
+
+### Income Sources
+
+#### Agent Income
+```typescript
+type AgentIncomeSource =
+  | "salary"           // Regular pay from employer
+  | "mission_cut"      // Percentage of mission rewards (typically 5-20%)
+  | "personal_deal"    // Side business, personal contracts
+  | "investment"       // Returns from business investments
+  | "theft"            // Stolen goods/cash
+  | "extortion"        // Protection money, blackmail
+  | "inheritance"      // From dead relatives/associates
+  | "gambling";        // Wins (and losses)
+
+// Salary ranges by role (per phase)
+const SALARY_RANGES = {
+  grunt: { min: 50, max: 150 },
+  specialist: { min: 150, max: 400 },
+  lieutenant: { min: 400, max: 1000 },
+  executive: { min: 1000, max: 3000 },
+  leader: { min: 0, max: 0 },  // Leaders take profits, not salary
+};
+```
+
+#### Organization Income
+```typescript
+type OrgIncomeSource =
+  | "legitimate_business"  // Legal revenue streams
+  | "protection_racket"    // Extortion
+  | "smuggling"            // Contraband trade
+  | "drug_trade"           // Narcotics
+  | "gambling_operation"   // Casinos, bookmaking
+  | "data_brokerage"       // Selling information
+  | "contract_work"        // Mercenary, hacking services
+  | "manufacturing"        // Legal or illegal goods
+  | "theft_fencing"        // Selling stolen goods
+  | "investment_returns";  // Interest, dividends
+
+interface IncomeStream {
+  type: OrgIncomeSource;
+  location?: LocationRef;   // Where income is generated
+  baseAmount: number;       // Credits per phase
+  volatility: number;       // How much it fluctuates (0-1)
+  risk: number;             // Chance of attracting heat
+  requirements: {
+    agents: number;         // Staff needed to operate
+    minSkill?: StatRequirement;
+  };
+}
+```
+
+### Goods Categories (Simplified)
+
+The economy uses **16 broad goods categories** - not granular items. This keeps inventory simple while differentiating orgs by what they trade.
+
+```typescript
+// ~16 categories, each defined in data/goods/categories.json
+// These are the starting categories - can add more via data
+
+// WEAPONS & MILITARY
+"small_arms"        // Pistols, SMGs, rifles
+"heavy_weapons"     // Machine guns, launchers, military hardware
+"explosives"        // Grenades, bombs, demolition charges
+"armor"             // Body armor, protective gear
+
+// CONTRABAND
+"narcotics"         // Drugs, stims, illegal pharmaceuticals
+"contraband"        // Restricted tech, stolen goods, black market items
+
+// VEHICLES & PARTS
+"vehicles"          // Cars, bikes, aircraft (whole units)
+"vehicle_parts"     // Components, modifications, fuel
+
+// CORPORATE & INDUSTRIAL
+"electronics"       // Computers, hacking tools, surveillance
+"data_storage"      // Servers, drives, storage media (holds non-tangible data)
+"robotics"          // Drones, automated systems, cyberware
+"industrial"        // Manufacturing equipment, raw materials
+"medical"           // Pharmaceuticals, surgical equipment, biotech
+
+// CONSUMER & LUXURY
+"consumer_goods"    // Legal products, retail inventory
+"luxury"            // High-value items, art, jewelry (good for fencing)
+"provisions"        // Food, supplies, basic necessities
+```
+
+### Tangible vs Non-Tangible
+
+**Core rule: Everything exists somewhere physically.**
+
+```typescript
+// TANGIBLE: Stored at Locations
+interface Inventory {
+  location: LocationRef;
+  items: InventorySlot[];
+}
+
+interface InventorySlot {
+  category: string;       // "small_arms", "narcotics", etc.
+  quantity: number;       // Units (abstract, not individual items)
+  value: number;          // Total credits value
+  tags: string[];         // ["stolen", "military-grade", "traceable"]
+}
+
+// NON-TANGIBLE: Stored ON tangible data_storage
+interface DataStore {
+  location: LocationRef;           // Where the physical storage is
+  storageCapacity: number;         // How much data can be held
+  contents: DataItem[];
+}
+
+interface DataItem {
+  id: string;
+  type: string;           // "intel", "secrets", "blackmail", "research"
+  value: number;
+  about?: EntityRef;      // Who/what this data concerns
+  encrypted: boolean;     // Harder to access if stolen
+}
+
+// EXAMPLE:
+// NeoSynth Corp has secrets about their AI research
+// → Stored as DataItem on their server farm (data_storage at HQ location)
+// → Yakuza raids the location, steals the data_storage
+// → Now Yakuza has the DataItem (can sell, use for blackmail, etc.)
+// → NeoSynth loses access (unless they had backups elsewhere)
+```
+
+**This creates gameplay:**
+- Want to steal data? Must raid the location with data_storage
+- Want to protect secrets? Invest in security at that location
+- Data can be copied (if you have access) but originals can be destroyed
+- Encrypted data needs tech skill to decrypt
+
+Each goods category has a base price defined in data. Prices fluctuate based on simple supply/demand:
+
+```typescript
+interface GoodsCategory {
+  id: string;                   // "small_arms", "narcotics", etc.
+  name: string;
+  basePrice: number;            // Credits per unit
+  legality: "legal" | "restricted" | "illegal";
+  tags: string[];               // For behavior matching
+}
+
+// Market is simple: track supply/demand per category
+interface Market {
+  prices: Record<string, number>;    // Current price per category
+  supply: Record<string, number>;    // Available in the city
+  demand: Record<string, number>;    // Wanted by orgs
+}
+
+// Price fluctuation: price = basePrice * (demand / supply)
+// Capped at 0.5x to 3x base price
+```
+
+### Trading
+
+```typescript
+// Orgs can buy/sell goods at locations with appropriate tags
+// "market" tag = can buy/sell legally
+// "black-market" tag = can buy/sell illegal goods (with heat risk)
+
+interface Trade {
+  buyer: EntityRef;
+  seller: EntityRef;
+  location: LocationRef;
+  category: string;
+  quantity: number;
+  pricePerUnit: number;
+  tags: string[];               // ["illegal", "traced", etc.]
+}
+
+// Stolen goods sell at 30-50% of market value (need a fence)
+// Legal goods sell at market price
+// Illegal goods have price premium but generate heat if traced
+```
+
+### Organization Assets (Simplified)
+
+```typescript
+interface OrgAssets {
+  wallet: Wallet;                    // Liquid credits
+
+  // Inventory stored across locations
+  // Each location has its own inventory
+  // Org's total inventory = sum of all location inventories
+
+  // Real estate
+  ownedLocations: LocationRef[];
+
+  // Data assets (stored on data_storage at locations)
+  // Accessed via location inventory, not stored directly on org
+}
+```
+
+### Money Flow Summary
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        MONEY FLOW IN NEOARCOLOGY                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│   ┌─────────────┐      salaries      ┌─────────────┐                    │
+│   │             │ ─────────────────> │             │                    │
+│   │    ORGS     │                    │   AGENTS    │                    │
+│   │             │ <───────────────── │             │                    │
+│   └─────────────┘   mission work     └─────────────┘                    │
+│         │                                   │                            │
+│         │                                   │                            │
+│         ▼                                   ▼                            │
+│   ┌─────────────┐                    ┌─────────────┐                    │
+│   │  LOCATIONS  │                    │   MARKETS   │                    │
+│   │  (income)   │                    │   (goods)   │                    │
+│   └─────────────┘                    └─────────────┘                    │
+│         │                                   │                            │
+│         │                                   │                            │
+│         ▼                                   ▼                            │
+│   ┌─────────────┐                    ┌─────────────┐                    │
+│   │  SECURITY   │ <───────────────── │   HEISTS    │                    │
+│   │  (expense)  │     theft target   │   (profit)  │                    │
+│   └─────────────┘                    └─────────────┘                    │
+│                                                                          │
+│   RESEARCH produces: equipment, intel, products → value                  │
+│   VIOLENCE costs: weapons, medical, replacements → expense               │
+│   BUSINESS produces: legitimate income → steady but low                  │
+│   CRIME produces: high income → but heat and risk                        │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Simulation Logic
 
-### How Organizations Generate Missions
+### How Leaders Generate Missions (Agent-Driven)
 
 ```typescript
-function generateOrgMissions(org: Organization, world: World): Mission[] {
+function leaderGeneratesMissions(leader: Agent, org: Organization, world: World): Mission[] {
   const missions: Mission[] = [];
 
-  for (const goal of org.goals) {
+  // Leader weighs org goals against personal goals
+  const goals = weighGoals(leader, org);
+
+  for (const goal of goals) {
+    // Leader's personality affects mission type selection
+    const preferredApproach = getLeaderPreference(leader, goal);
+
     switch (goal.type) {
       case "expand_territory":
-        // Find nearby uncontrolled or weakly-held locations
-        // Generate raid/takeover missions
         const targets = findExpansionTargets(org, world);
-        missions.push(...targets.map(t => createRaidMission(org, t)));
+        if (leader.stats.force > leader.stats.social) {
+          // Aggressive leader prefers raids
+          missions.push(...targets.map(t => createRaidMission(org, t)));
+        } else {
+          // Diplomatic leader prefers buyouts/negotiation
+          missions.push(...targets.map(t => createNegotiateMission(org, t)));
+        }
         break;
 
       case "destroy_enemy":
-        // Generate missions against enemy org
         const enemy = world.getOrg(goal.target);
-        missions.push(createHitMission(org, enemy.leadership[0]));
-        missions.push(createSabotageMission(org, enemy.locations[0]));
+        // Check if this is also the leader's personal enemy
+        const personalVendetta = leader.relationships.find(
+          r => r.targetId === goal.target && r.strength < -50
+        );
+        if (personalVendetta) {
+          // Leader prioritizes this, may over-commit resources
+          missions.push(createHitMission(org, enemy.leader, { priority: "critical" }));
+        } else {
+          missions.push(createSabotageMission(org, enemy.locations[0]));
+        }
         break;
 
       case "increase_wealth":
-        // Generate income-producing missions
-        missions.push(createHeistMission(org, findWealthyTarget(world)));
-        missions.push(createExtortionMission(org, findVulnerableTarget(world)));
+        // Leader's tags affect target selection
+        if (leader.tags.includes("greedy")) {
+          // Greedy leader goes for bigger, riskier scores
+          missions.push(createHeistMission(org, findWealthyTarget(world)));
+        } else {
+          // Conservative leader prefers steady income
+          missions.push(createRacketMission(org, findVulnerableTarget(world)));
+        }
         break;
 
-      case "reduce_heat":
-        // Generate missions to reduce law enforcement attention
-        missions.push(createBribeMission(org, findCorruptOfficial(world)));
+      // Personal goal handling
+      case "personal_revenge":
+        // Leader using org resources for personal vendetta
+        // This may upset leadership council if discovered
+        missions.push(createHitMission(org, goal.target, { hidden: true }));
         break;
-
-      // ... etc
     }
   }
 
-  return prioritizeAndFilter(missions, org.resources);
+  // Consult leadership council based on decision style
+  return consultCouncil(leader, org, missions, world);
+}
+
+function consultCouncil(
+  leader: Agent,
+  org: Organization,
+  proposedMissions: Mission[],
+  world: World
+): Mission[] {
+  // Decision style is determined by org tags, not a separate field
+  if (org.tags.includes("autocratic")) {
+    // Leader decides alone
+    return proposedMissions;
+  }
+
+  if (org.tags.includes("council-led")) {
+    // Leadership votes on major missions
+    const majorMissions = proposedMissions.filter(m => m.risk > 50);
+    for (const mission of majorMissions) {
+      const votes = org.leadership.map(lt => {
+        const agent = world.getAgent(lt);
+        return evaluateMissionAsCouncilMember(agent, mission, leader);
+      });
+      const approved = votes.filter(v => v.approve).length > votes.length / 2;
+      if (!approved) {
+        // Remove mission, but track dissent
+        proposedMissions.splice(proposedMissions.indexOf(mission), 1);
+        recordDissent(org, mission, votes);
+      }
+    }
+    return proposedMissions;
+  }
+
+  if (org.tags.includes("consensus-driven")) {
+    // All leadership must agree - conservative approach
+    return proposedMissions.filter(m =>
+      org.leadership.every(lt => {
+        const agent = world.getAgent(lt);
+        return evaluateMissionAsCouncilMember(agent, m, leader).approve;
+      })
+    );
+  }
+
+  if (org.tags.includes("democratic")) {
+    // All members vote (slow, but high buy-in)
+    return proposedMissions.filter(m => {
+      const approval = org.members.reduce((sum, memberId) => {
+        const agent = world.getAgent(memberId);
+        return sum + (evaluateMissionAsMember(agent, m) ? 1 : 0);
+      }, 0);
+      return approval > org.members.length / 2;
+    });
+  }
+
+  // Default to autocratic if no decision style tag
+  return proposedMissions;
+}
+
+function evaluateMissionAsCouncilMember(
+  agent: Agent,
+  mission: Mission,
+  leader: Agent
+): { approve: boolean; reasoning: string } {
+  // Council member's decision based on:
+  // 1. Does mission align with their personal goals?
+  // 2. Does it put them or their allies at risk?
+  // 3. What's their relationship with the leader?
+  // 4. Are they scheming for leadership themselves?
+
+  const loyaltyToLeader = agent.relationships.find(r => r.targetId === leader.id)?.strength ?? 0;
+  const personalBenefit = calculatePersonalBenefit(agent, mission);
+  const riskToSelf = calculateRiskToAgent(agent, mission);
+
+  // Ambitious agents with low loyalty may vote to make leader look bad
+  if (agent.tags.includes("ambitious") && loyaltyToLeader < 30) {
+    // Approve risky missions hoping they fail
+    if (mission.risk > 70) {
+      return { approve: true, reasoning: "hoping_leader_fails" };
+    }
+  }
+
+  // Standard evaluation
+  const score = loyaltyToLeader * 0.3 + personalBenefit * 0.4 - riskToSelf * 0.3;
+  return {
+    approve: score > 0,
+    reasoning: score > 0 ? "mission_worthwhile" : "too_risky"
+  };
 }
 ```
 
@@ -938,17 +2038,22 @@ function generateCity(config: CityGenConfig): World {
 ```typescript
 function generateAgent(world: World): Agent {
   // Random stats with some specialization
-  const archetype = pickRandom(["combat", "stealth", "tech", "social", "balanced"]);
+  const archetype = pickRandom(["combat", "infiltrator", "hacker", "face", "fixer"]);
   const stats = generateStatsForArchetype(archetype);
 
-  // Random personality
-  const personality = {
-    greed: randomRange(20, 80),
-    ambition: randomRange(20, 80),
-    violence: randomRange(10, 90),
-    loyalty: randomRange(30, 90),
-    survival: randomRange(40, 90),
-  };
+  // Random personality via tags (pick 2-4 from weighted pool)
+  const personalityTags = pickRandomTags([
+    { tag: "aggressive", weight: 0.3 },
+    { tag: "cautious", weight: 0.3 },
+    { tag: "greedy", weight: 0.4 },
+    { tag: "ambitious", weight: 0.4 },
+    { tag: "loyal", weight: 0.3 },
+    { tag: "reckless", weight: 0.2 },
+    { tag: "paranoid", weight: 0.2 },
+    { tag: "charismatic", weight: 0.2 },
+    { tag: "ruthless", weight: 0.15 },
+    { tag: "idealistic", weight: 0.15 },
+  ], { min: 2, max: 4 });
 
   // Generate name
   const name = generateCyberpunkName();
@@ -956,14 +2061,15 @@ function generateAgent(world: World): Agent {
   return {
     id: uuid(),
     name,
+    template: archetype,
     created: world.currentPhase,
-    tags: [archetype],
+    tags: [archetype, ...personalityTags],  // Role tag + personality tags
     relationships: [],
     status: "available",
     age: randomRange(20, 50) * PHASES_PER_YEAR,
     stats,
-    ai: { personality, morale: 50, fear: 0, satisfaction: 50 },
-    history: [],
+    wallet: { credits: randomRange(100, 1000), accounts: [], stashes: [] },
+    morale: 50,
   };
 }
 ```
@@ -1035,26 +2141,40 @@ const SYNDICATE_NAMES = [
 
 ### 2. Fixer Mode
 
-**Purpose**: Take control of one organization and try to complete a mission chain.
+**Purpose**: Take control of one organization and see how far you can take it in a living world.
 
 **Setup**:
 1. Generate city
 2. Run simulation for N phases (e.g., 500) to create history
 3. Present player with org selection screen
 4. Player picks an org (or creates a new fixer crew)
-5. Game reveals mission chain (win condition)
-6. Player controls that org; AI controls everything else
+5. Player controls that org; AI controls everything else
 
 **Player Controls**:
 - Hire/fire agents
 - Accept/create missions
 - Assign agents to missions
 - Purchase equipment, vehicles, locations
-- Set org priorities
+- Set org priorities and goals
 - Manage relationships (declare war, propose alliance)
+- Conduct business deals and research
 
-**Victory**: Complete the procedurally generated mission chain
-**Defeat**: Org destroyed, bankrupt, or player gives up
+**No Victory Condition**: This is a sandbox. The player sets their own goals:
+- Dominate the city?
+- Become the richest org?
+- Destroy a specific rival?
+- Build a criminal empire from nothing?
+- Survive as long as possible?
+
+**Game Over** (optional): The game continues even if your org is destroyed:
+- **Org Destroyed**: All assets seized, members scattered. Player can:
+  - Transition to **Observer Mode** and watch what happens next
+  - Start a new org (if any former agents are available to recruit)
+  - Quit and restart with a new city
+- **Bankrupt**: Can't pay salaries. Agents start leaving. Not game over—just a crisis to manage.
+- **Leader Dies**: Leadership challenge triggers. If no suitable successor, org may fragment.
+
+The simulation doesn't care about the player. The world continues regardless.
 
 ### 3. Agent Mode (Future)
 
@@ -1086,6 +2206,11 @@ interface WorldState {
   vehicles: Record<string, Vehicle>;
   missions: Record<string, Mission>;
 
+  // Economy
+  market: MarketState;
+  goods: Record<string, Good>;
+  researchProjects: Record<string, ResearchProject>;
+
   // World structure
   sectors: Sector[];
 
@@ -1100,16 +2225,23 @@ interface WorldState {
     governmentPower: number;
     corporatePower: number;
     gangPower: number;
+    marketActivity: number;
   };
 
   // Game mode state
   mode: GameMode;
   playerOrg?: string;        // For Fixer Mode
   playerAgent?: string;      // For Agent Mode
-  missionChain?: MissionChain; // Win condition
 }
 
 type GameMode = "observer" | "fixer" | "agent";
+
+interface MarketState {
+  priceModifiers: Record<string, number>;   // category ID → price modifier
+  activeEvents: MarketEvent[];
+  supplyLevels: Record<string, number>;     // category ID → supply level
+  demandLevels: Record<string, number>;     // category ID → demand level
+}
 ```
 
 ### Engine Structure
@@ -1122,14 +2254,17 @@ src/
 │   ├── EntityManager.ts      # CRUD for entities
 │   │
 │   ├── ai/
-│   │   ├── OrgAI.ts          # Organization decision making
-│   │   ├── AgentAI.ts        # Agent decision making
+│   │   ├── AgentAI.ts        # Agent decision making (primary)
+│   │   ├── LeadershipAI.ts   # Org decisions via leader
 │   │   └── MissionAI.ts      # Mission generation/evaluation
 │   │
 │   ├── systems/
 │   │   ├── MissionSystem.ts  # Mission lifecycle
-│   │   ├── CombatSystem.ts   # Conflict resolution
-│   │   ├── EconomySystem.ts  # Money flow
+│   │   ├── EncounterSystem.ts # Agent-to-agent interactions
+│   │   ├── ConfrontationSystem.ts # Combat/social/tech resolution
+│   │   ├── EconomySystem.ts  # Money flow, salaries, trades
+│   │   ├── MarketSystem.ts   # Supply/demand, price fluctuations
+│   │   ├── ResearchSystem.ts # R&D projects and outputs
 │   │   ├── PowerSystem.ts    # Influence calculations
 │   │   └── EventSystem.ts    # Random events
 │   │
@@ -1137,7 +2272,13 @@ src/
 │       ├── CityGenerator.ts
 │       ├── AgentGenerator.ts
 │       ├── OrgGenerator.ts
-│       └── MissionGenerator.ts
+│       ├── MissionGenerator.ts
+│       └── GoodsGenerator.ts
+│
+├── config/
+│   ├── ConfigLoader.ts       # Load and merge config files
+│   ├── RuntimeConfig.ts      # Runtime overrides
+│   └── Validator.ts          # Config schema validation
 │
 ├── modes/
 │   ├── ObserverMode.ts       # Observer-specific logic
@@ -1152,10 +2293,40 @@ src/
 ├── store/
 │   └── worldStore.ts         # Zustand store
 │
-└── data/
-    ├── names.json            # Name generation data
-    ├── config.json           # Balance parameters
-    └── templates/            # Entity templates
+├── debug/
+│   ├── DebugTools.ts         # Inspection and manipulation
+│   ├── StatsCollector.ts     # Metrics and histograms
+│   └── BalanceLogger.ts      # Track balance changes
+│
+└── types/
+    ├── entities.ts           # Entity interfaces
+    ├── economy.ts            # Economic types
+    ├── interactions.ts       # Agent interaction types
+    └── config.ts             # Config schema types
+
+data/
+├── config/
+│   ├── simulation.json       # Core simulation parameters
+│   ├── economy.json          # Economic balance values
+│   ├── combat.json           # Confrontation formulas
+│   └── generation.json       # Procedural gen parameters
+│
+├── templates/
+│   ├── orgs/                 # Organization templates
+│   ├── agents/               # Agent archetype templates
+│   ├── locations/            # Location type templates
+│   ├── missions/             # Mission type templates
+│   └── goods/                # Goods and equipment data
+│
+├── names/
+│   ├── agents.json           # Name generation pools
+│   ├── orgs.json             # Org name components
+│   └── locations.json        # Location name patterns
+│
+└── scenarios/                # Pre-built world setups
+    ├── default.json
+    ├── gang_war.json
+    └── corporate_dystopia.json
 ```
 
 ---
@@ -1188,9 +2359,334 @@ src/
 ### Phase 4: Fixer Mode
 1. Org selection screen
 2. Player control override
-3. Mission chain generation
-4. Win/lose conditions
-5. Player-specific UI enhancements
+3. Player-specific UI (management interface)
+4. Transition to/from Observer Mode
+
+### Phase 5: Economy & Markets
+1. Goods and inventory system
+2. Market dynamics
+3. Research and production
+4. Heist economics
+
+---
+
+## Data-Driven Design
+
+The simulation must be highly configurable for rapid iteration. Designers should be able to tweak values, generate a new world, and observe the results without code changes.
+
+### Configuration Philosophy
+
+```
+CODE defines MECHANICS (how things work)
+DATA defines BALANCE (how things feel)
+```
+
+### Configuration Files
+
+```
+data/
+├── config/
+│   ├── simulation.json     # Core simulation parameters
+│   ├── economy.json        # Economic balance values
+│   ├── combat.json         # Confrontation formulas
+│   ├── generation.json     # Procedural gen parameters
+│   └── difficulty.json     # Presets for different experiences
+│
+├── templates/
+│   ├── orgs/               # Organization templates
+│   │   ├── corporation.json
+│   │   ├── gang.json
+│   │   └── ...
+│   ├── agents/             # Agent archetype templates
+│   │   ├── combat.json
+│   │   ├── tech.json
+│   │   └── ...
+│   ├── locations/          # Location type templates
+│   ├── missions/           # Mission type templates
+│   └── goods/              # Goods and equipment data
+│
+├── names/
+│   ├── agents.json         # Name generation pools
+│   ├── orgs.json           # Org name components
+│   └── locations.json      # Location name patterns
+│
+└── scenarios/              # Pre-built world setups
+    ├── tutorial.json       # Simple starting scenario
+    ├── gang_war.json       # High-conflict scenario
+    └── corporate_dystopia.json
+```
+
+### Simulation Config Example
+
+```json
+{
+  "simulation": {
+    "time": {
+      "phasesPerDay": 4,
+      "daysPerWeek": 7,
+      "weeksPerMonth": 4,
+      "monthsPerYear": 12
+    },
+    "burnIn": {
+      "defaultPhases": 500,
+      "minPhases": 100,
+      "maxPhases": 2000
+    }
+  },
+  "agents": {
+    "stats": {
+      "min": 1,
+      "max": 100,
+      "startingTotal": 180,
+      "growthPerMission": 0.5
+    },
+    "personalityTags": {
+      "minTags": 2,
+      "maxTags": 4,
+      "pool": [
+        { "tag": "aggressive", "weight": 0.3 },
+        { "tag": "cautious", "weight": 0.3 },
+        { "tag": "greedy", "weight": 0.4 },
+        { "tag": "ambitious", "weight": 0.4 },
+        { "tag": "loyal", "weight": 0.3 }
+      ]
+    },
+    "founding": {
+      "requiredTags": ["ambitious", "leadership"],
+      "minSocial": 40,
+      "minCredits": 10000,
+      "minContacts": 3
+    }
+  },
+  "organizations": {
+    "decisionStyles": {
+      "corporation": { "default": "council", "weights": [0.1, 0.6, 0.2, 0.1] },
+      "gang": { "default": "autocratic", "weights": [0.7, 0.2, 0.05, 0.05] },
+      "cult": { "default": "consensus", "weights": [0.1, 0.2, 0.5, 0.2] }
+    }
+  },
+  "missions": {
+    "rng": {
+      "minRoll": 0.6,
+      "maxRoll": 1.4,
+      "distribution": "bell_curve"
+    },
+    "complications": {
+      "baseChance": 0.1,
+      "phaseIncrement": 0.02
+    },
+    "failureThreshold": 2.0
+  },
+  "economy": {
+    "salaryMultipliers": {
+      "grunt": 1.0,
+      "specialist": 2.5,
+      "lieutenant": 6.0,
+      "executive": 15.0
+    },
+    "fenceRates": {
+      "cash": 1.0,
+      "goods": 0.3,
+      "data": 0.5
+    }
+  }
+}
+```
+
+### Template Example (Gang)
+
+```json
+{
+  "id": "gang",
+  "name": "Gang",
+  "description": "Street-level criminal organization",
+
+  "tags": ["criminal", "violent", "territorial", "street-level", "autocratic"],
+
+  "defaults": {
+    "startingCredits": { "min": 5000, "max": 20000 },
+    "startingMembers": { "min": 5, "max": 15 },
+    "startingLocations": { "min": 1, "max": 3 }
+  },
+
+  "leaderRequirements": {
+    "preferredStats": ["force", "social"],
+    "requiredTags": ["leadership"],
+    "preferredTags": ["aggressive", "ambitious"]
+  },
+
+  "locationPreferences": {
+    "primary": ["street_corner", "safehouse", "nightclub"],
+    "secondary": ["warehouse", "chop_shop"],
+    "avoids": ["office", "research_lab"]
+  },
+
+  "incomeTypes": {
+    "preferred": ["protection_racket", "drug_trade", "theft_fencing"],
+    "avoided": ["legitimate_business"]
+  },
+
+  "missionPreferences": {
+    "preferred": ["raid", "extortion", "theft"],
+    "avoided": ["negotiate", "research"]
+  },
+
+  "nameGeneration": {
+    "patterns": [
+      "{color} {animals}",
+      "{material} {animals}",
+      "The {adjective} {noun_plural}"
+    ],
+    "pools": {
+      "color": ["Black", "Red", "White", "Golden", "Silver"],
+      "animals": ["Dragons", "Serpents", "Wolves", "Tigers", "Ravens"],
+      "material": ["Steel", "Iron", "Chrome", "Neon", "Rust"]
+    }
+  }
+}
+```
+
+Note: The "behavior" block is gone - behavior emerges from the org's tags combined with the leader's tags.
+
+### Runtime Configuration Override
+
+```typescript
+// Allow runtime tweaks without restart
+interface RuntimeConfig {
+  // Load from files at startup
+  loadFromFiles(): void;
+
+  // Override specific values (for debugging/testing)
+  override(path: string, value: any): void;
+
+  // Reset to file values
+  reset(): void;
+
+  // Watch files for changes (hot reload in dev)
+  watchFiles(): void;
+
+  // Export current config (including overrides)
+  export(): ConfigSnapshot;
+}
+
+// Usage in simulation
+const missionRNG = config.get("simulation.missions.rng.minRoll");
+const gangAggression = config.get("templates.orgs.gang.behavior.aggression");
+```
+
+### Scenario System
+
+Pre-built scenarios for testing specific situations:
+
+```json
+{
+  "id": "gang_war",
+  "name": "Gang War",
+  "description": "Two powerful gangs on the brink of war",
+
+  "overrides": {
+    "simulation.burnIn.defaultPhases": 200
+  },
+
+  "setup": {
+    "organizations": [
+      {
+        "template": "gang",
+        "name": "Black Dragons",
+        "power": "high",
+        "territory": "sector_1"
+      },
+      {
+        "template": "gang",
+        "name": "Steel Serpents",
+        "power": "high",
+        "territory": "sector_2"
+      }
+    ],
+    "relationships": [
+      {
+        "org1": "Black Dragons",
+        "org2": "Steel Serpents",
+        "type": "enemy",
+        "strength": -80
+      }
+    ],
+    "events": [
+      {
+        "phase": 0,
+        "type": "org_war_declared",
+        "actors": ["Black Dragons"],
+        "targets": ["Steel Serpents"]
+      }
+    ]
+  }
+}
+```
+
+### Designer Workflow
+
+```
+1. OBSERVE → Run simulation, watch what happens
+2. IDENTIFY → "Gangs are too powerful" or "Agents never betray"
+3. TWEAK → Adjust values in config files
+4. REGENERATE → Create new world with new parameters
+5. VALIDATE → Run simulation again
+6. REPEAT → Until balance feels right
+```
+
+### Debug Tools
+
+```typescript
+interface DebugTools {
+  // Simulation controls
+  pause(): void;
+  step(phases: number): void;
+  setSpeed(multiplier: number): void;
+
+  // Inspection
+  inspectAgent(id: string): AgentDebugInfo;
+  inspectOrg(id: string): OrgDebugInfo;
+  inspectRelationships(): RelationshipGraph;
+
+  // Manipulation (for testing)
+  giveCredits(entityId: string, amount: number): void;
+  forceRelationship(agent1: string, agent2: string, strength: number): void;
+  triggerEvent(eventType: string, params: object): void;
+
+  // Logging
+  setLogLevel(level: "none" | "errors" | "warnings" | "info" | "debug"): void;
+  filterLogs(entityId?: string, eventType?: string): void;
+
+  // Statistics
+  getStats(): SimulationStats;
+  getHistogram(metric: string, buckets: number): Histogram;
+  compareRuns(runIds: string[]): ComparisonReport;
+}
+```
+
+### Balance Tracking
+
+Keep a changelog of balance adjustments:
+
+```markdown
+# BALANCE.md
+
+## 2025-12-24: Initial Values
+- Agent founding: minAmbition=70, minCredits=10000
+- Fence rates: goods=0.3, data=0.5
+
+## 2025-12-25: Gang Rebalance
+- Problem: Gangs dominating too quickly
+- Change: Reduced gang aggression 0.9 → 0.7
+- Change: Increased gang heat generation 1.0 → 1.5
+- Result: Gangs still aggressive but get crushed by government more often
+
+## 2025-12-26: Economy Tweaks
+- Problem: Agents never have enough money to found orgs
+- Change: Increased mission cuts 5-10% → 10-20%
+- Change: Reduced founding minCredits 10000 → 7500
+- Result: More agent-founded orgs, more dynamic simulation
+```
 
 ---
 
@@ -1230,10 +2726,17 @@ neoarcology/
 - **Architecture**: Simulation-first (world runs autonomously)
 - **Time Units**: Phase → Day (4) → Week (28) → Month (112) → Year (1344)
 
+## MVP Foundation (4 Pillars)
+1. **Tags**: Everything classified by tags, not hardcoded types
+2. **Wallets**: Credits flow between entities
+3. **Stats + RNG**: 6 agent stats + dice roll = task outcomes
+4. **Locations**: Everything physical exists at a location
+
 ## Core Concepts
 - **Simulation-first**: The world runs without player input
+- **Agents drive everything**: Agents are the atomic unit; orgs are emergent structures
 - **Game modes are views**: Observer, Fixer, Agent modes view same simulation
-- **Organizations drive the sim**: Orgs generate missions, agents execute them
+- **Tags over types**: Entities use tags (strings), behaviors attach to tags
 - **Activity log**: All events logged for emergent narrative
 
 ## Agent Stats
@@ -1241,22 +2744,28 @@ neoarcology/
 - **Enterprise**: Social, Business, Engineering (economy, politics)
 
 ## Critical Conventions
+- **Tags over types**: Entities use tags (strings) not hardcoded type enums
+- **Behaviors attach to tags**: Adding a tag gives entity that behavior
+- **Templates are data**: "gang", "corporation" defined in JSON, not code
+- **~16 goods categories**: Broad categories, not granular items
+- **Tangible at locations**: Physical goods at locations, data on data_storage
 - Entity IDs are UUIDs
 - Every org has exactly ONE leader (leader field) plus leadership array
-- Locations have org-specific preferences (gangs → safehouses, corps → offices)
 - All significant events must be logged to ActivityLog
 - Never mutate state directly, use store actions
 
 ## Key Files
 - Simulation loop: `src/simulation/TickEngine.ts`
 - World state: `src/simulation/World.ts`
-- Organization AI: `src/simulation/ai/OrgAI.ts`
+- Leadership AI: `src/simulation/ai/LeadershipAI.ts`
 - Agent AI: `src/simulation/ai/AgentAI.ts`
 - Activity log: `src/simulation/ActivityLog.ts`
 - Types: `src/types/*.ts`
 - Balance: `data/config.json`
 
 ## Common Pitfalls
+- Using hardcoded types instead of tags
+- Forgetting that behavior comes from Leader tags + Org tags
 - Forgetting to log significant events to ActivityLog
 - Not checking org.leader before leadership array operations
 - Mutations in tick processing (always return new state)
@@ -1348,29 +2857,58 @@ Context, decisions, or blockers.
 - **Burn-in**: Running simulation without player to generate history
 
 ### Entities
-- **Organization (Org)**: Group entity (corp, gang, government, etc.)
-- **Agent**: Individual operative with stats and personality
+- **Agent**: The atomic unit of simulation. Individual with stats, personality, goals, and relationships. Agents drive all behavior.
+- **Organization (Org)**: Emergent structure created and run by agents. Provides shared resources and collective identity.
 - **Location**: Physical place in the city with type and owner
-- **Mission**: Task created by one org, potentially executed by another
-- **Leader**: Single agent who runs an organization
+- **Mission**: Task created by a leader, executed by agents
+- **Leader**: The agent who controls an organization's decisions
+
+### Agent Concepts
+- **Personal Goal**: Agent's individual objectives, may conflict with org goals
+- **Relationship**: Connection between two agents (-100 to +100 strength)
+- **Encounter**: When agents interact directly (same location, mission collision, etc.)
+- **Confrontation**: Direct opposition between agents (combat, social, or technical)
 
 ### Stats
 - **Operations Stats**: Force, Mobility, Tech - used for missions, combat
 - **Enterprise Stats**: Social, Business, Engineering - used for economy, politics
 - **Power Score**: Combined military (0.3) + economic (0.4) + political (0.3) strength
 
+### Organization Concepts
+- **Decision Style**: How leadership makes choices (autocratic, council, consensus, democratic)
+- **Leadership Council**: Lieutenants who advise (and may challenge) the leader
+- **Internal Politics**: Schemes, betrayals, and leadership challenges within an org
+
+### Economy
+- **Credits**: Universal currency (1 credit ≈ $100 USD mental model)
+- **Wallet**: Agent/org financial state (cash, accounts, stashes)
+- **Goods**: Physical items that can be bought, sold, or stolen
+- **Fence Rate**: Percentage of value you get when selling stolen goods
+- **Market Event**: Temporary condition affecting supply/demand/prices
+- **Income Stream**: Recurring source of credits for an org
+
 ### Systems
 - **Activity Log**: Record of all significant events for emergent narrative
+- **Encounter System**: Detects and resolves agent-to-agent interactions
+- **Team Dynamics**: How agent relationships affect mission execution
+- **Market System**: Supply/demand dynamics affecting prices
+- **Research System**: Projects that produce tangible value (upgrades, intel, products)
 - **Infrastructure Preferences**: Which location types each org type gravitates toward
 
 ### Game Modes
 - **Observer Mode**: Player watches simulation without control
-- **Fixer Mode**: Player controls one organization
+- **Fixer Mode**: Player controls one organization (via its leader)
 - **Agent Mode**: Player controls one agent (future)
 
 ---
 
-*Document Version: 2.1*
+*Document Version: 6.2*
 *Created: 2025-12-23*
 *Rewritten: 2025-12-24 - Simulation-first architecture*
 *Updated: 2025-12-24 - Added enterprise stats, infrastructure preferences, living docs*
+*Major Update: 2025-12-24 - Agent-driven architecture (agents as atomic unit, interaction system, personal goals)*
+*Major Update: 2025-12-24 - Economy system, sandbox Fixer Mode, data-driven design for rapid iteration*
+*Major Update: 2025-12-25 - Tags over types: fully data-driven entity classification and behaviors*
+*Simplification: 2025-12-25 - MVP foundation (4 pillars), 16 goods categories, tangible/non-tangible storage*
+*Clarification: 2025-12-25 - Leader tags + org tags combine for behavior; agent personality via tags*
+*Consistency Pass: 2025-12-25 - Fixed all code examples to use tags consistently; removed old personality/type patterns*
