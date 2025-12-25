@@ -2461,37 +2461,77 @@ Set up the development environment and project structure.
 - [ ] Dev tooling (hot reload, debug panel stub)
 
 ### Phase 1: Peaceful Economy Simulation (No UI)
-Build a "normal" cyberpunk economy with no hostile actions. The world runs, money flows, agents work jobs.
+
+Build a "normal" cyberpunk economy with no hostile actions. The world runs, money flows, agents work jobs. **Built bottom-up in three sub-phases:**
+
+#### Phase 1a: Agent Slice of Life
+
+Establish foundational agent behavior before any economy exists.
 
 **Core Systems:**
-- [ ] Entity system (tags, templates, Entity base class)
-- [ ] World state container
-- [ ] Tick engine with time rollover (phase → day → week → month)
-- [ ] Economy system:
-  - [ ] Wallets (credits in/out)
-  - [ ] Income timing (per-phase, daily, weekly, monthly)
-  - [ ] Weekly payroll (salaries, maintenance, rent)
-- [ ] Location system:
-  - [ ] Locations generate income based on timing
-  - [ ] Locations have capacity for agents and inventory
-- [ ] Agent system:
-  - [ ] Agent stats (6 stats)
-  - [ ] Agent employment (jobs at locations)
-  - [ ] Job tiers: unskilled (no requirements), skilled (stat requirements), specialist (high stats)
-  - [ ] Unemployed agents seek work
-- [ ] Organization system:
-  - [ ] Orgs own locations and employ agents
-  - [ ] Leaders make basic decisions (hire, fire, expand)
-  - [ ] Basic org income/expense tracking
-- [ ] Activity logging (all significant events)
+- [ ] Tick engine with time rollover (phase → day → week)
+- [ ] Agent needs: hunger (increases weekly, death at 100)
+- [ ] Agent inventory: hold goods personally (provisions)
+- [ ] Agent routine: daily cycle (wake → activity → eat → rest)
+- [ ] Eating: consume 1 provisions per week, resets hunger
+- [ ] Starvation: 4 weeks without food = death
+- [ ] Activity logging (consumption, hunger, death)
 
-**What this phase proves:**
-- Money flows correctly between entities
-- Agents get hired, work jobs, earn salaries
-- Orgs earn income from locations, pay expenses
-- The simulation is stable over many ticks
-- High-stat agents are employed in skilled/specialist roles
-- The world feels "alive" economically
+**What this proves:**
+- Agents have survival pressure (must eat or die)
+- Time system works (weekly need cycles)
+- Foundation for all future agent behavior
+
+**Test scenario:** 10 agents start with 4-8 provisions each. Watch them consume provisions weekly. All eventually starve. Success!
+
+#### Phase 1b: Simple Economy
+
+Agents can buy provisions. Entrepreneurial agents open small businesses.
+
+**Core Systems:**
+- [ ] Location system (retail_shop, restaurant)
+- [ ] Location inventory (goods for sale)
+- [ ] Commerce: agents buy provisions (fixed price: 10 credits)
+- [ ] Agent entrepreneurship: open business (costs credits)
+- [ ] Basic employment: 1 employee per small location
+- [ ] Weekly payroll: owner pays employee
+- [ ] Business viability: dissolve if owner bankrupt
+- [ ] Agent decisions: buy food, seek work, open business
+
+**Location capacity (employees):**
+- retail_shop: 1
+- restaurant: 1
+
+**What this proves:**
+- Money flows: customer → business → employee
+- Businesses can succeed or fail
+- Agents survive by earning and spending
+- Simple economic equilibrium (or interesting collapse)
+
+**Test scenario:** 20 agents, 2 initial shops. Run 100+ weeks. Observe purchases, employment, new businesses, failures, deaths.
+
+#### Phase 1c: Complex Organizations
+
+Multi-agent organizations with hierarchy and varied job tiers.
+
+**Core Systems:**
+- [ ] Organization entity (leader, members, wallet, locations)
+- [ ] Org templates: corporation, gang, small_business
+- [ ] Multiple location types with varied capacity:
+  - retail_shop/restaurant: 1 employee
+  - office: 2 employees (skilled jobs)
+  - factory: 3-4 employees (mix unskilled/skilled)
+  - research_lab: 3-4 employees (specialist jobs)
+- [ ] Job tiers: unskilled (100-300/wk), skilled (300-600/wk), specialist (600-1500/wk)
+- [ ] Stat requirements for skilled/specialist jobs
+- [ ] Leader decisions: hire, expand, contract
+- [ ] Org dissolution: 4 weeks negative wallet
+
+**What this proves:**
+- Multi-tier economy works
+- Skilled agents get better jobs
+- Orgs grow and shrink based on performance
+- Complex economic dynamics emerge
 
 **No hostile actions yet:** No theft, no combat, no raids. Just a working economy.
 
