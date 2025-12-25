@@ -27,11 +27,28 @@ Agent wakes up → Goes about their day → Eats (consumes provisions) → Rests
 - [ ] Track current phase, day, week
 - [ ] Week rollover triggers weekly agent needs
 
+### Balance Config (Data-Driven)
+- [ ] Create `data/config/balance.json` for tunable parameters
+- [ ] All survival/timing values come from config, not hardcoded
+- [ ] Designers can tweak without code changes
+
+```json
+// data/config/balance.json (example)
+{
+  "agent": {
+    "hungerPerWeek": 25,
+    "hungerMax": 100,
+    "provisionsPerMeal": 1
+  }
+}
+```
+
 ### Agent Needs System
 - [ ] Agents have `needs.hunger` (0-100, starts at 0)
-- [ ] Each week, hunger increases by 25 (starves at 100 after 4 weeks without food)
-- [ ] Eating (consuming 1 provisions) resets hunger to 0
-- [ ] At hunger >= 100, agent dies (status = 'dead')
+- [ ] Once per week (on week rollover), hunger increases by `hungerPerWeek` (default 25)
+- [ ] Eating (consuming `provisionsPerMeal`) resets hunger to 0
+- [ ] At hunger >= `hungerMax`, agent dies (status = 'dead')
+- [ ] All values loaded from balance config
 
 ### Agent Inventory
 - [ ] Agents can hold goods (personal inventory)
@@ -39,9 +56,10 @@ Agent wakes up → Goes about their day → Eats (consumes provisions) → Rests
 - [ ] Consuming provisions removes from inventory
 
 ### Agent Routine (Basic)
-- [ ] Daily routine phases: dawn (wake), day (activity), dusk (eat), night (rest)
-- [ ] "Eat" action during dusk phase consumes 1 provisions (if available)
-- [ ] If no provisions, hunger accumulates
+- [ ] Daily routine phases: dawn (wake), day (activity), dusk (wind down), night (rest)
+- [ ] Weekly: on week rollover, agent attempts to eat
+- [ ] "Eat" action consumes `provisionsPerMeal` from inventory (if available)
+- [ ] If no provisions available, hunger accumulates that week
 
 ### Agent Wallet (Minimal)
 - [ ] Agents start with credits (e.g., 100-500)

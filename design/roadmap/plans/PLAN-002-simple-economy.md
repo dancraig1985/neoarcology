@@ -30,8 +30,9 @@ Agent opens shop → Stocks provisions → Sells to customers → Pays employee 
 ### Location System
 - [ ] Locations exist at coordinates (sector, district)
 - [ ] Location templates: `retail_shop`, `restaurant`
-- [ ] Locations have: owner (AgentRef), inventory, employee slots
-- [ ] Job capacity by template:
+- [ ] Locations have: owner (AgentRef | OrgRef), inventory, employee slots
+- [ ] Owner can be Agent (Phase 1b) or Org (Phase 1c) - design for both now
+- [ ] Job capacity by template (from balance config):
   - `retail_shop`: 1 employee
   - `restaurant`: 1 employee
   - (Future: factory 3-4, research_lab 3-4)
@@ -93,30 +94,34 @@ Agent opens shop → Stocks provisions → Sells to customers → Pays employee 
 - [ ] Log: "Shop Y dissolved (owner bankrupt)"
 - [ ] Log: "Agent X quit job at Shop Y (unpaid)"
 
-## Economic Parameters (Tunable)
+## Economic Parameters (Data-Driven)
 
-```typescript
-const ECONOMY = {
-  prices: {
-    provisions: 10,           // credits per unit
-  },
-  salary: {
-    unskilled: { min: 100, max: 300 },
-  },
-  business: {
-    retail_shop: {
-      openingCost: 200,
-      operatingCost: 50,      // per week
-      employeeSlots: 1,
+All values in `data/config/balance.json` - designers can tweak without code changes:
+
+```json
+{
+  "economy": {
+    "prices": {
+      "provisions": 10
     },
-    restaurant: {
-      openingCost: 300,
-      operatingCost: 75,
-      employeeSlots: 1,
+    "salary": {
+      "unskilled": { "min": 100, "max": 300 }
     },
+    "entrepreneurThreshold": 500
   },
-  entrepreneurThreshold: 500,  // credits needed to consider opening business
-};
+  "locations": {
+    "retail_shop": {
+      "openingCost": 200,
+      "operatingCost": 50,
+      "employeeSlots": 1
+    },
+    "restaurant": {
+      "openingCost": 300,
+      "operatingCost": 75,
+      "employeeSlots": 1
+    }
+  }
+}
 ```
 
 ## Verification
