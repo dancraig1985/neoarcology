@@ -1,6 +1,6 @@
 # PLAN-000: Stack Setup
 
-**Status:** planned
+**Status:** completed
 **Priority:** P0 (critical)
 **Dependencies:** None
 **Phase:** 0
@@ -23,15 +23,15 @@ We're starting **web-only** for faster iteration. Electron can be added later.
 ## Objectives
 
 ### Project Scaffold
-- [ ] Initialize npm project with TypeScript
-- [ ] Configure TypeScript (strict mode, ES modules)
-- [ ] Set up Vite as build system (fast HMR, good TS support)
-- [ ] Create basic folder structure matching design doc
+- [x] Initialize npm project with TypeScript
+- [x] Configure TypeScript (strict mode, ES modules)
+- [x] Set up Vite as build system (fast HMR, good TS support)
+- [x] Create basic folder structure matching design doc
 
 ### Dependencies
-- [ ] Install and configure Pixi.js v8
-- [ ] Install and configure Zustand
-- [ ] Install dev dependencies (vitest for testing, prettier, eslint)
+- [x] Install and configure Pixi.js v8
+- [x] Install and configure Zustand
+- [x] Install dev dependencies (vitest for testing, prettier, eslint)
 
 ### Folder Structure
 ```
@@ -69,34 +69,34 @@ neoarcology/
 ```
 
 ### Type Definitions
-- [ ] Define base `Entity` interface with tags, template, relationships
-- [ ] Define `Agent` interface (stats, wallet, employment, morale)
-- [ ] Define `Organization` interface (leader, members, resources)
-- [ ] Define `Location` interface (sector, owner, inventory)
-- [ ] Define `Wallet` interface (credits, accounts, stashes)
-- [ ] Define `Job` interface (requirements, salary tier, output)
-- [ ] Define time-related types (IncomeTiming, etc.)
-- [ ] Define reference types (AgentRef, OrgRef, LocationRef)
+- [x] Define base `Entity` interface with tags, template, relationships
+- [x] Define `Agent` interface (stats, wallet, employment, morale)
+- [x] Define `Organization` interface (leader, members, resources)
+- [x] Define `Location` interface (sector, owner, inventory)
+- [x] Define `Wallet` interface (credits, accounts, stashes)
+- [x] Define `Job` interface (requirements, salary tier, output)
+- [x] Define time-related types (IncomeTiming, etc.)
+- [x] Define reference types (AgentRef, OrgRef, LocationRef)
 
 ### Data Loading
-- [ ] Create ConfigLoader that reads JSON from `data/` folder
-- [ ] Create sample template files (1-2 per entity type)
-- [ ] Create sample simulation.json config
-- [ ] Verify templates load correctly at startup
+- [x] Create ConfigLoader that reads JSON from `data/` folder
+- [x] Create sample template files (1-2 per entity type)
+- [x] Create sample simulation.json config
+- [x] Verify templates load correctly at startup
 
 ### Dev Tooling
-- [ ] Configure Vite for hot reload
-- [ ] Add npm scripts: `dev`, `build`, `test`, `lint`
-- [ ] Create a simple "hello world" that renders to canvas
-- [ ] Verify Pixi.js initializes (just show a colored background)
-- [ ] Add basic console logging for loaded config
+- [x] Configure Vite for hot reload
+- [x] Add npm scripts: `dev`, `build`, `test`, `lint`
+- [x] Create a simple "hello world" that renders to canvas
+- [x] Verify Pixi.js initializes (just show a colored background)
+- [x] Add basic console logging for loaded config
 
 ### Verification
-- [ ] `npm run dev` starts dev server with HMR
-- [ ] TypeScript compiles without errors
-- [ ] Pixi.js canvas renders (colored background)
-- [ ] Config files load and log to console
-- [ ] Zustand store initializes (empty world state)
+- [x] `npm run dev` starts dev server with HMR
+- [x] TypeScript compiles without errors
+- [x] Pixi.js canvas renders (colored background)
+- [x] Config files load and log to console
+- [x] Zustand store initializes (empty world state)
 
 ## Non-Goals (Defer to Later Phases)
 

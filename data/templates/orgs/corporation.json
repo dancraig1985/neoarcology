@@ -1,0 +1,20 @@
+{
+  "id": "corporation",
+  "name": "Corporation",
+  "description": "A legitimate business entity with corporate structure",
+  "tags": ["legitimate", "hierarchical", "profit-driven"],
+  "defaults": {
+    "resources": {
+      "credits": 50000,
+      "influence": 30,
+      "territory": 2,
+      "reputation": 50,
+      "heat": 0
+    },
+    "decisionStyle": "council-led"
+  },
+  "constraints": {
+    "maxHeat": 30,
+    "requiresLegalIncome": true
+  }
+}

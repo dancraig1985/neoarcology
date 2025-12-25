@@ -1,0 +1,345 @@
+/**
+ * Core entity types for NeoArcology
+ * Based on GAME-DESIGN.md - Tags over types philosophy
+ */
+
+import type { Expense, IncomeStream } from './economy';
+
+// Reference types for entity relationships
+export type EntityRef = string; // UUID
+export type AgentRef = EntityRef;
+export type OrgRef = EntityRef;
+export type LocationRef = EntityRef;
+export type MissionRef = EntityRef;
+export type VehicleRef = EntityRef;
+
+/**
+ * Base Entity - all simulation objects inherit from this
+ * Uses tags instead of hardcoded types
+ */
+export interface Entity {
+  id: EntityRef;
+  name: string;
+  template: string; // e.g., "gang", "corporation" - just a string, not an enum
+  tags: string[]; // e.g., ["criminal", "violent", "territorial"]
+  created: number; // Phase when created
+  destroyed?: number; // Phase when destroyed (if applicable)
+  relationships: Relationship[];
+}
+
+/**
+ * Relationship between entities
+ * Uses tags for relationship classification
+ */
+export interface Relationship {
+  targetId: EntityRef;
+  tags: string[]; // e.g., ["employer", "trusted"] or ["enemy", "blood-feud"]
+  strength: number; // -100 to +100
+  since: number; // Phase when relationship started
+}
+
+/**
+ * Agent Stats - 6 numbers that determine task outcomes
+ */
+export interface AgentStats {
+  force: number; // Combat, intimidation, physical power (0-100)
+  mobility: number; // Stealth, infiltration, agility, escape (0-100)
+  tech: number; // Hacking, electronics, digital systems (0-100)
+  social: number; // Negotiation, leadership, manipulation (0-100)
+  business: number; // Economics, trade, management, logistics (0-100)
+  engineering: number; // Research, manufacturing, repair, construction (0-100)
+}
+
+/**
+ * Agent - Individual actors in the simulation
+ * Agents are the atomic unit - orgs don't think, their leaders do
+ */
+export interface Agent extends Entity {
+  status: AgentStatus;
+  age: number; // In phases
+
+  stats: AgentStats;
+
+  // Employment
+  employer?: OrgRef;
+  salary: number; // Per week
+
+  // Personal finances
+  wallet: Wallet;
+
+  // Current activity
+  currentAction?: Action;
+
+  // Mood
+  morale: number; // -100 to +100
+
+  // Personal goals (may conflict with org goals)
+  personalGoals: PersonalGoal[];
+}
+
+export type AgentStatus =
+  | 'available'
+  | 'employed'
+  | 'on_mission'
+  | 'wounded'
+  | 'captured'
+  | 'dead'
+  | 'retired';
+
+/**
+ * Action - what an agent is currently doing
+ */
+export interface Action {
+  type: string;
+  startedPhase: number;
+  targetId?: EntityRef;
+  progress: number;
+}
+
+/**
+ * Personal Goal - agents have goals independent of their org
+ */
+export interface PersonalGoal {
+  type: PersonalGoalType;
+  priority: number; // 1-100
+  target?: EntityRef;
+  progress: number;
+}
+
+export type PersonalGoalType =
+  | 'wealth_accumulation'
+  | 'revenge'
+  | 'protection'
+  | 'advancement'
+  | 'independence'
+  | 'found_org'
+  | 'retire'
+  | 'mastery'
+  | 'reputation'
+  | 'romance'
+  | 'family'
+  | 'ideology';
+
+/**
+ * Organization - emergent structures created and run by agents
+ * Behavior emerges from Leader Agent Tags + Org Tags
+ */
+export interface Organization extends Entity {
+  // Resources
+  resources: OrgResources;
+
+  // Leadership structure
+  leader: AgentRef; // Single leader
+  leadership: AgentRef[]; // Lieutenants, executives (includes leader)
+  members: AgentRef[]; // All members (includes leadership)
+
+  // Assets
+  vehicles: VehicleRef[];
+  locations: LocationRef[]; // Owned/controlled locations
+
+  // Goals
+  goals: OrgGoal[];
+  enemies: OrgRef[];
+  allies: OrgRef[];
+
+  // Economics
+  income: IncomeStream[];
+  expenses: Expense[];
+}
+
+export interface OrgResources {
+  credits: number;
+  influence: number; // Political/social power
+  territory: number; // Physical control (locations owned)
+  reputation: number; // Public perception (-100 to +100)
+  heat: number; // Law enforcement attention
+}
+
+export interface OrgGoal {
+  type: GoalType;
+  target?: EntityRef;
+  priority: number;
+  progress: number;
+}
+
+export type GoalType =
+  | 'expand_territory'
+  | 'increase_wealth'
+  | 'destroy_enemy'
+  | 'protect_asset'
+  | 'recruit_talent'
+  | 'reduce_heat'
+  | 'gain_influence'
+  | 'complete_mission_chain';
+
+/**
+ * Location - physical places in the city
+ * Tags determine functionality (income, storage, fortified, etc.)
+ */
+export interface Location extends Entity {
+  // Position
+  sector: string;
+  district: string;
+  coordinates: {
+    distance: number; // From city center
+    vertical: number; // Building floor (0 = ground)
+  };
+
+  // Properties
+  size: number; // 1-5 scale
+  security: number; // 0-100
+
+  // Ownership
+  owner?: OrgRef;
+  previousOwners: { org: OrgRef; from: number; to: number }[];
+
+  // Economics
+  baseIncome: number;
+  operatingCost: number;
+
+  // Capacity
+  agentCapacity: number;
+  vehicleCapacity: number;
+
+  // Current state
+  occupants: AgentRef[];
+  vehicles: VehicleRef[];
+
+  // Inventory
+  inventory: Inventory;
+}
+
+/**
+ * Inventory - goods stored at a location
+ * ~16 broad categories, not 1000 items
+ */
+export interface Inventory {
+  [category: string]: number; // e.g., { small_arms: 50, narcotics: 100 }
+}
+
+/**
+ * Mission - tasks created by leaders, executed by agents
+ */
+export interface Mission extends Entity {
+  // Origin
+  creator: OrgRef;
+  createdPhase: number;
+
+  // Visibility
+  visibility: 'public' | 'private' | 'secret';
+
+  // Requirements
+  requirements: MissionRequirements;
+
+  // Target
+  target?: {
+    entityId: EntityRef;
+    targetTags?: string[];
+  };
+
+  // Timing
+  deadline?: number;
+  estimatedDuration: number;
+
+  // Rewards/Penalties
+  rewards: Record<string, number>;
+  failurePenalties: Record<string, number>;
+
+  // Execution
+  status: MissionStatus;
+  assignedOrg?: OrgRef;
+  assignedAgents: AgentRef[];
+  progress: MissionProgress;
+
+  outcome?: MissionOutcome;
+}
+
+export interface MissionRequirements {
+  stats: Partial<AgentStats>;
+  minAgents: number;
+  maxAgents: number;
+  requiredTags?: string[];
+  equipment?: EquipmentRequirement[];
+}
+
+export interface EquipmentRequirement {
+  category: string;
+  quantity: number;
+}
+
+export type MissionStatus =
+  | 'available'
+  | 'assigned'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+  | 'expired'
+  | 'cancelled';
+
+export interface MissionProgress {
+  phaseStarted?: number;
+  phasesElapsed: number;
+  forceAccumulated: number;
+  stealthAccumulated: number;
+  techAccumulated: number;
+  socialAccumulated: number;
+  complications: Complication[];
+  currentPhase: 'travel' | 'execution' | 'extraction';
+}
+
+export interface Complication {
+  type: string;
+  severity: number;
+  resolved: boolean;
+}
+
+export interface MissionOutcome {
+  success: boolean;
+  actualRewards: Record<string, number>;
+  actualPenalties: Record<string, number>;
+  agentResults: { agentId: AgentRef; status: AgentStatus }[];
+}
+
+/**
+ * Vehicle - transportation and mobile assets
+ */
+export interface Vehicle extends Entity {
+  owner?: OrgRef;
+  operator?: AgentRef;
+
+  stats: VehicleStats;
+  condition: number; // 0-100
+  location?: LocationRef;
+  maintenanceCost: number; // Per week
+}
+
+export interface VehicleStats {
+  speed: number;
+  capacity: number; // Agent slots
+  armor: number;
+  stealth: number;
+  cargo: number; // Equipment/goods capacity
+}
+
+/**
+ * Wallet - for tracking credits
+ * Both agents and orgs have wallets
+ */
+export interface Wallet {
+  credits: number;
+  accounts: BankAccount[];
+  stashes: CashStash[];
+}
+
+export interface BankAccount {
+  id: string;
+  balance: number;
+  frozen: boolean;
+}
+
+export interface CashStash {
+  id: string;
+  amount: number;
+  locationId: LocationRef;
+  hidden: boolean;
+}

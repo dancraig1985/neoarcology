@@ -1,0 +1,17 @@
+{
+  "id": "factory",
+  "name": "Factory",
+  "description": "An industrial manufacturing facility",
+  "tags": ["production", "storage", "legal", "industrial"],
+  "defaults": {
+    "size": 4,
+    "security": 30,
+    "baseIncome": 1000,
+    "operatingCost": 400,
+    "agentCapacity": 20,
+    "vehicleCapacity": 5
+  },
+  "constraints": {
+    "requiresLegalOwner": false
+  }
+}
