@@ -4,6 +4,7 @@
 **Priority:** P0 (critical)
 **Dependencies:** None
 **Phase:** 0
+**Reference:** [GAME-DESIGN.md](../../GAME-DESIGN.md) - Phase 0: Stack Setup
 
 ## Goal
 

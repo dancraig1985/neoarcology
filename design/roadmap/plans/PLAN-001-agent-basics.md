@@ -4,6 +4,7 @@
 **Priority:** P0 (critical)
 **Dependencies:** PLAN-000
 **Phase:** 1a
+**Reference:** [GAME-DESIGN.md](../../GAME-DESIGN.md) - Phase 1a: Agent Slice of Life
 
 ## Goal
 
@@ -45,9 +46,12 @@ Agent wakes up → Goes about their day → Eats (consumes provisions) → Rests
 
 ### Agent Needs System
 - [ ] Agents have `needs.hunger` (0-100, starts at 0)
-- [ ] Once per week (on week rollover), hunger increases by `hungerPerWeek` (default 25)
+- [ ] Agents are **compelled to eat once per week** (every 7 days / 28 phases)
+- [ ] On week rollover: agent attempts to eat, then hunger increases if they couldn't
 - [ ] Eating (consuming `provisionsPerMeal`) resets hunger to 0
-- [ ] At hunger >= `hungerMax`, agent dies (status = 'dead')
+- [ ] If no food available, hunger increases by `hungerPerWeek` (default 25)
+- [ ] **Starvation**: At hunger >= `hungerMax` (100), agent dies
+- [ ] This means 4 weeks without food = death (25 × 4 = 100)
 - [ ] All values loaded from balance config
 
 ### Agent Inventory

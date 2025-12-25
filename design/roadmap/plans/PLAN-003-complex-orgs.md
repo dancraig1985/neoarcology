@@ -4,6 +4,7 @@
 **Priority:** P1 (high)
 **Dependencies:** PLAN-002
 **Phase:** 1c
+**Reference:** [GAME-DESIGN.md](../../GAME-DESIGN.md) - Phase 1c: Complex Organizations
 
 ## Goal
 

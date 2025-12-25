@@ -4,6 +4,7 @@
 **Priority:** P0 (critical)
 **Dependencies:** PLAN-001
 **Phase:** 1b
+**Reference:** [GAME-DESIGN.md](../../GAME-DESIGN.md) - Phase 1b: Simple Economy
 
 ## Goal
 
