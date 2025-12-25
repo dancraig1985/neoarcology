@@ -2198,13 +2198,20 @@ const SYNDICATE_NAMES = [
 
 **Purpose**: Watch the city simulation unfold. No control, pure observation.
 
+**Turn-Based**: The simulation does NOT run in real-time. The player controls when ticks happen:
+- **Tick 1x**: Advance 1 phase
+- **Tick 5x**: Advance 5 phases
+- **Tick 10x**: Advance 10 phases
+- **Tick 100x**: Advance 100 phases (for burn-in or fast-forward)
+
+This gives the player time to inspect the world state between ticks.
+
 **Features**:
 - Browse all entities (Django-admin style lists)
-- Watch real-time activity log
+- Activity log updates after each tick batch
 - View org power rankings
 - See relationships graph
-- Fast-forward time (1x, 10x, 100x speed)
-- Pause and inspect
+- Player-controlled tick advancement (not real-time)
 - Filter log by org/agent/type
 - Historical graphs (power over time, wealth, etc.)
 
@@ -2234,13 +2241,15 @@ const SYNDICATE_NAMES = [
 │  │ [1245] Black Dragons declared war on Steel Serpents         ││
 │  └─────────────────────────────────────────────────────────────┘│
 │                                                                 │
-│  [PAUSE]  [1x]  [10x]  [100x]  ████████████░░░░ Phase 1247     │
+│  [Tick 1x]  [Tick 5x]  [Tick 10x]  [Tick 100x]   Phase: 1247   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ### 2. Org Mode
 
 **Purpose**: Take control of one organization and see how far you can take it in a living world.
+
+**Turn-Based**: Player takes actions, then clicks **[Next Phase]** to advance time. One phase = one turn.
 
 **Setup**:
 1. Generate city
@@ -2281,6 +2290,8 @@ The simulation doesn't care about the player. The world continues regardless.
 ### 3. Agent Mode (Future)
 
 **Purpose**: Control a single agent navigating the underworld.
+
+**Turn-Based**: Player takes actions, then clicks **[Next Phase]** to advance time. One phase = one turn.
 
 **Gameplay**:
 - Start as a free agent
@@ -3161,7 +3172,7 @@ Context, decisions, or blockers.
 
 ---
 
-*Document Version: 7.1*
+*Document Version: 7.2*
 *Created: 2025-12-23*
 *Rewritten: 2025-12-24 - Simulation-first architecture*
 *Updated: 2025-12-24 - Added enterprise stats, infrastructure preferences, living docs*
@@ -3173,3 +3184,4 @@ Context, decisions, or blockers.
 *Consistency Pass: 2025-12-25 - Fixed all code examples to use tags consistently; removed old personality/type patterns*
 *Major Update: 2025-12-25 - Implementation rollout plan; economy timing (weekly salaries, flexible income); agent jobs system*
 *Clarification: 2025-12-25 - Renamed Fixer Mode → Org Mode (control any org type); added iterative design philosophy*
+*Clarification: 2025-12-25 - Turn-based not real-time; Observer has Tick buttons, Org/Agent have Next Phase*
