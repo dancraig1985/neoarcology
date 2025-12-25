@@ -83,7 +83,7 @@ This means:
 │              │                │                │                 │
 │              ▼                ▼                ▼                 │
 │     ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │
-│     │  OBSERVER   │  │   FIXER     │  │   AGENT     │           │
+│     │  OBSERVER   │  │     ORG     │  │   AGENT     │           │
 │     │    MODE     │  │    MODE     │  │    MODE     │           │
 │     │ (view only) │  │ (control    │  │ (control    │           │
 │     │             │  │  one org)   │  │  one agent) │           │
@@ -105,8 +105,9 @@ This means:
 
 ### Player Modes = Control Override
 
-When a player enters "Fixer Mode":
-- They take control of ONE organization
+When a player enters "Org Mode":
+- They take control of ONE organization (any type: corp, gang, cult, fixer crew, etc.)
+- They become the "leader agent" of that org
 - That org's AI is replaced by player decisions
 - Everything else continues autonomously
 - The player is just one actor in a living world
@@ -158,10 +159,10 @@ Each phase tick processes in this order (agent-first):
    └─> Rewards/penalties distributed to agents AND orgs
 
 5. ECONOMY TICK
-   └─> Org income/expenses processed
-   └─> Agent salaries paid
-   └─> Personal wealth updated
+   └─> Location income processed (timing varies by location/operation)
    └─> Business deals executed
+   └─> Weekly: Salaries, rent, maintenance paid (on week rollover)
+   └─> Personal wealth updated
 
 6. LOCATION TICK
    └─> Location ownership changes
@@ -1339,7 +1340,7 @@ interface Wallet {
 // Agents have personal wealth separate from org resources
 interface AgentFinances {
   wallet: Wallet;
-  salary: number;            // Per phase from employer
+  salary: number;            // Per WEEK from employer (paid on week rollover)
   missionCuts: number;       // Percentage of mission rewards
   debts: Debt[];             // Money owed to others
   assets: PersonalAsset[];   // Owned property, vehicles, gear
@@ -1360,13 +1361,14 @@ type AgentIncomeSource =
   | "inheritance"      // From dead relatives/associates
   | "gambling";        // Wins (and losses)
 
-// Salary ranges by role (per phase)
+// Salary ranges by role (per WEEK, paid on week rollover)
 const SALARY_RANGES = {
-  grunt: { min: 50, max: 150 },
-  specialist: { min: 150, max: 400 },
-  lieutenant: { min: 400, max: 1000 },
-  executive: { min: 1000, max: 3000 },
-  leader: { min: 0, max: 0 },  // Leaders take profits, not salary
+  unskilled: { min: 100, max: 300 },     // Factory workers, basic labor
+  skilled: { min: 300, max: 600 },       // Requires some stats (Tech for research, etc.)
+  specialist: { min: 600, max: 1500 },   // High-stat operatives
+  lieutenant: { min: 1500, max: 4000 },  // Leadership roles
+  executive: { min: 4000, max: 10000 },  // Senior management
+  leader: { min: 0, max: 0 },            // Leaders take profits, not salary
 };
 ```
 
@@ -1387,7 +1389,8 @@ type OrgIncomeSource =
 interface IncomeStream {
   type: OrgIncomeSource;
   location?: LocationRef;   // Where income is generated
-  baseAmount: number;       // Credits per phase
+  baseAmount: number;       // Credits per timing interval
+  timing: IncomeTiming;     // When income is generated
   volatility: number;       // How much it fluctuates (0-1)
   risk: number;             // Chance of attracting heat
   requirements: {
@@ -1395,6 +1398,102 @@ interface IncomeStream {
     minSkill?: StatRequirement;
   };
 }
+
+// Income timing - different operations generate at different intervals
+type IncomeTiming =
+  | "per_phase"     // High-frequency: vending, retail, continuous services
+  | "per_day"       // Daily: restaurants, entertainment venues
+  | "per_week"      // Weekly: protection rackets, regular contracts
+  | "per_month";    // Monthly: rent, large contracts, investments
+```
+
+### Agent Employment & Jobs
+
+Agents work jobs to earn money. Jobs range from unskilled labor to highly specialized roles.
+
+```typescript
+interface Job {
+  id: string;
+  title: string;
+  employer: OrgRef;
+  location: LocationRef;
+
+  // Requirements
+  skillRequirements: {
+    stat?: string;          // Which stat is needed (if any)
+    minValue?: number;      // Minimum stat value required
+  };
+
+  // Compensation
+  salaryTier: "unskilled" | "skilled" | "specialist" | "lieutenant" | "executive";
+
+  // What the job produces
+  output?: {
+    type: "income" | "research" | "production" | "security";
+    value: number;          // Contribution per phase
+  };
+}
+
+// Job tiers and their requirements
+const JOB_TIERS = {
+  unskilled: {
+    // No stat requirements - anyone can do these
+    // Factory work, manual labor, basic retail, janitorial
+    examples: ["factory_worker", "warehouse_hand", "retail_clerk"],
+    requirements: null,
+  },
+
+  skilled: {
+    // Requires moderate stats - valuable but not rare
+    // Technicians, drivers, security guards
+    examples: ["technician", "driver", "security_guard", "mechanic"],
+    requirements: { minStat: 30 },
+  },
+
+  specialist: {
+    // Requires high stats - these agents are valuable targets
+    // Researchers, hackers, enforcers, negotiators
+    examples: ["researcher", "hacker", "enforcer", "negotiator"],
+    requirements: { minStat: 50 },
+  },
+
+  // Lieutenant and Executive are leadership roles, not typical jobs
+};
+```
+
+**Why this matters for gameplay:**
+
+1. **Normal Economy**: Most agents work normal jobs. Corps employ researchers, factories employ workers.
+
+2. **Agent Value**: High-stat agents are valuable. A researcher with Tech 70 is worth kidnapping.
+
+3. **Poaching**: Orgs can try to hire away skilled agents from competitors.
+
+4. **Capture**: In hostile missions, capturing a skilled agent can be more valuable than killing them.
+
+5. **Workforce**: Orgs need workers. Losing your factory workers means losing production income.
+
+```typescript
+// Example: NeoSynth Corp employs agents
+const neoSynthJobs = [
+  // Unskilled - anyone can do these
+  { title: "Assembly Line Worker", tier: "unskilled", location: factory, output: { type: "production", value: 10 } },
+  { title: "Janitor", tier: "unskilled", location: hq, output: null },
+
+  // Skilled - need some stats
+  { title: "Security Guard", tier: "skilled", requirements: { stat: "force", minValue: 30 }, location: hq },
+  { title: "Lab Technician", tier: "skilled", requirements: { stat: "tech", minValue: 30 }, location: lab },
+
+  // Specialist - high value, worth stealing
+  { title: "Senior Researcher", tier: "specialist", requirements: { stat: "engineering", minValue: 60 },
+    output: { type: "research", value: 50 } },
+  { title: "Netrunner", tier: "specialist", requirements: { stat: "tech", minValue: 60 },
+    output: { type: "security", value: 30 } },
+];
+
+// A rival corp might target that Senior Researcher...
+// Mission: "Extract Dr. Chen from NeoSynth" - kidnap, not kill
+// If successful, the researcher now works for you (under duress or willingly)
 ```
 
 ### Goods Categories (Simplified)
@@ -2139,7 +2238,7 @@ const SYNDICATE_NAMES = [
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 2. Fixer Mode
+### 2. Org Mode
 
 **Purpose**: Take control of one organization and see how far you can take it in a living world.
 
@@ -2147,8 +2246,9 @@ const SYNDICATE_NAMES = [
 1. Generate city
 2. Run simulation for N phases (e.g., 500) to create history
 3. Present player with org selection screen
-4. Player picks an org (or creates a new fixer crew)
-5. Player controls that org; AI controls everything else
+4. Player picks an org (any type: corporation, gang, cult, fixer crew, etc.) or creates a new one
+5. Player becomes the "leader agent" of that org
+6. Player controls that org; AI controls everything else
 
 **Player Controls**:
 - Hire/fire agents
@@ -2164,6 +2264,8 @@ const SYNDICATE_NAMES = [
 - Become the richest org?
 - Destroy a specific rival?
 - Build a criminal empire from nothing?
+- Run a legitimate corporation?
+- Lead a fanatical cult?
 - Survive as long as possible?
 
 **Game Over** (optional): The game continues even if your org is destroyed:
@@ -2184,7 +2286,8 @@ The simulation doesn't care about the player. The world continues regardless.
 - Start as a free agent
 - Accept jobs from various orgs
 - Build reputation
-- Eventually: start own fixer crew (transitions to Fixer Mode)
+- Rise through the ranks of an organization
+- Eventually: start your own org of any type (transitions to Org Mode)
 
 ---
 
@@ -2331,42 +2434,198 @@ data/
 
 ---
 
-## MVP Implementation Plan
+## Implementation Rollout
 
-### Phase 1: Core Simulation (No UI)
-1. Entity types and interfaces
-2. World state management
-3. Basic tick engine
-4. Organization AI (simple)
-5. Agent AI (simple)
-6. Mission creation and resolution
-7. Activity logging
+The game is built in layers, each adding complexity to a working foundation.
 
-### Phase 2: Observer Mode UI
-1. Pixi.js renderer setup
-2. Entity list panels (Django-admin style)
-3. Activity log panel
-4. Time controls (pause, speed)
-5. Basic entity detail views
+### Phase 0: Stack Setup
+Set up the development environment and project structure.
 
-### Phase 3: Procedural Generation
-1. City generator
-2. Organization generator
-3. Agent generator
-4. Initial world setup
-5. "Burn in" simulation (run N phases to create history)
+**Deliverables:**
+- [ ] TypeScript + Pixi.js + Zustand project scaffold
+- [ ] Electron shell (or web-only for initial dev)
+- [ ] Build system (Vite or similar)
+- [ ] Data file loading (JSON templates, configs)
+- [ ] Basic type definitions from this design doc
+- [ ] Dev tooling (hot reload, debug panel stub)
 
-### Phase 4: Fixer Mode
-1. Org selection screen
-2. Player control override
-3. Player-specific UI (management interface)
-4. Transition to/from Observer Mode
+### Phase 1: Peaceful Economy Simulation (No UI)
+Build a "normal" cyberpunk economy with no hostile actions. The world runs, money flows, agents work jobs.
 
-### Phase 5: Economy & Markets
-1. Goods and inventory system
-2. Market dynamics
-3. Research and production
-4. Heist economics
+**Core Systems:**
+- [ ] Entity system (tags, templates, Entity base class)
+- [ ] World state container
+- [ ] Tick engine with time rollover (phase → day → week → month)
+- [ ] Economy system:
+  - [ ] Wallets (credits in/out)
+  - [ ] Income timing (per-phase, daily, weekly, monthly)
+  - [ ] Weekly payroll (salaries, maintenance, rent)
+- [ ] Location system:
+  - [ ] Locations generate income based on timing
+  - [ ] Locations have capacity for agents and inventory
+- [ ] Agent system:
+  - [ ] Agent stats (6 stats)
+  - [ ] Agent employment (jobs at locations)
+  - [ ] Job tiers: unskilled (no requirements), skilled (stat requirements), specialist (high stats)
+  - [ ] Unemployed agents seek work
+- [ ] Organization system:
+  - [ ] Orgs own locations and employ agents
+  - [ ] Leaders make basic decisions (hire, fire, expand)
+  - [ ] Basic org income/expense tracking
+- [ ] Activity logging (all significant events)
+
+**What this phase proves:**
+- Money flows correctly between entities
+- Agents get hired, work jobs, earn salaries
+- Orgs earn income from locations, pay expenses
+- The simulation is stable over many ticks
+- High-stat agents are employed in skilled/specialist roles
+- The world feels "alive" economically
+
+**No hostile actions yet:** No theft, no combat, no raids. Just a working economy.
+
+### Phase 2: Procedural Generation
+Generate interesting starting worlds.
+
+**Deliverables:**
+- [ ] City generator (sectors, districts)
+- [ ] Location generator (variety of location templates)
+- [ ] Organization generator (corps, gangs, gov't with appropriate locations/agents)
+- [ ] Agent generator (personality tags, stat distributions, archetypes)
+- [ ] Name generators (agents, orgs, locations)
+- [ ] "Burn in" capability (run N phases to create history before player enters)
+- [ ] Scenario system (pre-configured starting conditions)
+
+### Phase 3: Observer Mode UI
+Build the UI to visualize the simulation.
+
+**Deliverables:**
+- [ ] Pixi.js renderer setup
+- [ ] Main layout (nav, main panel, activity log)
+- [ ] Time controls (pause, play, speed: 1x, 10x, 100x)
+- [ ] Entity list panels (Django-admin style):
+  - [ ] Organizations list + detail view
+  - [ ] Agents list + detail view
+  - [ ] Locations list + detail view
+  - [ ] Missions list + detail view (empty for now)
+- [ ] Activity log panel (filterable)
+- [ ] Basic statistics/graphs (org wealth over time, agent employment, etc.)
+- [ ] Entity relationships view
+
+**What this phase proves:**
+- Can observe the peaceful economy running
+- Can inspect any entity in detail
+- Can see money flowing, agents working
+- Can identify issues/imbalances visually
+
+### Phase 4: Hostile Missions & Combat
+Add conflict to the simulation.
+
+**Deliverables:**
+- [ ] Mission system:
+  - [ ] Mission templates (heist, raid, sabotage, extraction, assassination)
+  - [ ] Mission creation by leaders
+  - [ ] Agent assignment to missions
+  - [ ] Mission progress and resolution
+- [ ] Confrontation system:
+  - [ ] Combat resolution (Force vs Force)
+  - [ ] Stealth resolution (Mobility checks)
+  - [ ] Tech resolution (hacking, counter-hacking)
+- [ ] Encounter system:
+  - [ ] Mission collisions (two teams at same location)
+  - [ ] Random encounters
+- [ ] Consequences:
+  - [ ] Agent injury, capture, death
+  - [ ] Inventory theft
+  - [ ] Location damage/capture
+  - [ ] Heat generation
+- [ ] Observer Mode updates:
+  - [ ] Missions list populated
+  - [ ] Combat/mission logs in activity feed
+
+**What this phase proves:**
+- Hostile actions work correctly
+- Combat resolves based on stats
+- Orgs can attack each other for resources
+- Agent capture/extraction works (steal the researcher!)
+- The simulation handles conflict without breaking the economy
+
+### Phase 5: Org Mode
+Player takes control of an organization.
+
+**Deliverables:**
+- [ ] Org selection screen (pick existing org of any type, or create new one)
+- [ ] Player becomes the "leader agent" of their org
+- [ ] Player control override (AI disabled for player org)
+- [ ] Org Mode UI:
+  - [ ] Management dashboard (your org's status)
+  - [ ] Agent roster (hire, fire, assign)
+  - [ ] Location management (buy, sell, upgrade)
+  - [ ] Mission planning (create missions, assign agents)
+  - [ ] Finances panel (income, expenses, projections)
+  - [ ] Relationships panel (allies, enemies, deals)
+- [ ] Transition to/from Observer Mode (watch vs play)
+- [ ] Sandbox gameplay (no victory conditions, player sets goals)
+
+**What this phase proves:**
+- Player can meaningfully control an org
+- Player decisions affect the simulation
+- The world continues around the player
+- Observer Mode works as a "step back and watch" option
+
+### Phase 6: Agent Mode
+Player controls a single agent.
+
+**Deliverables:**
+- [ ] Agent selection/creation
+- [ ] Player is one agent in the world
+- [ ] Agent Mode UI:
+  - [ ] Personal status (stats, wallet, relationships)
+  - [ ] Job hunting (view available jobs, apply)
+  - [ ] Mission participation (as team member, not leader)
+  - [ ] Personal deals and side hustles
+  - [ ] Reputation and relationship management
+- [ ] Agent-level goals:
+  - [ ] Accumulate wealth
+  - [ ] Rise through org ranks
+  - [ ] Found your own org of any type (transitions to Org Mode)
+  - [ ] Retire wealthy
+- [ ] Permadeath or agent persistence options
+
+**What this phase proves:**
+- Can experience the world from ground level
+- Agent-level gameplay is compelling
+- Natural progression from Agent → Org Mode works
+
+---
+
+### Implementation Notes
+
+**Build order matters:** Each phase builds on the previous. Don't skip ahead.
+
+**Peaceful first, then hostile:** Getting the economy right without combat simplifies debugging. Combat adds complexity—make sure the foundation is solid.
+
+**UI validates simulation:** Observer Mode isn't just for the player—it's how we verify the simulation works correctly.
+
+**Data-driven from day one:** Use JSON templates even in Phase 1. Don't hardcode entity types.
+
+### Iterative Design
+
+**This design document will evolve.** Each implementation phase will surface new insights:
+
+- **Phase 1 (Economy)**: We'll learn how money should flow, what makes agents feel alive economically. The economy section of this doc will be refined based on what actually works.
+
+- **Phase 2 (Proc Gen)**: We'll discover what makes interesting starting worlds. Generation parameters will be tuned.
+
+- **Phase 3 (Observer UI)**: Seeing the simulation visualized will reveal balance issues and missing features.
+
+- **Phase 4 (Combat/Missions)**: Combat mechanics in this doc are speculative. The actual implementation will be designed when we get there, informed by how the peaceful simulation behaves.
+
+- **Phase 5 (Org Mode)**: Player control requirements will become clear once we can observe the AI orgs.
+
+- **Phase 6 (Agent Mode)**: Agent-level gameplay will be designed based on what makes the simulation interesting.
+
+**Don't over-design future phases.** The sections in this doc for later phases are sketches, not specifications. Detailed design happens when implementation begins.
 
 ---
 
@@ -2897,12 +3156,12 @@ Context, decisions, or blockers.
 
 ### Game Modes
 - **Observer Mode**: Player watches simulation without control
-- **Fixer Mode**: Player controls one organization (via its leader)
+- **Org Mode**: Player controls one organization of any type (player is the leader agent)
 - **Agent Mode**: Player controls one agent (future)
 
 ---
 
-*Document Version: 6.2*
+*Document Version: 7.1*
 *Created: 2025-12-23*
 *Rewritten: 2025-12-24 - Simulation-first architecture*
 *Updated: 2025-12-24 - Added enterprise stats, infrastructure preferences, living docs*
@@ -2912,3 +3171,5 @@ Context, decisions, or blockers.
 *Simplification: 2025-12-25 - MVP foundation (4 pillars), 16 goods categories, tangible/non-tangible storage*
 *Clarification: 2025-12-25 - Leader tags + org tags combine for behavior; agent personality via tags*
 *Consistency Pass: 2025-12-25 - Fixed all code examples to use tags consistently; removed old personality/type patterns*
+*Major Update: 2025-12-25 - Implementation rollout plan; economy timing (weekly salaries, flexible income); agent jobs system*
+*Clarification: 2025-12-25 - Renamed Fixer Mode → Org Mode (control any org type); added iterative design philosophy*

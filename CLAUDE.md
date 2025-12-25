@@ -12,7 +12,7 @@ A cyberpunk city simulation that runs autonomously. Game modes are different vie
 
 - **Simulation-first**: The world runs without player input
 - **Agent-driven**: Agents are the atomic unit; orgs are emergent structures run by agents
-- **Game modes are views**: Observer, Fixer, Agent modes view same simulation
+- **Game modes are views**: Observer, Org, Agent modes view same simulation
 - **Leaders drive orgs**: Org "decisions" are actually the leader's decisions
 - **Activity log**: All events logged for emergent narrative
 
@@ -80,6 +80,12 @@ A cyberpunk city simulation that runs autonomously. Game modes are different vie
 - Behaviors: `data/behaviors/*.json`
 
 **Adding new "types" = adding new template JSON files, no code changes required.**
+
+## Implementation Phases
+
+0. Stack Setup → 1. Peaceful Economy → 2. Proc Gen → 3. Observer UI → 4. Combat/Missions → 5. Org Mode → 6. Agent Mode
+
+**Iterative design**: Each phase refines the design doc. Don't over-design future phases.
 
 ## Common Pitfalls
 
