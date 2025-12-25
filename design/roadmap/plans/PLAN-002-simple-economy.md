@@ -1,6 +1,6 @@
 # PLAN-002: Simple Economy
 
-**Status:** planned
+**Status:** completed
 **Priority:** P0 (critical)
 **Dependencies:** PLAN-001
 **Phase:** 1b
@@ -29,53 +29,53 @@ Agent opens shop → Stocks provisions → Sells to customers → Pays employee 
 ## Objectives
 
 ### Location System
-- [ ] Locations exist at coordinates (sector, district)
-- [ ] Location templates: `retail_shop`, `restaurant`
-- [ ] Locations have: owner (AgentRef | OrgRef), inventory, employee slots
-- [ ] Owner can be Agent (Phase 1b) or Org (Phase 1c) - design for both now
-- [ ] Job capacity by template (from balance config):
+- [x] Locations exist at coordinates (sector, district)
+- [x] Location templates: `retail_shop`, `restaurant`
+- [x] Locations have: owner (AgentRef | OrgRef), inventory, employee slots
+- [x] Owner can be Agent (Phase 1b) or Org (Phase 1c) - design for both now
+- [x] Job capacity by template (from balance config):
   - `retail_shop`: 1 employee
   - `restaurant`: 1 employee
   - (Future: factory 3-4, research_lab 3-4)
 
 ### Location Inventory
-- [ ] Locations hold goods (provisions, etc.)
-- [ ] Owners can stock locations from personal inventory
-- [ ] Customers purchase from location inventory
+- [x] Locations hold goods (provisions, etc.)
+- [x] Owners can stock locations from personal inventory
+- [x] Customers purchase from location inventory
 
 ### Simple Commerce
-- [ ] Agents can "buy" action: pay credits, receive goods
-- [ ] Fixed prices for now (e.g., 10 credits per provisions)
-- [ ] Transaction: buyer wallet → seller wallet, goods transfer
-- [ ] Agents prioritize buying provisions when hungry and have credits
+- [x] Agents can "buy" action: pay credits, receive goods
+- [x] Fixed prices for now (e.g., 10 credits per provisions)
+- [x] Transaction: buyer wallet → seller wallet, goods transfer
+- [x] Agents prioritize buying provisions when hungry and have credits
 
 ### Agent Entrepreneurship
-- [ ] Agents with sufficient credits can "open business"
-- [ ] Opening cost (e.g., 200 credits for retail_shop)
-- [ ] Agent becomes owner, location created
-- [ ] Owner stocks location with provisions (from personal inventory or purchased)
+- [x] Agents with sufficient credits can "open business"
+- [x] Opening cost (e.g., 200 credits for retail_shop)
+- [x] Agent becomes owner, location created
+- [x] Owner stocks location with provisions (from personal inventory or purchased)
 
 ### Basic Employment
-- [ ] Locations can hire agents for jobs
-- [ ] Job = work at location, earn salary
-- [ ] Salary tier: `unskilled` (100-300 credits/week)
-- [ ] Hiring: randomly select from available agents
-- [ ] Employee works at location (present during day phase)
+- [x] Locations can hire agents for jobs
+- [x] Job = work at location, earn salary
+- [x] Salary tier: `unskilled` (100-300 credits/week)
+- [x] Hiring: randomly select from available agents
+- [x] Employee works at location (present during day phase)
 
 ### Weekly Payroll
-- [ ] On week rollover, locations pay employees
-- [ ] Payment: location owner wallet → employee wallet
-- [ ] If owner can't pay: employee leaves, seeks other work
+- [x] On week rollover, locations pay employees
+- [x] Payment: location owner wallet → employee wallet
+- [x] If owner can't pay: employee leaves, seeks other work
 
 ### Business Viability
-- [ ] Locations have operating costs (rent/maintenance)
-- [ ] Revenue: sales to customers
-- [ ] Profit = revenue - salary - operating costs
-- [ ] If owner wallet goes negative: business dissolves
-- [ ] Dissolved: location removed, employees become available
+- [x] Locations have operating costs (rent/maintenance)
+- [x] Revenue: sales to customers
+- [x] Profit = revenue - salary - operating costs
+- [x] If owner wallet goes negative: business dissolves
+- [x] Dissolved: location removed, employees become available
 
 ### Agent Decision Making (Simple)
-- [ ] Each phase, agent chooses action based on priority:
+- [x] Each phase, agent chooses action based on priority:
   1. If hungry + has credits: go buy provisions
   2. If employed: go to work
   3. If unemployed + shops hiring: seek job
@@ -83,17 +83,17 @@ Agent opens shop → Stocks provisions → Sells to customers → Pays employee 
   5. Else: idle
 
 ### Test Harness
-- [ ] Create 20 agents (varied starting credits/provisions)
-- [ ] Create 2 initial retail_shops with provisions stocked
-- [ ] Run simulation for 100+ weeks
-- [ ] Observe: purchases, employment, new businesses, failures, deaths
+- [x] Create 20 agents (varied starting credits/provisions)
+- [x] Create 2 initial retail_shops with provisions stocked
+- [x] Run simulation for 100+ weeks
+- [x] Observe: purchases, employment, new businesses, failures, deaths
 
 ### Activity Log Additions
-- [ ] Log: "Agent X purchased 2 provisions from Shop Y for 20 credits"
-- [ ] Log: "Agent X opened retail_shop 'Corner Store'"
-- [ ] Log: "Agent X hired by Shop Y (salary: 150/week)"
-- [ ] Log: "Shop Y dissolved (owner bankrupt)"
-- [ ] Log: "Agent X quit job at Shop Y (unpaid)"
+- [x] Log: "Agent X purchased 2 provisions from Shop Y for 20 credits"
+- [x] Log: "Agent X opened retail_shop 'Corner Store'"
+- [x] Log: "Agent X hired by Shop Y (salary: 150/week)"
+- [x] Log: "Shop Y dissolved (owner bankrupt)"
+- [x] Log: "Agent X quit job at Shop Y (unpaid)"
 
 ## Economic Parameters (Data-Driven)
 
@@ -127,13 +127,13 @@ All values in `data/config/balance.json` - designers can tweak without code chan
 
 ## Verification
 
-- [ ] Agents can purchase provisions and survive
-- [ ] Shops sell provisions, earn revenue
-- [ ] Employees get paid weekly
-- [ ] Unprofitable shops dissolve
-- [ ] Some agents open new businesses
-- [ ] Economy reaches some equilibrium (or interesting collapse)
-- [ ] Run 200 weeks stable
+- [x] Agents can purchase provisions and survive
+- [x] Shops sell provisions, earn revenue
+- [x] Employees get paid weekly
+- [x] Unprofitable shops dissolve
+- [x] Some agents open new businesses
+- [x] Economy reaches some equilibrium (or interesting collapse)
+- [x] Run 200 weeks stable
 
 ## Non-Goals (Defer)
 

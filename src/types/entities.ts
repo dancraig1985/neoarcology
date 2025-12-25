@@ -83,6 +83,7 @@ export interface Agent extends Entity {
 
   // Employment
   employer?: OrgRef;
+  employedAt?: LocationRef; // Location where agent works
   salary: number; // Per week
 
   // Personal finances
@@ -210,13 +211,20 @@ export interface Location extends Entity {
   size: number; // 1-5 scale
   security: number; // 0-100
 
-  // Ownership
-  owner?: OrgRef;
-  previousOwners: { org: OrgRef; from: number; to: number }[];
+  // Ownership - can be Agent (small business) or Org (corporation)
+  owner?: AgentRef | OrgRef;
+  ownerType: 'agent' | 'org' | 'none';
+  previousOwners: { ownerId: EntityRef; from: number; to: number }[];
+
+  // Employment
+  employees: AgentRef[];
+  employeeSlots: number;
 
   // Economics
   baseIncome: number;
   operatingCost: number;
+  weeklyRevenue: number; // Tracks sales this week
+  weeklyCosts: number; // Tracks costs this week
 
   // Capacity
   agentCapacity: number;

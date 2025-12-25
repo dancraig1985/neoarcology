@@ -8,7 +8,30 @@
     "startingHungerMax": 24,
     "startingCreditsMin": 100,
     "startingCreditsMax": 500,
-    "startingProvisionsMin": 4,
-    "startingProvisionsMax": 8
+    "startingProvisionsMin": 2,
+    "startingProvisionsMax": 4,
+    "entrepreneurThreshold": 400
+  },
+  "economy": {
+    "prices": {
+      "provisions": 10
+    },
+    "salary": {
+      "unskilled": { "min": 100, "max": 200 }
+    }
+  },
+  "locations": {
+    "retail_shop": {
+      "openingCost": 200,
+      "operatingCost": 30,
+      "employeeSlots": 1,
+      "startingInventory": 20
+    },
+    "restaurant": {
+      "openingCost": 300,
+      "operatingCost": 50,
+      "employeeSlots": 1,
+      "startingInventory": 15
+    }
   }
 }

@@ -3,13 +3,14 @@
  * Ties together tick engine, agents, and systems
  */
 
-import type { Agent } from '../types';
+import type { Agent, Location } from '../types';
 import type { LoadedConfig } from '../config/ConfigLoader';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
 import { processAgentPhase, createAgent, countLivingAgents, countDeadAgents } from './systems/AgentSystem';
+import { processAgentEconomicDecision, processWeeklyEconomy } from './systems/EconomySystem';
 
-// Agent names for test harness
+// Agent names for test harness (20 names for expanded population)
 const TEST_NAMES = [
   'Alex Chen',
   'Jordan Kim',
@@ -21,24 +22,57 @@ const TEST_NAMES = [
   'Drew Santos',
   'Blake Turner',
   'Jamie Cruz',
+  'Morgan Swift',
+  'Taylor Vega',
+  'Phoenix Reed',
+  'River Stone',
+  'Skylar Frost',
+  'Sage Wolfe',
+  'Rowan Steele',
+  'Finley Drake',
+  'Ash Kimura',
+  'Eden Blackwood',
 ];
 
 export interface SimulationState {
   time: TimeState;
   agents: Agent[];
+  locations: Location[];
   isRunning: boolean;
   ticksPerSecond: number;
 }
 
 /**
- * Create initial simulation state with test agents
+ * Create initial simulation state with test agents and locations
  */
 export function createSimulation(config: LoadedConfig): SimulationState {
   const time = createTimeState();
   const agents: Agent[] = [];
+  const locations: Location[] = [];
 
-  // Create 10 test agents
-  for (let i = 0; i < 10; i++) {
+  // Create 2 initial retail shops (system-owned - no owner)
+  const shopNames = ['Central Market', 'Corner Store'];
+  for (let i = 0; i < 2; i++) {
+    const location = createSystemLocation(
+      `location-sys-${i + 1}`,
+      shopNames[i] ?? `Shop ${i + 1}`,
+      'retail_shop',
+      config.balance,
+      time.currentPhase
+    );
+    locations.push(location);
+
+    ActivityLog.info(
+      time.currentPhase,
+      'business',
+      `system shop opened with ${location.inventory['provisions']} provisions`,
+      location.id,
+      location.name
+    );
+  }
+
+  // Create 20 test agents
+  for (let i = 0; i < 20; i++) {
     const agent = createAgent(
       `agent-${i + 1}`,
       TEST_NAMES[i] ?? `Agent ${i + 1}`,
@@ -56,14 +90,61 @@ export function createSimulation(config: LoadedConfig): SimulationState {
     );
   }
 
-  console.log(`\n[Simulation] Created ${agents.length} test agents`);
+  console.log(`\n[Simulation] Created ${locations.length} locations and ${agents.length} test agents`);
   console.log('[Simulation] Starting simulation...\n');
 
   return {
     time,
     agents,
+    locations,
     isRunning: false,
     ticksPerSecond: 10,
+  };
+}
+
+/**
+ * Create a system-owned location (no owner, infinite restocking)
+ */
+function createSystemLocation(
+  id: string,
+  name: string,
+  template: string,
+  balance: LoadedConfig['balance'],
+  phase: number
+): Location {
+  const locationConfig = balance.locations[template];
+  if (!locationConfig) {
+    throw new Error(`Unknown location template: ${template}`);
+  }
+
+  return {
+    id,
+    name,
+    template,
+    tags: [template, 'business', 'retail', 'system'],
+    created: phase,
+    relationships: [],
+    sector: 'downtown',
+    district: 'market',
+    coordinates: { distance: Math.random() * 50, vertical: 0 },
+    size: 2,
+    security: 20,
+    owner: undefined,
+    ownerType: 'none',
+    previousOwners: [],
+    employees: [],
+    employeeSlots: locationConfig.employeeSlots,
+    baseIncome: 0,
+    operatingCost: 0, // System shops have no operating cost
+    weeklyRevenue: 0,
+    weeklyCosts: 0,
+    agentCapacity: 20,
+    vehicleCapacity: 0,
+    occupants: [],
+    vehicles: [],
+    inventory: {
+      provisions: locationConfig.startingInventory * 5, // System shops have more stock
+    },
   };
 }
 
@@ -72,25 +153,95 @@ export function createSimulation(config: LoadedConfig): SimulationState {
  */
 export function tick(state: SimulationState, config: LoadedConfig): SimulationState {
   // Advance time (uses simulation config for time structure)
-  const { time: newTime, dayRollover } = advancePhase(state.time, config.simulation);
+  const { time: newTime, dayRollover, weekRollover } = advancePhase(state.time, config.simulation);
 
   // Log time progression on day rollover
   if (dayRollover) {
     const living = countLivingAgents(state.agents);
     const dead = countDeadAgents(state.agents);
-    console.log(`\n--- ${formatTime(newTime)} --- (${living} alive, ${dead} dead)`);
+    const employed = state.agents.filter((a) => a.status === 'employed').length;
+    const shops = state.locations.filter((l) => l.ownerType === 'agent').length;
+    console.log(
+      `\n--- ${formatTime(newTime)} --- (${living} alive, ${dead} dead, ${employed} employed, ${shops} agent shops)`
+    );
   }
 
-  // Process all agents (uses balance config for gameplay tuning)
-  const newAgents = state.agents.map((agent) =>
+  let updatedAgents = [...state.agents];
+  let updatedLocations = [...state.locations];
+
+  // 1. Process biological needs (hunger, eating from inventory)
+  updatedAgents = updatedAgents.map((agent) =>
     processAgentPhase(agent, newTime.currentPhase, config.balance)
   );
+
+  // 2. Process economic decisions for each agent (buy food, seek job, open business)
+  for (let i = 0; i < updatedAgents.length; i++) {
+    const agent = updatedAgents[i];
+    if (!agent || agent.status === 'dead') continue;
+
+    const result = processAgentEconomicDecision(
+      agent,
+      updatedLocations,
+      updatedAgents,
+      config.balance,
+      newTime.currentPhase
+    );
+
+    updatedAgents[i] = result.agent;
+    updatedLocations = result.locations;
+
+    // Add new location if agent opened a business
+    if (result.newLocation) {
+      updatedLocations.push(result.newLocation);
+    }
+  }
+
+  // 3. Restock system-owned shops (infinite supply)
+  updatedLocations = restockSystemShops(updatedLocations, config.balance);
+
+  // 4. Process weekly economy on week rollover (payroll, operating costs)
+  if (weekRollover) {
+    console.log(`\n=== WEEK ${newTime.week} ROLLOVER ===`);
+    const weeklyResult = processWeeklyEconomy(
+      updatedAgents,
+      updatedLocations,
+      config.balance,
+      newTime.currentPhase
+    );
+    updatedAgents = weeklyResult.agents;
+    updatedLocations = weeklyResult.locations;
+  }
 
   return {
     ...state,
     time: newTime,
-    agents: newAgents,
+    agents: updatedAgents,
+    locations: updatedLocations,
   };
+}
+
+/**
+ * Restock system-owned shops to maintain supply
+ */
+function restockSystemShops(locations: Location[], balance: LoadedConfig['balance']): Location[] {
+  return locations.map((loc) => {
+    if (loc.ownerType !== 'none') return loc;
+
+    const config = balance.locations[loc.template];
+    const targetStock = (config?.startingInventory ?? 20) * 5;
+    const currentStock = loc.inventory['provisions'] ?? 0;
+
+    if (currentStock < targetStock / 2) {
+      return {
+        ...loc,
+        inventory: {
+          ...loc.inventory,
+          provisions: targetStock,
+        },
+      };
+    }
+    return loc;
+  });
 }
 
 /**
@@ -106,18 +257,28 @@ export function shouldStop(state: SimulationState): boolean {
 export function getSummary(state: SimulationState): string {
   const living = countLivingAgents(state.agents);
   const dead = countDeadAgents(state.agents);
-  const totalProvisions = state.agents.reduce(
+  const employed = state.agents.filter((a) => a.status === 'employed').length;
+  const agentProvisions = state.agents.reduce(
     (sum, a) => sum + (a.inventory['provisions'] ?? 0),
     0
   );
-  const totalCredits = state.agents.reduce((sum, a) => sum + a.wallet.credits, 0);
+  const agentCredits = state.agents.reduce((sum, a) => sum + a.wallet.credits, 0);
+
+  const systemShops = state.locations.filter((l) => l.ownerType === 'none').length;
+  const agentShops = state.locations.filter((l) => l.ownerType === 'agent').length;
+  const locationProvisions = state.locations.reduce(
+    (sum, l) => sum + (l.inventory['provisions'] ?? 0),
+    0
+  );
 
   return `
 === Simulation Summary ===
 Time: ${formatTime(state.time)}
-Agents: ${living} alive, ${dead} dead
-Total Provisions: ${totalProvisions}
-Total Credits: ${totalCredits}
+Agents: ${living} alive, ${dead} dead, ${employed} employed
+Agent Provisions: ${agentProvisions}
+Agent Credits: ${agentCredits}
+Locations: ${systemShops} system shops, ${agentShops} agent shops
+Shop Inventory: ${locationProvisions} provisions
 ==========================
 `;
 }

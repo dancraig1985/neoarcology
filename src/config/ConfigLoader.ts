@@ -43,6 +43,23 @@ export interface BalanceConfig {
     startingCreditsMax: number;
     startingProvisionsMin: number;
     startingProvisionsMax: number;
+    entrepreneurThreshold: number;
+  };
+  economy: {
+    prices: {
+      provisions: number;
+    };
+    salary: {
+      unskilled: { min: number; max: number };
+    };
+  };
+  locations: {
+    [templateId: string]: {
+      openingCost: number;
+      operatingCost: number;
+      employeeSlots: number;
+      startingInventory: number;
+    };
   };
 }
 
