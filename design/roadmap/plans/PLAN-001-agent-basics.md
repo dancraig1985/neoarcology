@@ -37,7 +37,8 @@ Agent wakes up → Goes about their day → Eats (consumes provisions) → Rests
 // data/config/balance.json (example)
 {
   "agent": {
-    "hungerPerWeek": 25,
+    "hungerPerPhase": 0.89,
+    "hungerThreshold": 25,
     "hungerMax": 100,
     "provisionsPerMeal": 1
   }
@@ -45,13 +46,14 @@ Agent wakes up → Goes about their day → Eats (consumes provisions) → Rests
 ```
 
 ### Agent Needs System
-- [ ] Agents have `needs.hunger` (0-100, starts at 0)
-- [ ] Agents are **compelled to eat once per week** (every 7 days / 28 phases)
-- [ ] On week rollover: agent attempts to eat, then hunger increases if they couldn't
+- [ ] Agents have `needs.hunger` (0-100, starts at random 0-24 for staggering)
+- [ ] Hunger increases by `hungerPerPhase` each phase (~0.89 = ~25 per week)
+- [ ] When hunger >= `hungerThreshold` (25), agent is **compelled to eat**
 - [ ] Eating (consuming `provisionsPerMeal`) resets hunger to 0
-- [ ] If no food available, hunger increases by `hungerPerWeek` (default 25)
+- [ ] If no food available, hunger keeps accumulating past threshold
 - [ ] **Starvation**: At hunger >= `hungerMax` (100), agent dies
-- [ ] This means 4 weeks without food = death (25 × 4 = 100)
+- [ ] ~4 weeks without food = death (accumulates to 100)
+- [ ] Random starting hunger naturally staggers eating across agents
 - [ ] All values loaded from balance config
 
 ### Agent Inventory
@@ -61,9 +63,10 @@ Agent wakes up → Goes about their day → Eats (consumes provisions) → Rests
 
 ### Agent Routine (Basic)
 - [ ] Daily routine phases: dawn (wake), day (activity), dusk (wind down), night (rest)
-- [ ] Weekly: on week rollover, agent attempts to eat
-- [ ] "Eat" action consumes `provisionsPerMeal` from inventory (if available)
-- [ ] If no provisions available, hunger accumulates that week
+- [ ] Each phase: check if hungry (hunger >= threshold)
+- [ ] If hungry: attempt to eat (priority action)
+- [ ] "Eat" action consumes `provisionsPerMeal` from inventory, resets hunger to 0
+- [ ] If no provisions available, agent continues with hunger accumulating
 
 ### Agent Wallet (Minimal)
 - [ ] Agents start with credits (e.g., 100-500)
