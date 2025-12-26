@@ -87,6 +87,28 @@ A cyberpunk city simulation that runs autonomously. Game modes are different vie
 
 **Iterative design**: Each phase refines the design doc. Don't over-design future phases.
 
+## Development Principles
+
+### YAGNI (You Aren't Gonna Need It)
+- **Only implement what's currently used**. Don't add fields, parameters, or code "for later".
+- **Data files should only contain used fields**. If `security` isn't checked by any code, don't include it in templates. Set unused fields to `null` or omit entirely.
+- **Add features when needed**. When implementing security checks, add the `security` field then.
+- **Delete dead code**. If something becomes unused, remove it immediately.
+
+### DRY (Don't Repeat Yourself)
+- **Extract shared logic into functions**. If the same pattern appears twice, it should be a function.
+- **Single source of truth for data**. Each piece of configuration lives in ONE place:
+  - Location-specific data → `data/templates/locations/<name>.json`
+  - Global game balance → `data/config/balance.json`
+  - Time/simulation structure → `data/config/simulation.json`
+- **Shared types in one place**. Entity types in `src/types/`, config types in `src/config/ConfigLoader.ts`.
+- **Reuse existing systems**. Before writing new code, check if an existing system can be extended.
+
+### Data Organization
+- **Template files are self-contained**. All data for a location type lives in its template file.
+- **Balance.json is for global parameters only**. Hunger rates, price multipliers, salary ranges—not per-entity config.
+- **Code reads from config, never hardcodes tunable values**. Designers should be able to tweak gameplay by editing JSON.
+
 ## Common Pitfalls
 
 - Using hardcoded types instead of tags
@@ -94,4 +116,6 @@ A cyberpunk city simulation that runs autonomously. Game modes are different vie
 - Forgetting to log significant events to ActivityLog
 - Not checking org.leader before leadership array operations
 - Mutations in tick processing (always return new state)
-- [Add as discovered during development]
+- Adding template fields that no code uses (YAGNI violation)
+- Duplicating data between balance.json and template files (DRY violation)
+- Copy-pasting logic instead of extracting shared functions (DRY violation)
