@@ -10,7 +10,7 @@
     "startingCreditsMax": 500,
     "startingProvisionsMin": 2,
     "startingProvisionsMax": 4,
-    "entrepreneurThreshold": 400
+    "entrepreneurThreshold": 300
   },
   "economy": {
     "prices": {

@@ -133,7 +133,7 @@ function createSystemLocation(
     ownerType: 'none',
     previousOwners: [],
     employees: [],
-    employeeSlots: locationConfig.employeeSlots,
+    employeeSlots: 0, // System shops don't hire - they're just supply sources
     baseIncome: 0,
     operatingCost: 0, // System shops have no operating cost
     weeklyRevenue: 0,

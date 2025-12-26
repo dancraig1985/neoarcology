@@ -65,6 +65,7 @@ export function processAgentEconomicDecision(
   let newLocation: Location | undefined;
 
   // Decision priority:
+  // 0. If shop owner + low inventory: restock shop
   // 1. If hungry + has credits + shop has goods: buy provisions
   // 2. If unemployed + shops hiring: seek job
   // 3. If has lots of credits: consider opening business
@@ -73,6 +74,14 @@ export function processAgentEconomicDecision(
   const isHungry = agent.needs.hunger >= balance.agent.hungerThreshold;
   const hasNoFood = (agent.inventory['provisions'] ?? 0) < balance.agent.provisionsPerMeal;
   const hasCredits = agent.wallet.credits >= balance.economy.prices.provisions;
+
+  // 0. Shop owners restock their inventory
+  const ownedLocation = updatedLocations.find((loc) => loc.owner === agent.id);
+  if (ownedLocation) {
+    const result = tryRestockShop(updatedAgent, ownedLocation, updatedLocations, balance, phase);
+    updatedAgent = result.agent;
+    updatedLocations = result.locations;
+  }
 
   // 1. Try to buy provisions if hungry and no food
   if (isHungry && hasNoFood && hasCredits) {
@@ -237,6 +246,64 @@ function tryOpenBusiness(
   };
 
   return { agent: updatedAgent, newLocation };
+}
+
+/**
+ * Shop owner tries to restock their shop when inventory is low
+ * Provisions appear from thin air for now (future: wholesale market)
+ */
+function tryRestockShop(
+  owner: Agent,
+  location: Location,
+  locations: Location[],
+  balance: BalanceConfig,
+  phase: number
+): { agent: Agent; locations: Location[] } {
+  const currentStock = location.inventory['provisions'] ?? 0;
+  const restockThreshold = 10; // Restock when below this
+  const restockAmount = 20; // How much to buy
+  const wholesalePrice = balance.economy.prices.provisions * 0.7; // 30% discount for wholesale
+  const restockCost = restockAmount * wholesalePrice;
+
+  // Only restock if inventory is low and owner can afford it
+  if (currentStock >= restockThreshold) {
+    return { agent: owner, locations };
+  }
+
+  if (owner.wallet.credits < restockCost) {
+    return { agent: owner, locations };
+  }
+
+  // Restock the shop
+  ActivityLog.info(
+    phase,
+    'restock',
+    `restocked ${location.name} with ${restockAmount} provisions for ${restockCost.toFixed(0)} credits`,
+    owner.id,
+    owner.name
+  );
+
+  const updatedLocation: Location = {
+    ...location,
+    inventory: {
+      ...location.inventory,
+      provisions: currentStock + restockAmount,
+    },
+  };
+
+  const updatedOwner: Agent = {
+    ...owner,
+    wallet: {
+      ...owner.wallet,
+      credits: owner.wallet.credits - restockCost,
+    },
+  };
+
+  const updatedLocations = locations.map((loc) =>
+    loc.id === location.id ? updatedLocation : loc
+  );
+
+  return { agent: updatedOwner, locations: updatedLocations };
 }
 
 /**
