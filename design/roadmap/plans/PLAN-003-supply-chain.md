@@ -27,12 +27,33 @@ This removes the "magic restocking" and creates real economic flow.
 
 ## Objectives
 
-### Inventory Capacity System
-- [ ] Locations have `inventoryCapacity` (max goods they can hold)
-- [ ] Agents have `carryingCapacity` (max goods they can carry)
-- [ ] Production stops when location at capacity
-- [ ] Purchases limited by buyer's available capacity
-- [ ] Simple check: `currentInventory + amount <= capacity`
+### Modular Inventory System
+Create a reusable inventory interface for anything that holds tangible goods:
+
+```typescript
+interface InventoryHolder {
+  inventory: Record<string, number>;  // { provisions: 50, ... }
+  inventoryCapacity: number;          // max total units
+}
+
+// Pure functions that work on any InventoryHolder:
+getInventoryTotal(holder): number
+getAvailableCapacity(holder): number
+canAddToInventory(holder, amount): boolean
+addToInventory(holder, goodsType, amount): InventoryHolder
+removeFromInventory(holder, goodsType, amount): InventoryHolder
+transferInventory(from, to, goodsType, amount): { from, to, transferred }
+```
+
+**Applies to:**
+- [ ] Agents (carrying goods)
+- [ ] Locations (storing goods - factories, shops, warehouses)
+- [ ] Vehicles (transporting cargo) - future, but interface ready
+
+**Capacity rules:**
+- [ ] Total inventory count vs capacity (not per-goods-type)
+- [ ] Add operations fail/partial if over capacity
+- [ ] Transfer = remove from source + add to destination
 
 ### Organization Entity (Minimal)
 - [ ] Org has: id, name, leader (AgentRef), wallet
@@ -41,17 +62,17 @@ This removes the "magic restocking" and creates real economic flow.
 - [ ] Org template: `corporation` only (defer gangs)
 
 ### Factory Location
-- [ ] Factory produces provisions each phase (if under capacity)
-- [ ] Production rate from template balance (e.g., 10/phase)
-- [ ] Provisions go to factory inventory (up to capacity)
+- [ ] Factory produces provisions each phase
+- [ ] Production: `addToInventory(factory, 'provisions', productionRate)`
+- [ ] If at capacity, production is wasted (or skipped)
 - [ ] Factory has operating cost (paid weekly by org)
 
 ### Wholesale Commerce
 - [ ] Shop owners can buy provisions from factories
+- [ ] Uses `transferInventory(factory, shopOwner, 'provisions', amount)`
 - [ ] Wholesale price < retail price (margin for shops)
-- [ ] Factory sells from inventory, credits go to org wallet
-- [ ] Shop owners buy when inventory low (limited by shop capacity)
-- [ ] Purchase quantity = min(desired, available, capacity remaining)
+- [ ] Credits transfer: shop owner wallet → org wallet
+- [ ] Amount limited by: factory stock, shop capacity, buyer credits
 
 ### Remove Magic Restocking
 - [ ] Remove `restockSystemShops` - no more infinite supply
@@ -72,14 +93,24 @@ This removes the "magic restocking" and creates real economic flow.
 ## Economic Flow
 
 ```
-[Factory] --produces--> [Factory Inventory]
-                              |
-                    (wholesale purchase)
-                              ↓
-[Shop Owner Wallet] <--pays-- [Shop Inventory] --sells--> [Agent]
-       |                           ↑                         |
-       +-------(restocks from)-----+                    (eats)
+[Factory]
+    | addToInventory(factory, provisions, 10)
+    ↓
+[Factory Inventory: 500 cap]
+    | transferInventory(factory, shop, provisions, 20)
+    ↓
+[Shop Inventory: 50 cap]  ←-------- [Shop Owner] pays wholesale
+    | transferInventory(shop, agent, provisions, 1)
+    ↓
+[Agent Inventory: 10 cap] ←-------- [Agent] pays retail
+    | removeFromInventory(agent, provisions, 1)
+    ↓
+[Agent eats, survives]
 ```
+
+All inventory operations use the same `InventorySystem` functions.
+
+**Implementation:** `src/simulation/systems/InventorySystem.ts`
 
 ## Parameters (add to templates/config)
 
