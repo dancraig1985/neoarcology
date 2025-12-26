@@ -27,23 +27,31 @@ This removes the "magic restocking" and creates real economic flow.
 
 ## Objectives
 
+### Inventory Capacity System
+- [ ] Locations have `inventoryCapacity` (max goods they can hold)
+- [ ] Agents have `carryingCapacity` (max goods they can carry)
+- [ ] Production stops when location at capacity
+- [ ] Purchases limited by buyer's available capacity
+- [ ] Simple check: `currentInventory + amount <= capacity`
+
 ### Organization Entity (Minimal)
 - [ ] Org has: id, name, leader (AgentRef), wallet
-- [ ] Org owns locations (factory, warehouse)
+- [ ] Org owns locations (factory)
 - [ ] Leader is an agent who makes decisions for the org
 - [ ] Org template: `corporation` only (defer gangs)
 
 ### Factory Location
-- [ ] Factory produces provisions each phase
+- [ ] Factory produces provisions each phase (if under capacity)
 - [ ] Production rate from template balance (e.g., 10/phase)
-- [ ] Provisions go to factory inventory
+- [ ] Provisions go to factory inventory (up to capacity)
 - [ ] Factory has operating cost (paid weekly by org)
 
 ### Wholesale Commerce
-- [ ] Shop owners can buy provisions from factories/warehouses
+- [ ] Shop owners can buy provisions from factories
 - [ ] Wholesale price < retail price (margin for shops)
 - [ ] Factory sells from inventory, credits go to org wallet
-- [ ] Shop owners buy when inventory low (replaces magic restock)
+- [ ] Shop owners buy when inventory low (limited by shop capacity)
+- [ ] Purchase quantity = min(desired, available, capacity remaining)
 
 ### Remove Magic Restocking
 - [ ] Remove `restockSystemShops` - no more infinite supply
@@ -73,7 +81,7 @@ This removes the "magic restocking" and creates real economic flow.
        +-------(restocks from)-----+                    (eats)
 ```
 
-## Parameters (add to templates)
+## Parameters (add to templates/config)
 
 **Factory template:**
 ```json
@@ -82,7 +90,27 @@ This removes the "magic restocking" and creates real economic flow.
   "balance": {
     "productionPerPhase": 10,
     "operatingCost": 100,
-    "employeeSlots": 0
+    "employeeSlots": 0,
+    "inventoryCapacity": 500
+  }
+}
+```
+
+**Retail shop template (update):**
+```json
+{
+  "id": "retail_shop",
+  "balance": {
+    "inventoryCapacity": 50
+  }
+}
+```
+
+**Agent balance (balance.json):**
+```json
+{
+  "agent": {
+    "carryingCapacity": 10
   }
 }
 ```
@@ -101,11 +129,12 @@ This removes the "magic restocking" and creates real economic flow.
 
 ## Verification
 
-- [ ] Factory produces provisions over time
-- [ ] Shop owners buy wholesale from factory
-- [ ] Agents buy retail from shops
+- [ ] Factory produces provisions (stops at capacity)
+- [ ] Shop owners buy wholesale from factory (limited by shop capacity)
+- [ ] Agents buy retail from shops (limited by carrying capacity)
 - [ ] Credits flow: agents → shops → factory/org
 - [ ] No magic restocking - real supply chain
+- [ ] Capacity constraints create natural pressure/scarcity
 - [ ] Economy survives 100+ weeks with real supply
 
 ## Non-Goals (Defer)
@@ -120,6 +149,11 @@ This removes the "magic restocking" and creates real economic flow.
 ## Notes
 
 - Keep it minimal - just enough to close the supply chain loop
-- If factory can't produce enough → scarcity → agents starve (interesting!)
-- If factory produces too much → oversupply → shop owners can't sell (interesting!)
-- Balance productionPerPhase vs consumption rate for stability
+- Capacity creates natural pressure points in the supply chain:
+  - Factory at capacity → production stops → must sell to make room
+  - Shop at capacity → can't restock → must sell to make room
+  - Agent at capacity → can't hoard → must consume or not buy
+- If factory can't produce enough → scarcity → agents starve
+- If factory produces too much → backs up at factory → wasted production capacity
+- If shops don't sell fast enough → can't restock → factory backs up
+- Balance: productionPerPhase × phases vs (agents × consumption rate)
