@@ -19,19 +19,5 @@
     "salary": {
       "unskilled": { "min": 100, "max": 200 }
     }
-  },
-  "locations": {
-    "retail_shop": {
-      "openingCost": 200,
-      "operatingCost": 30,
-      "employeeSlots": 1,
-      "startingInventory": 20
-    },
-    "restaurant": {
-      "openingCost": 300,
-      "operatingCost": 50,
-      "employeeSlots": 1,
-      "startingInventory": 15
-    }
   }
 }

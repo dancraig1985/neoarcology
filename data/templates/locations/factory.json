@@ -6,10 +6,15 @@
   "defaults": {
     "size": 4,
     "security": 30,
-    "baseIncome": 1000,
-    "operatingCost": 400,
     "agentCapacity": 20,
     "vehicleCapacity": 5
+  },
+  "balance": {
+    "openingCost": 1000,
+    "operatingCost": 400,
+    "employeeSlots": 4,
+    "startingInventory": 0,
+    "baseIncome": 1000
   },
   "constraints": {
     "requiresLegalOwner": false

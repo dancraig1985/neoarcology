@@ -9,6 +9,12 @@
     "agentCapacity": 10,
     "vehicleCapacity": 0
   },
+  "balance": {
+    "openingCost": 200,
+    "operatingCost": 30,
+    "employeeSlots": 1,
+    "startingInventory": 20
+  },
   "constraints": {
     "requiresLegalOwner": false
   }

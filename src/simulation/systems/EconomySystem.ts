@@ -3,7 +3,7 @@
  */
 
 import type { Agent, Location } from '../../types';
-import type { BalanceConfig } from '../../config/ConfigLoader';
+import type { BalanceConfig, LocationTemplate } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import {
   purchaseFromLocation,
@@ -53,6 +53,7 @@ export function processAgentEconomicDecision(
   locations: Location[],
   agents: Agent[],
   balance: BalanceConfig,
+  locationTemplates: Record<string, LocationTemplate>,
   phase: number
 ): { agent: Agent; locations: Location[]; newLocation?: Location } {
   // Skip dead agents
@@ -103,7 +104,7 @@ export function processAgentEconomicDecision(
     updatedAgent.wallet.credits >= balance.agent.entrepreneurThreshold &&
     !ownsAnyLocation(updatedAgent, updatedLocations)
   ) {
-    const result = tryOpenBusiness(updatedAgent, balance, phase);
+    const result = tryOpenBusiness(updatedAgent, locationTemplates, phase);
     if (result.newLocation) {
       updatedAgent = result.agent;
       newLocation = result.newLocation;
@@ -202,7 +203,7 @@ function ownsAnyLocation(agent: Agent, locations: Location[]): boolean {
  */
 function tryOpenBusiness(
   agent: Agent,
-  balance: BalanceConfig,
+  locationTemplates: Record<string, LocationTemplate>,
   phase: number
 ): { agent: Agent; newLocation?: Location } {
   // 20% chance to try opening a business each phase when eligible
@@ -211,11 +212,12 @@ function tryOpenBusiness(
   }
 
   // Choose retail_shop (cheaper) for now
-  const template = 'retail_shop';
-  const config = balance.locations[template];
-  if (!config) {
+  const template = locationTemplates['retail_shop'];
+  if (!template) {
     return { agent };
   }
+
+  const config = template.balance;
 
   // Check if agent can afford it
   if (agent.wallet.credits < config.openingCost) {
@@ -232,7 +234,6 @@ function tryOpenBusiness(
     template,
     agent.id,
     agent.name,
-    balance,
     phase
   );
 

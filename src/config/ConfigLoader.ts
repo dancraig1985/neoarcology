@@ -53,14 +53,6 @@ export interface BalanceConfig {
       unskilled: { min: number; max: number };
     };
   };
-  locations: {
-    [templateId: string]: {
-      openingCost: number;
-      operatingCost: number;
-      employeeSlots: number;
-      startingInventory: number;
-    };
-  };
 }
 
 /**
@@ -72,7 +64,21 @@ export interface EntityTemplate {
   description?: string;
   tags: string[];
   defaults: Record<string, unknown>;
+  balance?: Record<string, unknown>;
   constraints?: Record<string, unknown>;
+}
+
+/**
+ * Location template with typed balance section
+ */
+export interface LocationTemplate extends EntityTemplate {
+  balance: {
+    openingCost: number;
+    operatingCost: number;
+    employeeSlots: number;
+    startingInventory: number;
+    baseIncome?: number;
+  };
 }
 
 /**
@@ -84,8 +90,10 @@ export interface LoadedConfig {
   templates: {
     orgs: EntityTemplate[];
     agents: EntityTemplate[];
-    locations: EntityTemplate[];
+    locations: LocationTemplate[];
   };
+  /** Convenience lookup: locationTemplates['retail_shop'] */
+  locationTemplates: Record<string, LocationTemplate>;
 }
 
 /**
@@ -107,7 +115,15 @@ export async function loadConfig(): Promise<LoadedConfig> {
   // Load templates
   const orgTemplates = await loadTemplates('/data/templates/orgs');
   const agentTemplates = await loadTemplates('/data/templates/agents');
-  const locationTemplates = await loadTemplates('/data/templates/locations');
+  const locationTemplates = (await loadTemplates(
+    '/data/templates/locations'
+  )) as LocationTemplate[];
+
+  // Build location template lookup map
+  const locationTemplateMap: Record<string, LocationTemplate> = {};
+  for (const template of locationTemplates) {
+    locationTemplateMap[template.id] = template;
+  }
 
   console.log(
     `[ConfigLoader] Loaded templates: ${orgTemplates.length} orgs, ${agentTemplates.length} agents, ${locationTemplates.length} locations`
@@ -121,6 +137,7 @@ export async function loadConfig(): Promise<LoadedConfig> {
       agents: agentTemplates,
       locations: locationTemplates,
     },
+    locationTemplates: locationTemplateMap,
   };
 }
 
@@ -136,7 +153,7 @@ async function loadTemplates(basePath: string): Promise<EntityTemplate[]> {
   const knownTemplates: Record<string, string[]> = {
     '/data/templates/orgs': ['corporation.json', 'gang.json'],
     '/data/templates/agents': ['combat.json'],
-    '/data/templates/locations': ['factory.json'],
+    '/data/templates/locations': ['factory.json', 'retail_shop.json', 'restaurant.json'],
   };
 
   const files = knownTemplates[basePath] ?? [];

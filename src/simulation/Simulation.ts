@@ -57,7 +57,7 @@ export function createSimulation(config: LoadedConfig): SimulationState {
       `location-sys-${i + 1}`,
       shopNames[i] ?? `Shop ${i + 1}`,
       'retail_shop',
-      config.balance,
+      config,
       time.currentPhase
     );
     locations.push(location);
@@ -108,27 +108,34 @@ export function createSimulation(config: LoadedConfig): SimulationState {
 function createSystemLocation(
   id: string,
   name: string,
-  template: string,
-  balance: LoadedConfig['balance'],
+  templateId: string,
+  config: LoadedConfig,
   phase: number
 ): Location {
-  const locationConfig = balance.locations[template];
-  if (!locationConfig) {
-    throw new Error(`Unknown location template: ${template}`);
+  const template = config.locationTemplates[templateId];
+  if (!template) {
+    throw new Error(`Unknown location template: ${templateId}`);
   }
+
+  const locationConfig = template.balance;
+  const defaults = template.defaults as {
+    size?: number;
+    security?: number;
+    agentCapacity?: number;
+  };
 
   return {
     id,
     name,
-    template,
-    tags: [template, 'business', 'retail', 'system'],
+    template: templateId,
+    tags: [...template.tags, 'system'],
     created: phase,
     relationships: [],
     sector: 'downtown',
     district: 'market',
     coordinates: { distance: Math.random() * 50, vertical: 0 },
-    size: 2,
-    security: 20,
+    size: defaults.size ?? 2,
+    security: defaults.security ?? 20,
     owner: undefined,
     ownerType: 'none',
     previousOwners: [],
@@ -138,7 +145,7 @@ function createSystemLocation(
     operatingCost: 0, // System shops have no operating cost
     weeklyRevenue: 0,
     weeklyCosts: 0,
-    agentCapacity: 20,
+    agentCapacity: defaults.agentCapacity ?? 20,
     vehicleCapacity: 0,
     occupants: [],
     vehicles: [],
@@ -184,6 +191,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
       updatedLocations,
       updatedAgents,
       config.balance,
+      config.locationTemplates,
       newTime.currentPhase
     );
 
@@ -197,7 +205,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   }
 
   // 3. Restock system-owned shops (infinite supply)
-  updatedLocations = restockSystemShops(updatedLocations, config.balance);
+  updatedLocations = restockSystemShops(updatedLocations, config.locationTemplates);
 
   // 4. Process weekly economy on week rollover (payroll, operating costs)
   if (weekRollover) {
@@ -223,12 +231,15 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
 /**
  * Restock system-owned shops to maintain supply
  */
-function restockSystemShops(locations: Location[], balance: LoadedConfig['balance']): Location[] {
+function restockSystemShops(
+  locations: Location[],
+  locationTemplates: Record<string, LoadedConfig['locationTemplates'][string]>
+): Location[] {
   return locations.map((loc) => {
     if (loc.ownerType !== 'none') return loc;
 
-    const config = balance.locations[loc.template];
-    const targetStock = (config?.startingInventory ?? 20) * 5;
+    const template = locationTemplates[loc.template];
+    const targetStock = (template?.balance.startingInventory ?? 20) * 5;
     const currentStock = loc.inventory['provisions'] ?? 0;
 
     if (currentStock < targetStock / 2) {

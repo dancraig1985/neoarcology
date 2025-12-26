@@ -3,7 +3,7 @@
  */
 
 import type { Location, Agent, AgentRef } from '../../types';
-import type { BalanceConfig } from '../../config/ConfigLoader';
+import type { LocationTemplate, BalanceConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 
 /**
@@ -12,48 +12,54 @@ import { ActivityLog } from '../ActivityLog';
 export function createLocation(
   id: string,
   name: string,
-  template: string,
+  template: LocationTemplate,
   ownerId: AgentRef,
   ownerName: string,
-  balance: BalanceConfig,
   phase: number
 ): Location {
-  const locationConfig = balance.locations[template];
+  const locationConfig = template.balance;
   if (!locationConfig) {
-    throw new Error(`Unknown location template: ${template}`);
+    throw new Error(`Unknown location template: ${template.id}`);
   }
 
   ActivityLog.info(
     phase,
     'business',
-    `opened ${template} "${name}"`,
+    `opened ${template.id} "${name}"`,
     ownerId,
     ownerName
   );
 
+  const defaults = template.defaults as {
+    size?: number;
+    security?: number;
+    agentCapacity?: number;
+    vehicleCapacity?: number;
+  };
+
   return {
     id,
     name,
-    template,
-    tags: [template, 'business', 'retail'],
+    template: template.id,
+    tags: [...template.tags, 'business'],
     created: phase,
     relationships: [],
     sector: 'downtown',
     district: 'market',
     coordinates: { distance: Math.random() * 100, vertical: 0 },
-    size: 1,
-    security: 10,
+    size: defaults.size ?? 1,
+    security: defaults.security ?? 10,
     owner: ownerId,
     ownerType: 'agent',
     previousOwners: [],
     employees: [],
     employeeSlots: locationConfig.employeeSlots,
-    baseIncome: 0,
+    baseIncome: locationConfig.baseIncome ?? 0,
     operatingCost: locationConfig.operatingCost,
     weeklyRevenue: 0,
     weeklyCosts: 0,
-    agentCapacity: 10,
-    vehicleCapacity: 0,
+    agentCapacity: defaults.agentCapacity ?? 10,
+    vehicleCapacity: defaults.vehicleCapacity ?? 0,
     occupants: [],
     vehicles: [],
     inventory: {
