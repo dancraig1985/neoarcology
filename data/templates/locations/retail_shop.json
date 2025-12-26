@@ -1,0 +1,15 @@
+{
+  "id": "retail_shop",
+  "name": "Retail Shop",
+  "description": "A small storefront selling goods to the public",
+  "tags": ["retail", "commerce", "legal", "small_business"],
+  "defaults": {
+    "size": 1,
+    "security": 10,
+    "agentCapacity": 10,
+    "vehicleCapacity": 0
+  },
+  "constraints": {
+    "requiresLegalOwner": false
+  }
+}

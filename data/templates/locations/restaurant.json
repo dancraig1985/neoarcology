@@ -1,0 +1,15 @@
+{
+  "id": "restaurant",
+  "name": "Restaurant",
+  "description": "An establishment serving food and drinks",
+  "tags": ["retail", "commerce", "food_service", "legal", "small_business"],
+  "defaults": {
+    "size": 2,
+    "security": 10,
+    "agentCapacity": 15,
+    "vehicleCapacity": 0
+  },
+  "constraints": {
+    "requiresLegalOwner": false
+  }
+}
