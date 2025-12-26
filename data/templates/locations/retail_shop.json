@@ -2,20 +2,11 @@
   "id": "retail_shop",
   "name": "Retail Shop",
   "description": "A small storefront selling goods to the public",
-  "tags": ["retail", "commerce", "legal", "small_business"],
-  "defaults": {
-    "size": 1,
-    "security": 10,
-    "agentCapacity": 10,
-    "vehicleCapacity": 0
-  },
+  "tags": null,
   "balance": {
     "openingCost": 200,
     "operatingCost": 30,
     "employeeSlots": 1,
     "startingInventory": 20
-  },
-  "constraints": {
-    "requiresLegalOwner": false
   }
 }

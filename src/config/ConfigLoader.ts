@@ -57,19 +57,17 @@ export interface BalanceConfig {
 
 /**
  * Entity template loaded from data/templates/
+ * Only includes fields actually used by the code
  */
 export interface EntityTemplate {
   id: string;
   name: string;
   description?: string;
-  tags: string[];
-  defaults: Record<string, unknown>;
-  balance?: Record<string, unknown>;
-  constraints?: Record<string, unknown>;
+  tags: string[] | null;
 }
 
 /**
- * Location template with typed balance section
+ * Location template with balance section
  */
 export interface LocationTemplate extends EntityTemplate {
   balance: {
@@ -77,7 +75,6 @@ export interface LocationTemplate extends EntityTemplate {
     operatingCost: number;
     employeeSlots: number;
     startingInventory: number;
-    baseIncome?: number;
   };
 }
 

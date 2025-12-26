@@ -118,24 +118,19 @@ function createSystemLocation(
   }
 
   const locationConfig = template.balance;
-  const defaults = template.defaults as {
-    size?: number;
-    security?: number;
-    agentCapacity?: number;
-  };
 
   return {
     id,
     name,
     template: templateId,
-    tags: [...template.tags, 'system'],
+    tags: template.tags ? [...template.tags, 'system'] : ['system'],
     created: phase,
     relationships: [],
     sector: 'downtown',
     district: 'market',
     coordinates: { distance: Math.random() * 50, vertical: 0 },
-    size: defaults.size ?? 2,
-    security: defaults.security ?? 20,
+    size: 2,
+    security: 20,
     owner: undefined,
     ownerType: 'none',
     previousOwners: [],
@@ -145,7 +140,7 @@ function createSystemLocation(
     operatingCost: 0, // System shops have no operating cost
     weeklyRevenue: 0,
     weeklyCosts: 0,
-    agentCapacity: defaults.agentCapacity ?? 20,
+    agentCapacity: 20,
     vehicleCapacity: 0,
     occupants: [],
     vehicles: [],

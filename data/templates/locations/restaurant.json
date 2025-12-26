@@ -2,20 +2,11 @@
   "id": "restaurant",
   "name": "Restaurant",
   "description": "An establishment serving food and drinks",
-  "tags": ["retail", "commerce", "food_service", "legal", "small_business"],
-  "defaults": {
-    "size": 2,
-    "security": 10,
-    "agentCapacity": 15,
-    "vehicleCapacity": 0
-  },
+  "tags": null,
   "balance": {
     "openingCost": 300,
     "operatingCost": 50,
     "employeeSlots": 1,
     "startingInventory": 15
-  },
-  "constraints": {
-    "requiresLegalOwner": false
   }
 }
