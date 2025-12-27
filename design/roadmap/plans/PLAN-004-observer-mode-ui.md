@@ -1,6 +1,6 @@
 # PLAN-004: MVP Observer Mode UI
 
-**Status:** in-progress
+**Status:** completed
 **Priority:** P1 (high)
 **Dependencies:** PLAN-003 (completed)
 **Phase:** 3
@@ -111,27 +111,27 @@ critical: 0xff0066        // Pink/red
 
 ### Phase C: Navigation & Tables
 - [x] Create `src/ui/panels/NavPanel.ts` - entity type buttons
-- [ ] Create `src/ui/components/ScrollableList.ts` - scrolling
-- [ ] Create `src/ui/components/Table.ts` - data table
-- [x] Create `src/ui/panels/MainPanel.ts` - hosts table (placeholder)
-- [ ] Create `src/ui/UIConfig.ts` - column definitions for Agents, Orgs, Locations
+- [x] Create `src/ui/components/ScrollableList.ts` - scrolling (built into Table)
+- [x] Create `src/ui/components/Table.ts` - data table
+- [x] Create `src/ui/panels/MainPanel.ts` - hosts table
+- [x] Create `src/ui/UIConfig.ts` - column definitions for Agents, Orgs, Locations
 
 ### Phase D: Detail Views
-- [ ] Create `src/ui/components/DetailView.ts` - key-value display
-- [ ] Add detail view to MainPanel (appears when row clicked)
-- [ ] Define detail fields in UIConfig for each entity type
+- [x] Create `src/ui/components/DetailView.ts` - key-value display
+- [x] Add detail view to MainPanel (appears when row clicked)
+- [x] Define detail fields in UIConfig for each entity type
 
 ### Phase E: Activity Log
 - [x] Create `src/ui/panels/LogPanel.ts` - scrollable log
 - [x] Render log entries with phase, icon, message
 - [x] Color-code by level (info=gray, warning=yellow, critical=pink)
-- [ ] Add category filter dropdown
-- [ ] Click entity name in log to filter to that entity
+- [x] Add category filter buttons
+- [x] Click entity name in log to navigate to that entity
 
 ### Phase F: Polish
-- [ ] Corner accents on panels (cyberpunk style)
-- [ ] Row hover highlighting
-- [ ] Keyboard shortcuts (Space=End Turn, D/W/M/Y for time jumps)
+- [x] Corner accents on panels (cyberpunk style)
+- [x] Row hover highlighting
+- [x] Keyboard shortcuts (Space=End Turn, D/W/M/Y for time jumps)
 - [x] Window resize handling
 
 ## Key Files to Modify
@@ -168,12 +168,12 @@ critical: 0xff0066        // Pink/red
 ## Verification
 
 - [x] Header shows time (phase, day, week), updates after advance
-- [ ] Nav buttons switch between Agents/Orgs/Locations tables
-- [ ] Tables display all entities with correct columns
-- [ ] Clicking row shows detail view
+- [x] Nav buttons switch between Agents/Orgs/Locations tables
+- [x] Tables display all entities with correct columns
+- [x] Clicking row shows detail view
 - [x] Activity log shows entries, auto-scrolls to bottom
 - [x] End Turn advances 1 phase, +Day/+Week/+Month/+Year advance by time unit
-- [ ] Log filtering by category works
+- [x] Log filtering by category works
 - [x] Pure Pixi.js - no DOM overlays
 - [x] Cyberpunk aesthetic: dark bg, neon accents, monospace feel
 
