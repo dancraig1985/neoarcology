@@ -48,19 +48,38 @@ A cyberpunk city simulation that runs autonomously. Game modes are different vie
 
 - **Game Design**: `design/GAME-DESIGN.md` (source of truth for mechanics)
 - **Roadmap**: `design/roadmap/plans/` (PLAN files for implementation)
+- **Simulation Bible**: `design/bible/` (detailed system documentation)
 
-## Key Files (once implemented)
+### Simulation Bible
 
-- Simulation loop: `src/simulation/TickEngine.ts`
-- World state: `src/simulation/World.ts`
-- Agent AI: `src/simulation/ai/AgentAI.ts` (primary behavior driver)
-- Leadership AI: `src/simulation/ai/LeadershipAI.ts` (org decisions via leader)
-- Encounter system: `src/simulation/systems/EncounterSystem.ts`
-- Economy system: `src/simulation/systems/EconomySystem.ts`
-- Market system: `src/simulation/systems/MarketSystem.ts`
+The `design/bible/` folder contains detailed documentation for each simulation system. **Read relevant chapters before working on a system:**
+
+| Chapter | When to Read |
+|---------|--------------|
+| [agents.md](design/bible/agents.md) | Working on hunger, eating, death, agent behavior |
+| [orgs.md](design/bible/orgs.md) | Working on organizations, leadership, dissolution |
+| [economy.md](design/bible/economy.md) | Working on money flow, transactions, payroll |
+| [inventory.md](design/bible/inventory.md) | Working on goods, storage, capacity |
+| [locations.md](design/bible/locations.md) | Working on locations, templates, commerce |
+| [production.md](design/bible/production.md) | Working on factories, production cycles |
+
+## Key Files
+
+**Implemented:**
+- Simulation controller: `src/simulation/Simulation.ts`
+- Time/tick engine: `src/simulation/TickEngine.ts`
+- Agent system: `src/simulation/systems/AgentSystem.ts` (hunger, eating, death)
+- Economy system: `src/simulation/systems/EconomySystem.ts` (transactions, payroll, business)
+- Org system: `src/simulation/systems/OrgSystem.ts` (production, org operations)
+- Location system: `src/simulation/systems/LocationSystem.ts` (commerce, hiring)
+- Inventory system: `src/simulation/systems/InventorySystem.ts` (goods, capacity)
 - Activity log: `src/simulation/ActivityLog.ts`
 - Config loader: `src/config/ConfigLoader.ts`
 - Types: `src/types/*.ts`
+
+**Planned:**
+- Agent AI: `src/simulation/ai/AgentAI.ts` (advanced decision making)
+- Encounter system: `src/simulation/systems/EncounterSystem.ts`
 
 ## Configuration (Data-Driven)
 
