@@ -3,18 +3,42 @@
  * A cyberpunk city simulation that runs autonomously
  */
 
-import { loadConfig } from './config/ConfigLoader';
+import { loadConfig, type LoadedConfig } from './config/ConfigLoader';
 import { initRenderer } from './renderer/Renderer';
-import { createSimulation, tick, shouldStop, getSummary, type SimulationState } from './simulation/Simulation';
+import { createSimulation, tick, getSummary, type SimulationState } from './simulation/Simulation';
+import { UIController } from './ui/UIController';
 
 // Simulation state
 let simulation: SimulationState | null = null;
-let simulationInterval: number | null = null;
+let config: LoadedConfig | null = null;
+let ui: UIController | null = null;
+
+/**
+ * Advance the simulation by N phases
+ */
+function advanceSimulation(phases: number): void {
+  if (!simulation || !config) return;
+
+  for (let i = 0; i < phases; i++) {
+    simulation = tick(simulation, config);
+  }
+
+  // Update UI after all ticks
+  if (ui) {
+    ui.update(simulation);
+  }
+
+  // Log summary periodically for debugging
+  if (phases >= 28) {
+    console.log(getSummary(simulation));
+  }
+}
 
 async function main() {
   console.log('=================================');
   console.log('  NeoArcology v0.1.0');
   console.log('  Cyberpunk City Simulation');
+  console.log('  OBSERVER MODE');
   console.log('=================================\n');
 
   try {
@@ -31,87 +55,48 @@ async function main() {
 
     // Load configuration
     console.log('[Main] Loading configuration...');
-    const config = await loadConfig();
+    config = await loadConfig();
     console.log('[Main] Configuration loaded\n');
-
-    // Log balance config
-    console.log('=== Balance Config ===');
-    console.log(`Hunger per phase: ${config.balance.agent.hungerPerPhase}`);
-    console.log(`Hunger threshold: ${config.balance.agent.hungerThreshold}`);
-    console.log(`Hunger max (death): ${config.balance.agent.hungerMax}`);
-    console.log(`Starting provisions: ${config.balance.agent.startingProvisionsMin}-${config.balance.agent.startingProvisionsMax}`);
-    console.log('======================\n');
 
     // Create simulation with test agents
     console.log('[Main] Creating simulation...');
     simulation = createSimulation(config);
+    console.log('[Main] Simulation created\n');
 
-    // Run simulation loop
-    const ticksPerSecond = 20; // Speed: 20 phases per second
-    const tickInterval = 1000 / ticksPerSecond;
+    // Create UI controller
+    console.log('[Main] Initializing UI...');
+    ui = new UIController(app, {
+      onTick: (phases) => advanceSimulation(phases),
+    });
 
-    console.log(`[Main] Starting simulation at ${ticksPerSecond} ticks/second`);
-    console.log('[Main] Watch agents eat provisions and eventually starve...\n');
+    // Initial UI update
+    ui.update(simulation);
+    console.log('[Main] UI ready\n');
 
-    simulationInterval = window.setInterval(() => {
-      if (!simulation) return;
-
-      // Process one tick
-      simulation = tick(simulation, config);
-
-      // Check if all agents are dead
-      if (shouldStop(simulation)) {
-        console.log('\n' + getSummary(simulation));
-        console.log('🎮 SIMULATION COMPLETE: All agents have died.');
-        console.log('This is the expected outcome for PLAN-001!');
-
-        if (simulationInterval) {
-          clearInterval(simulationInterval);
-          simulationInterval = null;
-        }
-      }
-    }, tickInterval);
+    console.log('[Main] Observer Mode active');
+    console.log('[Main] Use the buttons at the bottom to advance time:');
+    console.log('  - End Turn: +1 phase');
+    console.log('  - +Day: +4 phases');
+    console.log('  - +Week: +28 phases');
+    console.log('  - +Month: +112 phases');
+    console.log('  - +Year: +1344 phases\n');
 
     // Store references for debugging
     (window as unknown as {
       neoArcology: {
         app: typeof app;
         getSimulation: () => SimulationState | null;
-        pause: () => void;
-        resume: () => void;
+        tick: (n?: number) => void;
       }
     }).neoArcology = {
       app,
       getSimulation: () => simulation,
-      pause: () => {
-        if (simulationInterval) {
-          clearInterval(simulationInterval);
-          simulationInterval = null;
-          console.log('[Main] Simulation paused');
-        }
-      },
-      resume: () => {
-        if (!simulationInterval && simulation) {
-          simulationInterval = window.setInterval(() => {
-            if (!simulation) return;
-            simulation = tick(simulation, config);
-            if (shouldStop(simulation)) {
-              console.log('\n' + getSummary(simulation));
-              if (simulationInterval) {
-                clearInterval(simulationInterval);
-                simulationInterval = null;
-              }
-            }
-          }, tickInterval);
-          console.log('[Main] Simulation resumed');
-        }
-      },
+      tick: (n = 1) => advanceSimulation(n),
     };
 
     console.log('[Main] Debug commands available:');
-    console.log('  neoArcology.pause() - Pause simulation');
-    console.log('  neoArcology.resume() - Resume simulation');
-    console.log('  neoArcology.getSimulation() - Get current state\n');
+    console.log('  neoArcology.getSimulation() - Get current state');
+    console.log('  neoArcology.tick(n) - Advance n phases\n');
 
   } catch (error) {
     console.error('[Main] Failed to initialize:', error);
