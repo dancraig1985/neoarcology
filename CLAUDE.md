@@ -44,11 +44,12 @@ A cyberpunk city simulation that runs autonomously. Game modes are different vie
 - Never mutate state directly, use store actions
 
 ### Micro-Org Business Model
-- **All businesses are owned by orgs**, never directly by agents
+- **Commercial locations** (shops, factories) are owned by orgs for clean accounting
 - When an agent starts a business, a "micro-org" is created to own it
 - Revenue goes to **org wallet**, not agent wallet
 - Owners extract profits via **weekly dividend** (30 credits/week)
 - If owner dies, org dissolves automatically
+- **Personal locations** (homes, hideouts) can be owned directly by agents via `ownerType: 'agent'`
 
 ### Supply Chain
 - **Wholesale** (`wholesale` tag): Sells to businesses (factories)

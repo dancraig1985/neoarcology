@@ -9,7 +9,9 @@ Organizations (orgs) own businesses and employ agents. Every business is owned b
 
 ## Micro-Org Model
 
-**All businesses are owned by organizations, never directly by agents.**
+**Commercial businesses (shops, factories) are owned by organizations** for clean separation of personal and business finances.
+
+Note: Personal locations (homes, hideouts) CAN be owned directly by agents via `ownerType: 'agent'`. The micro-org model is specifically for commercial operations with revenue/expenses.
 
 When an agent opens a shop:
 1. A new "micro-org" is created (e.g., "Alex Chen's Shop")
