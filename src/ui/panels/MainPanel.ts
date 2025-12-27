@@ -22,6 +22,9 @@ import type { Agent, Organization, Location } from '../../types';
 
 const DETAIL_WIDTH = 280;
 
+// Enriched org type with computed fields for display
+type OrgWithLeaderName = Organization & { leaderName: string };
+
 export class MainPanel extends Panel {
   private currentEntityType: EntityType = 'agents';
   private currentState: SimulationState | null = null;
@@ -33,7 +36,7 @@ export class MainPanel extends Panel {
 
   // Tables for each entity type
   private agentTable: Table<Agent>;
-  private orgTable: Table<Organization>;
+  private orgTable: Table<OrgWithLeaderName>;
   private locationTable: Table<Location>;
 
   // Detail views for each entity type
@@ -73,8 +76,8 @@ export class MainPanel extends Panel {
       onRowClick: (agent) => this.handleRowClick('agents', agent),
     });
 
-    this.orgTable = new Table<Organization>(tableWidth, contentHeight, {
-      columns: ORG_COLUMNS,
+    this.orgTable = new Table<OrgWithLeaderName>(tableWidth, contentHeight, {
+      columns: ORG_COLUMNS as typeof ORG_COLUMNS,
       onRowClick: (org) => this.handleRowClick('orgs', org),
     });
 
@@ -151,7 +154,7 @@ export class MainPanel extends Panel {
     this.updateDetailView();
   }
 
-  private getCurrentTable(): Table<Agent> | Table<Organization> | Table<Location> {
+  private getCurrentTable(): Table<Agent> | Table<OrgWithLeaderName> | Table<Location> {
     switch (this.currentEntityType) {
       case 'agents':
         return this.agentTable;
@@ -187,7 +190,12 @@ export class MainPanel extends Panel {
         this.agentTable.setData(sortedAgents);
         break;
       case 'orgs':
-        this.orgTable.setData(this.currentState.organizations);
+        // Enrich orgs with leader names computed from agents
+        const orgsWithLeaders: OrgWithLeaderName[] = this.currentState.organizations.map((org) => {
+          const leader = this.currentState!.agents.find((a) => a.id === org.leader);
+          return { ...org, leaderName: leader?.name ?? '-' };
+        });
+        this.orgTable.setData(orgsWithLeaders);
         break;
       case 'locations':
         this.locationTable.setData(this.currentState.locations);

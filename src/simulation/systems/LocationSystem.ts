@@ -145,6 +145,9 @@ export function hireAgent(
     agent.name
   );
 
+  // Set employer to the org that owns the location (if org-owned)
+  const employer = location.ownerType === 'org' ? location.owner : undefined;
+
   return {
     location: {
       ...location,
@@ -154,6 +157,7 @@ export function hireAgent(
       ...agent,
       status: 'employed',
       employedAt: location.id,
+      employer,
       salary,
     },
   };
@@ -185,6 +189,7 @@ export function releaseAgent(
       ...agent,
       status: 'available',
       employedAt: undefined,
+      employer: undefined,
       salary: 0,
     },
   };
