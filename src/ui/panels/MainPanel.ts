@@ -140,6 +140,17 @@ export class MainPanel extends Panel {
     return this.selectedEntityId;
   }
 
+  /**
+   * Select an entity by ID (navigates to it)
+   */
+  selectEntity(entityId: string): void {
+    if (!this.currentState) return;
+
+    this.selectedEntityId = entityId;
+    this.getCurrentTable().setSelected(entityId);
+    this.updateDetailView();
+  }
+
   private getCurrentTable(): Table<Agent> | Table<Organization> | Table<Location> {
     switch (this.currentEntityType) {
       case 'agents':
@@ -222,6 +233,9 @@ export class MainPanel extends Panel {
 
   protected layout(): void {
     super.layout();
+
+    // Guard against being called before child properties are initialized
+    if (!this.detailContainer) return;
 
     const tableWidth = this._width - DETAIL_WIDTH;
     const contentHeight = this._height;

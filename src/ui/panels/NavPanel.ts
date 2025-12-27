@@ -23,6 +23,7 @@ export class NavPanel extends Panel {
       backgroundColor: COLORS.panel,
       borderColor: COLORS.border,
       showBorder: true,
+      showCornerAccents: true,
       padding: SPACING.sm,
     });
 

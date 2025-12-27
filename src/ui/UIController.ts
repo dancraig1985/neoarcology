@@ -80,7 +80,9 @@ export class UIController {
     this.root.addChild(this.mainPanel);
 
     // Log panel (above controls)
-    this.logPanel = new LogPanel(width, SPACING.logHeight);
+    this.logPanel = new LogPanel(width, SPACING.logHeight, {
+      onEntityClick: (entityId, entityType) => this.navigateToEntity(entityId, entityType),
+    });
     this.root.addChild(this.logPanel);
 
     // Initial layout
@@ -88,6 +90,41 @@ export class UIController {
 
     // Handle resize - use Pixi's resize event
     app.renderer.on('resize', () => this.onResize());
+
+    // Keyboard shortcuts
+    this.setupKeyboardShortcuts();
+  }
+
+  private setupKeyboardShortcuts(): void {
+    window.addEventListener('keydown', (event) => {
+      // Ignore if user is typing in an input field
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      switch (event.code) {
+        case 'Space':
+          event.preventDefault();
+          this.callbacks.onTick(1); // End Turn
+          break;
+        case 'KeyD':
+          event.preventDefault();
+          this.callbacks.onTick(4); // +Day
+          break;
+        case 'KeyW':
+          event.preventDefault();
+          this.callbacks.onTick(28); // +Week
+          break;
+        case 'KeyM':
+          event.preventDefault();
+          this.callbacks.onTick(112); // +Month
+          break;
+        case 'KeyY':
+          event.preventDefault();
+          this.callbacks.onTick(1344); // +Year
+          break;
+      }
+    });
   }
 
   /**
@@ -103,6 +140,21 @@ export class UIController {
   private onEntityTypeSelect(type: EntityType): void {
     this._currentEntityType = type;
     this.mainPanel.setEntityType(type);
+  }
+
+  /**
+   * Navigate to an entity from the log
+   */
+  private navigateToEntity(entityId: string, entityType: EntityType): void {
+    // Switch to the entity type if needed
+    if (this._currentEntityType !== entityType) {
+      this._currentEntityType = entityType;
+      this.navPanel.setSelected(entityType);
+      this.mainPanel.setEntityType(entityType);
+    }
+
+    // Select the entity in the main panel
+    this.mainPanel.selectEntity(entityId);
   }
 
   private onResize(): void {
