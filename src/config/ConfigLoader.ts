@@ -28,6 +28,16 @@ export interface SimulationConfig {
 }
 
 /**
+ * Goods category configuration (size, prices, etc.)
+ * All data for a goods type is grouped together
+ */
+export interface GoodsConfig {
+  size: number;           // How much inventory space 1 unit occupies
+  retailPrice: number;    // Price when sold to consumers
+  wholesalePrice: number; // Price for B2B transactions
+}
+
+/**
  * Balance configuration from data/config/balance.json
  * Designer-tunable parameters for game mechanics
  */
@@ -44,15 +54,15 @@ export interface BalanceConfig {
     startingProvisionsMin: number;
     startingProvisionsMax: number;
     entrepreneurThreshold: number;
+    inventoryCapacity: number;
   };
   economy: {
-    prices: {
-      provisions: number;
-    };
     salary: {
       unskilled: { min: number; max: number };
     };
   };
+  goods: Record<string, GoodsConfig>;
+  defaultGoodsSize: number;
 }
 
 /**
@@ -67,6 +77,16 @@ export interface EntityTemplate {
 }
 
 /**
+ * Production configuration for a single good type
+ * Factories can produce multiple goods at different rates
+ */
+export interface ProductionConfig {
+  good: string;              // e.g., "provisions", "small_arms", "heavy_weapons"
+  amountPerEmployee: number; // How much each worker produces per cycle
+  phasesPerCycle: number;    // Production interval: 1 = every phase, 4 = daily, 28 = weekly
+}
+
+/**
  * Location template with balance section
  */
 export interface LocationTemplate extends EntityTemplate {
@@ -75,6 +95,8 @@ export interface LocationTemplate extends EntityTemplate {
     operatingCost: number;
     employeeSlots: number;
     startingInventory: number;
+    inventoryCapacity: number;
+    production?: ProductionConfig[]; // Optional: what goods this location produces
   };
 }
 

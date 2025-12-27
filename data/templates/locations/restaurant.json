@@ -7,6 +7,7 @@
     "openingCost": 300,
     "operatingCost": 50,
     "employeeSlots": 1,
-    "startingInventory": 15
+    "startingInventory": 15,
+    "inventoryCapacity": 40
   }
 }

@@ -10,14 +10,27 @@
     "startingCreditsMax": 500,
     "startingProvisionsMin": 2,
     "startingProvisionsMax": 4,
-    "entrepreneurThreshold": 300
+    "entrepreneurThreshold": 600,
+    "inventoryCapacity": 10
   },
   "economy": {
-    "prices": {
-      "provisions": 10
-    },
     "salary": {
-      "unskilled": { "min": 100, "max": 200 }
+      "unskilled": { "min": 20, "max": 40 }
     }
-  }
+  },
+  "goods": {
+    "provisions": { "size": 0.1, "retailPrice": 15, "wholesalePrice": 7 },
+    "small_arms": { "size": 1, "retailPrice": 100, "wholesalePrice": 70 },
+    "heavy_weapons": { "size": 2, "retailPrice": 500, "wholesalePrice": 350 },
+    "narcotics": { "size": 0.1, "retailPrice": 50, "wholesalePrice": 30 },
+    "electronics": { "size": 0.5, "retailPrice": 80, "wholesalePrice": 50 },
+    "vehicles": { "size": 10, "retailPrice": 5000, "wholesalePrice": 3500 },
+    "data_storage": { "size": 0.1, "retailPrice": 20, "wholesalePrice": 12 },
+    "medical": { "size": 0.2, "retailPrice": 40, "wholesalePrice": 25 },
+    "luxury_goods": { "size": 0.5, "retailPrice": 200, "wholesalePrice": 120 },
+    "raw_materials": { "size": 1, "retailPrice": 15, "wholesalePrice": 10 },
+    "fuel": { "size": 0.5, "retailPrice": 30, "wholesalePrice": 20 },
+    "cyberware": { "size": 0.3, "retailPrice": 300, "wholesalePrice": 200 }
+  },
+  "defaultGoodsSize": 1
 }

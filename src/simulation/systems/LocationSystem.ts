@@ -2,19 +2,19 @@
  * LocationSystem - Handles locations, inventory, and commerce
  */
 
-import type { Location, Agent, AgentRef } from '../../types';
+import type { Location, Agent } from '../../types';
 import type { LocationTemplate, BalanceConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 
 /**
- * Create a new location (business)
+ * Create a new location (business) - owned by an organization
  */
 export function createLocation(
   id: string,
   name: string,
   template: LocationTemplate,
-  ownerId: AgentRef,
-  ownerName: string,
+  orgId: string,
+  orgName: string,
   phase: number
 ): Location {
   const locationConfig = template.balance;
@@ -25,9 +25,9 @@ export function createLocation(
   ActivityLog.info(
     phase,
     'business',
-    `opened ${template.id} "${name}"`,
-    ownerId,
-    ownerName
+    `${orgName} opened ${template.id} "${name}"`,
+    orgId,
+    orgName
   );
 
   return {
@@ -42,8 +42,8 @@ export function createLocation(
     coordinates: { distance: Math.random() * 100, vertical: 0 },
     size: 1,
     security: 10,
-    owner: ownerId,
-    ownerType: 'agent',
+    owner: orgId,
+    ownerType: 'org', // All businesses owned by orgs
     previousOwners: [],
     employees: [],
     employeeSlots: locationConfig.employeeSlots,
@@ -58,6 +58,7 @@ export function createLocation(
     inventory: {
       provisions: locationConfig.startingInventory,
     },
+    inventoryCapacity: locationConfig.inventoryCapacity,
   };
 }
 
@@ -73,10 +74,11 @@ export function purchaseFromLocation(
   balance: BalanceConfig,
   phase: number
 ): { location: Location; buyer: Agent; success: boolean } {
-  const price = balance.economy.prices[goodsType as keyof typeof balance.economy.prices];
-  if (price === undefined) {
+  const goodsConfig = balance.goods[goodsType];
+  if (!goodsConfig) {
     return { location, buyer, success: false };
   }
+  const price = goodsConfig.retailPrice;
 
   const totalCost = price * quantity;
   const available = location.inventory[goodsType] ?? 0;

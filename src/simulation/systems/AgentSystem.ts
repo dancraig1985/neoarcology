@@ -112,6 +112,8 @@ function attemptToEat(agent: Agent, phase: number, balance: BalanceConfig): Agen
  * Handle agent starvation (death)
  */
 function handleStarvation(agent: Agent, phase: number): Agent {
+  console.log(`[DEBUG DEATH] ${agent.name} died! Credits: ${agent.wallet.credits}, Provisions: ${agent.inventory['provisions'] ?? 0}, Status: ${agent.status}, EmployedAt: ${agent.employedAt ?? 'none'}`);
+
   ActivityLog.critical(
     phase,
     'death',
@@ -172,6 +174,7 @@ export function createAgent(
     inventory: {
       provisions: startingProvisions,
     },
+    inventoryCapacity: balance.agent.inventoryCapacity,
     salary: 0,
     wallet: {
       credits: Math.floor(startingCredits),

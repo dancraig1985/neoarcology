@@ -3,7 +3,7 @@
  * Based on GAME-DESIGN.md - Tags over types philosophy
  */
 
-import type { Expense, IncomeStream } from './economy';
+// Economy types imported when needed
 
 // Reference types for entity relationships
 export type EntityRef = string; // UUID
@@ -80,6 +80,7 @@ export interface Agent extends Entity {
 
   // Personal inventory (goods held)
   inventory: AgentInventory;
+  inventoryCapacity: number; // Max goods agent can carry
 
   // Employment
   employer?: OrgRef;
@@ -145,54 +146,18 @@ export type PersonalGoalType =
 /**
  * Organization - emergent structures created and run by agents
  * Behavior emerges from Leader Agent Tags + Org Tags
+ * MINIMAL for PLAN-003: Just enough for supply chain
  */
 export interface Organization extends Entity {
-  // Resources
-  resources: OrgResources;
+  // Leadership - single leader who makes decisions for the org
+  leader: AgentRef;
 
-  // Leadership structure
-  leader: AgentRef; // Single leader
-  leadership: AgentRef[]; // Lieutenants, executives (includes leader)
-  members: AgentRef[]; // All members (includes leadership)
+  // Finances - org has its own wallet separate from leader
+  wallet: Wallet;
 
-  // Assets
-  vehicles: VehicleRef[];
-  locations: LocationRef[]; // Owned/controlled locations
-
-  // Goals
-  goals: OrgGoal[];
-  enemies: OrgRef[];
-  allies: OrgRef[];
-
-  // Economics
-  income: IncomeStream[];
-  expenses: Expense[];
+  // Owned locations (factories, warehouses, etc.)
+  locations: LocationRef[];
 }
-
-export interface OrgResources {
-  credits: number;
-  influence: number; // Political/social power
-  territory: number; // Physical control (locations owned)
-  reputation: number; // Public perception (-100 to +100)
-  heat: number; // Law enforcement attention
-}
-
-export interface OrgGoal {
-  type: GoalType;
-  target?: EntityRef;
-  priority: number;
-  progress: number;
-}
-
-export type GoalType =
-  | 'expand_territory'
-  | 'increase_wealth'
-  | 'destroy_enemy'
-  | 'protect_asset'
-  | 'recruit_talent'
-  | 'reduce_heat'
-  | 'gain_influence'
-  | 'complete_mission_chain';
 
 /**
  * Location - physical places in the city
@@ -236,6 +201,7 @@ export interface Location extends Entity {
 
   // Inventory
   inventory: Inventory;
+  inventoryCapacity: number; // Max goods location can store
 }
 
 /**

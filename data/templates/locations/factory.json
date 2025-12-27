@@ -2,11 +2,19 @@
   "id": "factory",
   "name": "Factory",
   "description": "An industrial manufacturing facility",
-  "tags": null,
+  "tags": ["wholesale"],
   "balance": {
     "openingCost": 1000,
-    "operatingCost": 400,
-    "employeeSlots": 4,
-    "startingInventory": 0
+    "operatingCost": 20,
+    "employeeSlots": 2,
+    "startingInventory": 0,
+    "inventoryCapacity": 500,
+    "production": [
+      {
+        "good": "provisions",
+        "amountPerEmployee": 2,
+        "phasesPerCycle": 1
+      }
+    ]
   }
 }

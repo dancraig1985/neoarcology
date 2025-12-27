@@ -2,11 +2,12 @@
   "id": "retail_shop",
   "name": "Retail Shop",
   "description": "A small storefront selling goods to the public",
-  "tags": null,
+  "tags": ["retail"],
   "balance": {
     "openingCost": 200,
-    "operatingCost": 30,
+    "operatingCost": 10,
     "employeeSlots": 1,
-    "startingInventory": 20
+    "startingInventory": 20,
+    "inventoryCapacity": 50
   }
 }

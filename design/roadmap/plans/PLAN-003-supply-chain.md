@@ -1,6 +1,6 @@
 # PLAN-003: Provisions Supply Chain
 
-**Status:** planned
+**Status:** completed
 **Priority:** P1 (high)
 **Dependencies:** PLAN-002
 **Phase:** 1c
@@ -46,49 +46,49 @@ transferInventory(from, to, goodsType, amount): { from, to, transferred }
 ```
 
 **Applies to:**
-- [ ] Agents (carrying goods)
-- [ ] Locations (storing goods - factories, shops, warehouses)
+- [x] Agents (carrying goods)
+- [x] Locations (storing goods - factories, shops, warehouses)
 - [ ] Vehicles (transporting cargo) - future, but interface ready
 
 **Capacity rules:**
-- [ ] Total inventory count vs capacity (not per-goods-type)
-- [ ] Add operations fail/partial if over capacity
-- [ ] Transfer = remove from source + add to destination
+- [x] Total inventory count vs capacity (not per-goods-type)
+- [x] Add operations fail/partial if over capacity
+- [x] Transfer = remove from source + add to destination
 
 ### Organization Entity (Minimal)
-- [ ] Org has: id, name, leader (AgentRef), wallet
-- [ ] Org owns locations (factory)
-- [ ] Leader is an agent who makes decisions for the org
-- [ ] Org template: `corporation` only (defer gangs)
+- [x] Org has: id, name, leader (AgentRef), wallet
+- [x] Org owns locations (factory)
+- [x] Leader is an agent who makes decisions for the org
+- [x] Org template: `corporation` only (defer gangs)
 
 ### Factory Location
-- [ ] Factory produces provisions each phase
-- [ ] Production: `addToInventory(factory, 'provisions', productionRate)`
-- [ ] If at capacity, production is wasted (or skipped)
-- [ ] Factory has operating cost (paid weekly by org)
+- [x] Factory produces provisions each phase
+- [x] Production: `addToInventory(factory, 'provisions', productionRate)`
+- [x] If at capacity, production is wasted (or skipped)
+- [x] Factory has operating cost (paid weekly by org)
 
 ### Wholesale Commerce
-- [ ] Shop owners can buy provisions from factories
-- [ ] Uses `transferInventory(factory, shopOwner, 'provisions', amount)`
-- [ ] Wholesale price < retail price (margin for shops)
-- [ ] Credits transfer: shop owner wallet → org wallet
-- [ ] Amount limited by: factory stock, shop capacity, buyer credits
+- [x] Shop owners can buy provisions from factories
+- [x] Uses `transferInventory(factory, shopOwner, 'provisions', amount)`
+- [x] Wholesale price < retail price (margin for shops)
+- [x] Credits transfer: shop owner wallet → org wallet
+- [x] Amount limited by: factory stock, shop capacity, buyer credits
 
 ### Remove Magic Restocking
-- [ ] Remove `restockSystemShops` - no more infinite supply
-- [ ] Remove system-owned shops - all shops have real owners
-- [ ] If no provisions available wholesale → shops run dry → agents can't buy
+- [x] Remove `restockSystemShops` - no more infinite supply
+- [x] Remove system-owned shops - all shops have real owners
+- [x] If no provisions available wholesale → shops run dry → agents can't buy
 
 ### Org Weekly Processing
-- [ ] Org pays factory operating costs from org wallet
-- [ ] Org pays employee salaries (if any) from org wallet
-- [ ] If org wallet negative: org dissolves, factory closes
+- [x] Org pays factory operating costs from org wallet
+- [x] Org pays employee salaries (if any) from org wallet
+- [ ] If org wallet negative: org dissolves, factory closes (deferred)
 
 ### Test Harness
-- [ ] 1 corporation with 1 factory (produces provisions)
-- [ ] 20 agents (some will open shops, others work/buy)
-- [ ] No system shops - economy must bootstrap from factory
-- [ ] Verify: factory → wholesale → retail → consumption loop
+- [x] 1 corporation with 1 factory (produces provisions)
+- [x] 20 agents (some will open shops, others work/buy)
+- [x] No system shops - economy must bootstrap from factory
+- [x] Verify: factory → wholesale → retail → consumption loop
 
 ## Economic Flow
 
@@ -160,13 +160,13 @@ All inventory operations use the same `InventorySystem` functions.
 
 ## Verification
 
-- [ ] Factory produces provisions (stops at capacity)
-- [ ] Shop owners buy wholesale from factory (limited by shop capacity)
-- [ ] Agents buy retail from shops (limited by carrying capacity)
-- [ ] Credits flow: agents → shops → factory/org
-- [ ] No magic restocking - real supply chain
-- [ ] Capacity constraints create natural pressure/scarcity
-- [ ] Economy survives 100+ weeks with real supply
+- [x] Factory produces provisions (stops at capacity)
+- [x] Shop owners buy wholesale from factory (limited by shop capacity)
+- [x] Agents buy retail from shops (limited by carrying capacity)
+- [x] Credits flow: agents → shops → factory/org
+- [x] No magic restocking - real supply chain
+- [x] Capacity constraints create natural pressure/scarcity
+- [ ] Economy survives 100+ weeks with real supply (manual test needed)
 
 ## Non-Goals (Defer)
 
