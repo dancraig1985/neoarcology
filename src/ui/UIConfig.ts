@@ -4,6 +4,7 @@
  */
 
 import type { Agent, Organization, Location } from '../types';
+import type { DetailSection } from './components/DetailView';
 
 /**
  * Column definition for tables
@@ -169,3 +170,159 @@ export function renderCell<T>(item: T, column: ColumnDef<T>): string {
   }
   return defaultRender(item, column.key);
 }
+
+// ============================================
+// Detail View Definitions
+// ============================================
+
+/**
+ * Agent detail sections
+ */
+export const AGENT_DETAILS: DetailSection[] = [
+  {
+    title: 'Identity',
+    fields: [
+      { key: 'id', label: 'ID' },
+      { key: 'name', label: 'Name' },
+      { key: 'status', label: 'Status' },
+      { key: 'created', label: 'Born (phase)' },
+    ],
+  },
+  {
+    title: 'Employment',
+    fields: [
+      { key: 'employer', label: 'Employer', render: (a) => (a as Agent).employer ?? 'Unemployed' },
+      { key: 'salary', label: 'Salary/week' },
+    ],
+  },
+  {
+    title: 'Stats',
+    fields: [
+      { key: 'stats.force', label: 'Force' },
+      { key: 'stats.mobility', label: 'Mobility' },
+      { key: 'stats.tech', label: 'Tech' },
+      { key: 'stats.social', label: 'Social' },
+      { key: 'stats.business', label: 'Business' },
+      { key: 'stats.engineering', label: 'Engineering' },
+    ],
+  },
+  {
+    title: 'Needs & Resources',
+    fields: [
+      { key: 'needs.hunger', label: 'Hunger', render: (a) => `${Math.round((a as Agent).needs.hunger)}%` },
+      { key: 'wallet.credits', label: 'Credits' },
+      {
+        key: 'inventory',
+        label: 'Inventory',
+        render: (a) => {
+          const inv = (a as Agent).inventory;
+          const items = Object.entries(inv)
+            .filter(([, v]) => v > 0)
+            .map(([k, v]) => `${k}: ${v}`);
+          return items.length > 0 ? items.join(', ') : 'Empty';
+        },
+      },
+    ],
+  },
+];
+
+/**
+ * Organization detail sections
+ */
+export const ORG_DETAILS: DetailSection[] = [
+  {
+    title: 'Identity',
+    fields: [
+      { key: 'id', label: 'ID' },
+      { key: 'name', label: 'Name' },
+      { key: 'template', label: 'Type' },
+      { key: 'created', label: 'Founded (phase)' },
+    ],
+  },
+  {
+    title: 'Leadership',
+    fields: [
+      { key: 'leader', label: 'Leader ID' },
+      { key: 'leaderName', label: 'Leader Name' },
+    ],
+  },
+  {
+    title: 'Finances',
+    fields: [
+      { key: 'wallet.credits', label: 'Credits' },
+    ],
+  },
+  {
+    title: 'Assets',
+    fields: [
+      {
+        key: 'locations',
+        label: 'Locations',
+        render: (o) => {
+          const locs = (o as Organization).locations;
+          return locs.length > 0 ? locs.join(', ') : 'None';
+        },
+      },
+      { key: 'tags', label: 'Tags' },
+    ],
+  },
+];
+
+/**
+ * Location detail sections
+ */
+export const LOCATION_DETAILS: DetailSection[] = [
+  {
+    title: 'Identity',
+    fields: [
+      { key: 'id', label: 'ID' },
+      { key: 'name', label: 'Name' },
+      { key: 'template', label: 'Type' },
+      { key: 'tags', label: 'Tags' },
+    ],
+  },
+  {
+    title: 'Ownership',
+    fields: [
+      { key: 'owner', label: 'Owner ID' },
+      { key: 'ownerType', label: 'Owner Type' },
+    ],
+  },
+  {
+    title: 'Operations',
+    fields: [
+      {
+        key: 'employees',
+        label: 'Employees',
+        render: (l) => `${(l as Location).employees.length} / ${(l as Location).employeeSlots}`,
+      },
+      { key: 'operatingCost', label: 'Operating Cost' },
+      { key: 'weeklyRevenue', label: 'Weekly Revenue' },
+      { key: 'weeklyCosts', label: 'Weekly Costs' },
+    ],
+  },
+  {
+    title: 'Inventory',
+    fields: [
+      {
+        key: 'inventory',
+        label: 'Stock',
+        render: (l) => {
+          const inv = (l as Location).inventory;
+          const items = Object.entries(inv)
+            .filter(([, v]) => v > 0)
+            .map(([k, v]) => `${k}: ${v}`);
+          return items.length > 0 ? items.join(', ') : 'Empty';
+        },
+      },
+      { key: 'inventoryCapacity', label: 'Capacity' },
+    ],
+  },
+  {
+    title: 'Location',
+    fields: [
+      { key: 'sector', label: 'Sector' },
+      { key: 'district', label: 'District' },
+    ],
+  },
+];
