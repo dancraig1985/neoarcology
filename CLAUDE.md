@@ -39,10 +39,21 @@ A cyberpunk city simulation that runs autonomously. Game modes are different vie
 - **~16 goods categories**: Broad categories (small_arms, narcotics, etc.), not granular items
 - **Tangible at locations**: Physical goods stored at locations, non-tangible data on data_storage
 - **Agents have personal goals** that may conflict with org goals
-- Every org has exactly ONE leader (`leader` field) plus `leadership` array
-- Org decisions flow through leader → council (decision style is a tag)
+- Every org has exactly ONE leader (`leader` field) who receives owner dividends
 - All significant events must be logged to ActivityLog
 - Never mutate state directly, use store actions
+
+### Micro-Org Business Model
+- **All businesses are owned by orgs**, never directly by agents
+- When an agent starts a business, a "micro-org" is created to own it
+- Revenue goes to **org wallet**, not agent wallet
+- Owners extract profits via **weekly dividend** (30 credits/week)
+- If owner dies, org dissolves automatically
+
+### Supply Chain
+- **Wholesale** (`wholesale` tag): Sells to businesses (factories)
+- **Retail** (`retail` tag): Sells to consumers (shops)
+- Money flows: Factory → (wholesale) → Shops → (retail) → Agents → (salary) → back to agents
 
 ## Key Documentation
 
@@ -84,19 +95,12 @@ The `design/bible/` folder contains detailed documentation for each simulation s
 ## Configuration (Data-Driven)
 
 - Simulation params: `data/config/simulation.json`
-- Economy balance: `data/config/economy.json`
-- Scenarios: `data/scenarios/*.json`
+- Balance config: `data/config/balance.json` (hunger, prices, salaries, goods)
 
 **Templates (define entity defaults + tags):**
 - Org templates: `data/templates/orgs/*.json`
 - Agent archetypes: `data/templates/agents/*.json`
-- Location templates: `data/templates/locations/*.json`
-- Mission templates: `data/templates/missions/*.json`
-- Goods data: `data/templates/goods/*.json`
-
-**Tags & Behaviors:**
-- Tag registry: `data/registry/tags.json`
-- Behaviors: `data/behaviors/*.json`
+- Location templates: `data/templates/locations/*.json` (includes production config)
 
 **Adding new "types" = adding new template JSON files, no code changes required.**
 
@@ -131,10 +135,16 @@ The `design/bible/` folder contains detailed documentation for each simulation s
 ## Common Pitfalls
 
 - Using hardcoded types instead of tags
-- Forgetting that org behavior = Leader Agent Tags + Org Tags
 - Forgetting to log significant events to ActivityLog
-- Not checking org.leader before leadership array operations
 - Mutations in tick processing (always return new state)
 - Adding template fields that no code uses (YAGNI violation)
 - Duplicating data between balance.json and template files (DRY violation)
 - Copy-pasting logic instead of extracting shared functions (DRY violation)
+
+### Economy Pitfalls
+- **Revenue to wrong wallet**: Revenue must go to ORG wallet, not agent/leader wallet
+- **Forgetting owner dividends**: Owners need weekly dividend payment to survive
+- **Unbalanced economics**: Ensure revenue > (operating costs + salaries + owner dividend)
+- **Not handling owner death**: Org must dissolve when leader dies
+- **Zombie businesses**: Orgs with <50 credits should dissolve (insolvent)
+- **Too many competing businesses**: Entrepreneur threshold too low = shops dilute customer base
