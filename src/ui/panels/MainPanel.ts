@@ -217,7 +217,10 @@ export class MainPanel extends Panel {
       case 'orgs': {
         const org = this.currentState.organizations.find((o) => o.id === this.selectedEntityId);
         if (org) {
-          this.orgDetail.setData(org.name, org);
+          // Enrich with computed leaderName
+          const leader = this.currentState.agents.find((a) => a.id === org.leader);
+          const enrichedOrg = { ...org, leaderName: leader?.name ?? '-' };
+          this.orgDetail.setData(org.name, enrichedOrg);
         }
         break;
       }
