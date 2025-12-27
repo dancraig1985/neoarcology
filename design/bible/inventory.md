@@ -1,159 +1,70 @@
-# Inventory System
+# Inventory
 
-The inventory system handles storage of goods at locations and in agent inventories, with size-based capacity limits.
+Everything physical in NeoArcology takes up space. Agents carry goods in their pockets; locations store goods in their warehouses.
 
-## Key Files
-- `src/simulation/systems/InventorySystem.ts` - Core inventory operations
-- `data/config/balance.json` - Goods sizes and prices
-- `src/types/entities.ts` - Inventory type definitions
+## Goods
 
-## Goods Categories
+The simulation uses broad **categories** of goods, not individual items:
+- Provisions (food)
+- Small arms
+- Heavy weapons
+- Narcotics
+- Electronics
+- Vehicles
+- And more...
 
-The simulation uses ~16 broad goods categories (not granular items):
+Each category represents a class of items. "Provisions" might be ration packs, fresh food, or nutrient paste - the simulation doesn't distinguish.
 
-| Good | Size | Retail | Wholesale | Notes |
-|------|------|--------|-----------|-------|
-| provisions | 0.1 | 15 | 7 | Food, essential for survival |
-| small_arms | 1.0 | 100 | 70 | Weapons |
-| heavy_weapons | 2.0 | 500 | 350 | Large weapons |
-| narcotics | 0.1 | 50 | 30 | Illegal goods |
-| electronics | 0.5 | 80 | 50 | Tech items |
-| vehicles | 10.0 | 5000 | 3500 | Large, expensive |
-| data_storage | 0.1 | 20 | 12 | Digital storage |
-| medical | 0.2 | 40 | 25 | Medical supplies |
-| luxury_goods | 0.5 | 200 | 120 | High-end items |
-| raw_materials | 1.0 | 15 | 10 | Manufacturing inputs |
-| fuel | 0.5 | 30 | 20 | Energy |
-| cyberware | 0.3 | 300 | 200 | Cybernetic implants |
+## Size and Capacity
 
-## Size-Based Capacity
+### Everything Has Size
+Each type of goods takes up space:
+- Small items (provisions, data chips) take little space
+- Large items (vehicles, heavy weapons) take lots of space
 
-Inventory capacity is measured in **space units**, not item count.
+### Everything Has Capacity
+Both agents and locations have limited storage:
+- **Agents** - Can carry a limited amount (pockets, backpack)
+- **Locations** - Have warehouse/storage space based on type
 
-### Example
-A location with `inventoryCapacity: 50` can hold:
-- 500 provisions (50 / 0.1 = 500)
-- 50 small_arms (50 / 1.0 = 50)
-- 25 heavy_weapons (50 / 2.0 = 25)
-- Or any combination that fits
+### The Math
+You can't carry more than your capacity allows. A tiny shop can't stock as much as a massive warehouse. An agent can't carry a vehicle in their pocket.
 
-### Calculations
-
-```typescript
-// Get space used by inventory
-function getInventorySpaceUsed(holder, sizes): number {
-  let total = 0;
-  for (const [goodsType, count] of Object.entries(holder.inventory)) {
-    const size = sizes.goods[goodsType]?.size ?? sizes.defaultGoodsSize;
-    total += count * size;
-  }
-  return total;
-}
-
-// Get available space
-function getAvailableCapacity(holder, sizes): number {
-  return holder.inventoryCapacity - getInventorySpaceUsed(holder, sizes);
-}
-```
-
-## Inventory Holders
-
-Both agents and locations can hold inventory:
+## Who Holds Inventory
 
 ### Agent Inventory
-```typescript
-interface Agent {
-  inventory: Record<string, number>;  // { provisions: 3, ... }
-  inventoryCapacity: number;          // Default: 10
-}
-```
+Personal belongings:
+- Food for survival
+- Weapons for combat
+- Goods for sale/trade
+
+Agents eat from their personal inventory when hungry.
 
 ### Location Inventory
-```typescript
-interface Location {
-  inventory: Record<string, number>;
-  inventoryCapacity: number;  // From template: 50 (shop), 500 (factory)
-}
-```
+Business stock:
+- Shops hold goods for retail sale
+- Factories hold produced goods for wholesale
 
-## Inventory Operations
+When you buy from a shop, goods move from location inventory to your inventory.
 
-### Adding Items
-```typescript
-function addToInventory(
-  holder: InventoryHolder,
-  goodsType: string,
-  amount: number,
-  sizes?: GoodsSizes
-): { holder: InventoryHolder; added: number }
-```
-- Respects capacity limits
-- Returns actual amount added (may be less than requested)
+## Movement of Goods
 
-### Removing Items
-```typescript
-function removeFromInventory(
-  holder: InventoryHolder,
-  goodsType: string,
-  amount: number
-): { holder: InventoryHolder; removed: number }
-```
-- Can't remove more than available
-- Returns actual amount removed
+### Purchase
+Buyer pays, goods transfer from seller to buyer.
 
-### Transferring Items
-```typescript
-function transferInventory(
-  from: InventoryHolder,
-  to: InventoryHolder,
-  goodsType: string,
-  amount: number,
-  sizes?: GoodsSizes
-): { from: InventoryHolder; to: InventoryHolder; transferred: number }
-```
-- Respects both source availability and destination capacity
-- Used for wholesale restocking
+### Production
+Factories create goods from nothing (using labor).
 
-## Capacity Configuration
+### Consumption
+Eating destroys provisions. They're gone.
 
-### From Templates
-```json
-// retail_shop.json
-{ "inventoryCapacity": 50 }
+## Running Out
 
-// factory.json
-{ "inventoryCapacity": 500 }
-```
+### Agents
+An agent with no provisions must buy food or starve.
 
-### From Balance Config
-```json
-// balance.json
-{
-  "agent": {
-    "inventoryCapacity": 10
-  },
-  "defaultGoodsSize": 1
-}
-```
+### Shops
+A shop with no stock can't sell. Customers go elsewhere. Revenue stops.
 
-## Restocking Logic
-
-Shops restock from wholesale when:
-1. `currentStock < restockThreshold` (15)
-2. Wholesale location has stock
-3. Shop org can afford wholesale price
-
-Restock amount:
-```typescript
-const desiredAmount = Math.min(30, maxItemsThatFit);
-const affordableAmount = Math.floor(orgCredits / wholesalePrice);
-const amountToBuy = Math.min(desiredAmount, wholesalerStock, affordableAmount);
-```
-
-## Key Invariants
-
-1. Inventory can never exceed capacity
-2. Inventory quantities are always >= 0
-3. Size is always > 0 (default: 1.0)
-4. Transfers are atomic (both sides update or neither)
-5. Only provisions are currently produced/consumed
+### Factories
+A factory at capacity stops producing until goods are sold.

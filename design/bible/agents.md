@@ -1,109 +1,60 @@
 # Agents
 
-Agents are the atomic unit of the simulation. They have needs, make economic decisions, and can own businesses through organizations.
+Agents are the people of NeoArcology. They have needs, make decisions, and can die.
 
-## Key Files
-- `src/simulation/systems/AgentSystem.ts` - Hunger, eating, starvation
-- `src/simulation/systems/EconomySystem.ts` - Economic decisions
-- `src/types/entities.ts` - Agent type definition
+## Survival
 
-## Agent Lifecycle
+### Hunger
+Agents get hungrier over time. When hunger reaches a threshold, they need to eat.
 
-### Creation
-Agents are created with randomized starting values:
-- `hunger`: 0 to `startingHungerMax` (24)
-- `credits`: `startingCreditsMin` (100) to `startingCreditsMax` (500)
-- `provisions`: `startingProvisionsMin` (2) to `startingProvisionsMax` (4)
+- **Hunger accumulates** continuously as time passes
+- **Eating resets hunger** to zero and consumes one provision
+- **Starvation occurs** when hunger reaches maximum - the agent dies
 
-### Status Values
-- `available` - Unemployed, can seek jobs or start businesses
-- `employed` - Has a job at a location OR runs own business
-- `dead` - Died (from starvation)
+### Eating Priority
+When hungry, an agent will:
+1. First, eat from their personal inventory (if they have provisions)
+2. If no food, try to buy from a shop (if they have money)
+3. If no money or no shops have stock, continue starving
 
 ### Death
-When `hunger >= hungerMax` (100), agent dies:
-- Status set to `dead`
-- `destroyed` field set to current phase
-- Dead agents are skipped in all processing
-
-## Hunger System
-
-### Accumulation
-Each phase, hunger increases by `hungerPerPhase` (0.89):
-```
-newHunger = agent.needs.hunger + 0.89
-```
-
-### Eating
-When hunger >= `hungerThreshold` (25), agent tries to eat:
-1. Check if has provisions in inventory
-2. If yes: consume 1 provision, reset hunger to 0
-3. If no: hunger stays high, agent will try to buy
-
-### Starvation Warnings
-- 50%+ of max: "is very hungry"
-- 75%+ of max: "is starving!"
-- 100% of max: Death
-
-### Timeline
-With hungerPerPhase=0.89 and threshold=25:
-- ~28 phases (1 day) until first hunger event
-- If no food for ~84 phases (3 days), death from starvation
+Death is permanent. A dead agent:
+- No longer participates in the simulation
+- Loses all possessions (credits, inventory)
+- If they owned a business, it closes (see Organizations)
 
 ## Economic Behavior
 
-Each phase, agents make economic decisions in this priority:
+Agents make decisions each phase based on their situation:
 
-### 1. Shop Owner Restocking
-If agent leads an org with retail locations:
-- Check each shop's inventory
-- If below threshold (15), try to restock from wholesale
+### Priority 1: Feed the Business
+Shop owners restock their inventory from wholesale suppliers before doing anything else. A shop owner who lets their store run empty will lose customers.
 
-### 2. Buy Provisions
-If hungry AND has no food AND has credits:
-- Find retail locations with provisions
-- Purchase 1 provision at retail price (15)
-- Revenue goes to shop's owner org
+### Priority 2: Feed Yourself
+Hungry agents with no food will try to buy provisions. They need both money and a shop with stock.
 
-### 3. Seek Employment
-If `status === 'available'` and no job:
-- Find locations with open employee slots
-- Cannot work at own business
-- Get hired with random salary (20-40)
+### Priority 3: Find Work
+Unemployed agents look for jobs at locations that are hiring. Jobs provide steady income (weekly salary).
 
-### 4. Start Business
-If credits >= `entrepreneurThreshold` (600) AND not already an owner:
-- Can quit current job to start business
-- Creates a micro-org to own the shop
-- 70% of credits go to business capital
-- 200 credits opening cost
+### Priority 4: Start a Business
+Agents who accumulate enough savings may quit their job and open their own shop. This requires significant capital and creates a new organization to own the business.
 
-## Balance Configuration
+## Employment
 
-From `data/config/balance.json`:
-```json
-{
-  "agent": {
-    "hungerPerPhase": 0.89,
-    "hungerThreshold": 25,
-    "hungerMax": 100,
-    "provisionsPerMeal": 1,
-    "startingHungerMin": 0,
-    "startingHungerMax": 24,
-    "startingCreditsMin": 100,
-    "startingCreditsMax": 500,
-    "startingProvisionsMin": 2,
-    "startingProvisionsMax": 4,
-    "entrepreneurThreshold": 600,
-    "inventoryCapacity": 10
-  }
-}
-```
+### Getting Hired
+- Agent must be unemployed
+- Location must have open employee slots
+- Cannot work at a business you own
 
-## Key Invariants
+### Being Employed
+- Receive weekly salary from employer
+- If employer can't pay, you're fired
+- Can quit to start your own business (if wealthy enough)
 
-1. Dead agents are never processed
-2. Agents eat from personal inventory before buying
-3. Only `available` status agents seek employment
-4. Business owners (org leaders) can't work as employees at their own business
-5. Employed agents CAN quit to start a business if wealthy enough
+## Entrepreneurship
+
+When an agent starts a business:
+- They create an organization to own it
+- Most of their savings become business capital
+- They become the organization's leader
+- They now receive owner dividends instead of salary

@@ -1,174 +1,84 @@
-# Production System
+# Production
 
-Production transforms labor into goods. Factories produce provisions that flow through the supply chain to consumers.
+Factories create goods. Without production, there's nothing to sell, nothing to eat, nothing.
 
-## Key Files
-- `src/simulation/systems/OrgSystem.ts` - `processFactoryProduction()`
-- `data/templates/locations/factory.json` - Production configuration
-- `src/config/ConfigLoader.ts` - `ProductionConfig` interface
+## How Production Works
 
-## Production Model
+Production requires **labor**:
+- Factories have employee slots
+- Workers show up and produce goods
+- More workers = more production
 
-Production is **labor-dependent**:
-```
-Production = Employees × AmountPerEmployee (when cycle triggers)
-```
+**No workers = no production.** An empty factory sits idle.
 
-No employees = no production (factory sits idle).
+## The Production Cycle
 
-## Production Configuration
+Each cycle (which could be every phase, daily, or weekly depending on the good):
+1. Count how many workers are present
+2. Each worker produces their share
+3. Goods appear in the factory's inventory
 
-From location template:
-```json
-{
-  "production": [
-    {
-      "good": "provisions",
-      "amountPerEmployee": 2,
-      "phasesPerCycle": 1
-    }
-  ]
-}
-```
+Production continues until the factory is full. Then it stops until goods are sold.
 
-### Fields
-- `good` - What goods type is produced
-- `amountPerEmployee` - Units produced per worker per cycle
-- `phasesPerCycle` - How often production runs:
-  - `1` = every phase
-  - `4` = every day (4 phases/day)
-  - `28` = every week (28 phases/week)
+## Labor Dependency
 
-## Multi-Good Production
+This is crucial: **production scales with employment**.
 
-Factories can produce multiple goods with different rates:
-```json
-{
-  "production": [
-    { "good": "provisions", "amountPerEmployee": 2, "phasesPerCycle": 1 },
-    { "good": "electronics", "amountPerEmployee": 1, "phasesPerCycle": 4 }
-  ]
-}
-```
+- 0 workers → 0 output
+- 1 worker → some output
+- 2 workers → twice as much
+- Full staff → maximum output
 
-Each production config is processed independently.
-
-## Production Processing
-
-Called each tick in `Simulation.tick()`:
-```typescript
-updatedLocations = updatedLocations.map((loc) => {
-  const template = config.locationTemplates[loc.template];
-  return processFactoryProduction(
-    loc,
-    template?.balance.production,
-    phase,
-    goodsSizes
-  );
-});
-```
-
-### Algorithm
-```typescript
-function processFactoryProduction(location, productionConfig, phase, goodsSizes) {
-  // No production config = not a producer
-  if (!productionConfig) return location;
-
-  const employeeCount = location.employees.length;
-
-  // No workers = no production
-  if (employeeCount === 0) {
-    // Log warning: "no workers - production halted"
-    return location;
-  }
-
-  for (const config of productionConfig) {
-    // Check if this phase is a production cycle
-    if (phase % config.phasesPerCycle !== 0) continue;
-
-    // Check capacity
-    const capacity = getAvailableCapacity(location, goodsSizes);
-    if (capacity <= 0) {
-      // Log warning: "at capacity, production halted"
-      continue;
-    }
-
-    // Calculate production
-    const amount = employeeCount * config.amountPerEmployee;
-
-    // Add to inventory (respects capacity)
-    const { holder, added } = addToInventory(location, config.good, amount, goodsSizes);
-    location = holder;
-
-    // Log production
-  }
-
-  return location;
-}
-```
-
-## Production Economics
-
-### Current Factory Setup
-- 2 employee slots
-- 2 provisions per employee per phase
-- Total: 4 provisions/phase = 16/day = 112/week
-
-### Demand
-- 21 agents eating ~1/day = ~21/week consumption
-- Production far exceeds demand (by design, for stability)
-
-### Balance
-Factory produces excess inventory, which accumulates until:
-- Shops buy it (wholesale)
-- Capacity limit reached (500 provisions)
+A factory owner who can't attract or retain workers will watch their business grind to a halt.
 
 ## Capacity Limits
 
-Production respects inventory capacity:
-- Factory capacity: 500 units
-- Provisions size: 0.1
-- Max provisions: 5000
+Factories can only hold so much:
+- Every factory has a storage capacity
+- Production stops when storage is full
+- Goods must be sold (wholesale) to make room
 
-When at capacity, production halts with warning log.
+A factory with no buyers will fill up and stop producing.
 
-## Labor Market
+## What Gets Produced
 
-### Workers for Factory
-Factory needs workers hired via `tryGetJob()`:
-1. Unemployed agent finds hiring location
-2. Factory has `employeeSlots: 2`
-3. Agent hired with salary 20-40/week
-4. Production scales with employee count
+Different factories produce different goods:
+- Food factories → Provisions
+- Arms manufacturers → Weapons
+- Electronics plants → Tech goods
 
-### No Workers = No Production
-If factory can't attract/retain workers:
-- Production drops to 0
-- Shops can't restock
-- Agents starve
+Each factory type has its own production rate and cycle.
 
-This creates economic feedback loop.
+## The Supply Chain
 
-## Supply Chain Flow
+Production is just the start:
 
 ```
-FACTORY                SHOPS                 AGENTS
-┌─────────┐           ┌─────────┐           ┌─────────┐
-│ PRODUCE │ ─────────►│ RESTOCK │ ─────────►│PURCHASE │
-│ 4/phase │ wholesale │when <15 │  retail   │ when    │
-│         │  @7 each  │ buy 30  │  @15 each │ hungry  │
-└─────────┘           └─────────┘           └─────────┘
-     │                     │                     │
-     ▼                     ▼                     ▼
- inventory            inventory              eat food
- increases            fluctuates             hunger→0
+PRODUCTION → WHOLESALE → RETAIL → CONSUMPTION
+  (factory)   (to shops)  (to agents)  (eating)
 ```
 
-## Key Invariants
+If any link breaks:
+- No production → Shops can't restock → Agents starve
+- No wholesale buyers → Factory fills up → Production stops
+- No retail buyers → Shops fail → Wholesale stops → Factory fails
 
-1. Production only happens at locations with `production` config
-2. No employees = no production
-3. Production respects capacity limits
-4. Cycle timing uses modulo: `phase % phasesPerCycle === 0`
-5. Each good in production array is processed independently
-6. Goods are created from nothing (value creation)
+## Worker Incentives
+
+Workers need reasons to work:
+- **Salary** - Paid weekly by the factory's org
+- **Survival** - Money buys food
+
+If a factory can't pay competitive wages, workers will:
+- Leave for better jobs
+- Start their own businesses
+- (Or starve if there's nowhere else to go)
+
+## Factory Economics
+
+For a factory to survive:
+- Wholesale revenue must exceed costs
+- Costs = worker salaries + operating costs + owner dividend
+- If revenue < costs, the factory eventually closes
+
+A factory that can't sell its goods is doomed.

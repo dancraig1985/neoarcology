@@ -1,157 +1,92 @@
 # Economy
 
-The economy is a closed-loop system where money circulates between agents and organizations through employment and commerce.
+Money flows in a circle through NeoArcology. Understanding this flow is key to understanding why agents live or die.
 
-## Key Files
-- `src/simulation/systems/EconomySystem.ts` - All economic processing
-- `src/simulation/systems/LocationSystem.ts` - Purchase transactions
-- `data/config/balance.json` - Price and salary configuration
-
-## Money Flow Diagram
+## The Money Circle
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      MONEY CIRCULATION                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│   ┌──────────┐    wholesale (7)    ┌──────────┐             │
-│   │ FACTORY  │ ──────────────────► │  SHOPS   │             │
-│   │   ORG    │                     │   ORGS   │             │
-│   └────┬─────┘                     └────┬─────┘             │
-│        │                                │                    │
-│        │ salaries                       │ salaries           │
-│        │ + owner div                    │ + owner div        │
-│        │ (30+60)                        │ (30+30)            │
-│        ▼                                ▼                    │
-│   ┌──────────────────────────────────────────┐              │
-│   │              AGENT WALLETS               │              │
-│   └──────────────────────────────────────────┘              │
-│        │                                                     │
-│        │ retail purchases (15 each)                         │
-│        │                                                     │
-│        └─────────────────► SHOPS ────────────►              │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+    FACTORY ──────► SHOPS ──────► AGENTS
+       ▲              │              │
+       │              │              │
+       │         (wholesale)    (retail)
+       │              │              │
+       │              ▼              ▼
+       └──── WAGES ◄────────────────┘
 ```
 
-## Transaction Types
+1. **Factories sell wholesale** to shops
+2. **Shops sell retail** to agents (consumers)
+3. **Businesses pay wages** to their employees
+4. **Employees spend wages** at shops
+5. **Cycle repeats**
 
-### Retail Purchase (Agent → Shop)
-When an agent buys provisions:
-1. Agent pays `retailPrice` (15) from personal wallet
-2. Shop location's inventory decreases by 1
-3. Shop's owner org wallet increases by 15
-4. Location's `weeklyRevenue` tracked (for stats)
+If any link breaks, people starve.
 
-```typescript
-// In tryBuyProvisions()
-agent.wallet.credits -= 15;
-location.inventory['provisions'] -= 1;
-ownerOrg.wallet.credits += 15;
+## Two Types of Transactions
+
+### Retail (Consumer)
+When an agent buys food at a shop:
+- Agent pays the retail price
+- Money goes to the shop's organization
+- Agent receives the goods
+
+### Wholesale (Business-to-Business)
+When a shop restocks from a factory:
+- Shop's org pays the wholesale price
+- Money goes to the factory's organization
+- Shop receives the goods
+
+Wholesale prices are lower than retail - this is how shops make profit.
+
+## Where Money Goes
+
+### Revenue
+All sales revenue goes to the **organization's wallet**, not directly to any person. This is true for both retail and wholesale.
+
+### Expenses
+Organizations pay from their wallet:
+- **Employee salaries** - Weekly, to each worker
+- **Operating costs** - Weekly, for each location
+- **Owner dividends** - Weekly, to the leader
+
+### Personal Income
+Agents only receive money through:
+- **Salary** - If employed by an org
+- **Dividends** - If they own an org
+
+There's no other way to get money in the current simulation.
+
+## Profit and Loss
+
+For a business to survive:
+```
+Revenue > (Employee Salaries + Operating Costs + Owner Dividend)
 ```
 
-### Wholesale Purchase (Shop → Factory)
-When a shop restocks:
-1. Shop org pays `wholesalePrice` (7) per unit
-2. Factory location's inventory decreases
-3. Shop location's inventory increases
-4. Factory's owner org wallet increases
+If revenue falls short:
+1. First, owner dividends get skipped
+2. Then employees can't be paid (they quit)
+3. Finally, the business becomes insolvent and closes
 
-```typescript
-// In tryRestockFromWholesale()
-shopOrg.wallet.credits -= (quantity * 7);
-factoryLocation.inventory['provisions'] -= quantity;
-shopLocation.inventory['provisions'] += quantity;
-factoryOrg.wallet.credits += (quantity * 7);
-```
+## Economic Death Spirals
 
-### Employee Salary (Org → Agent)
-Weekly payroll:
-1. Org pays each employee's salary from org wallet
-2. Employee's personal wallet increases
-3. If org can't pay, employee is released
+Several things can kill an economy:
 
-```typescript
-// In processOrgPayroll()
-org.wallet.credits -= employee.salary;
-employee.wallet.credits += employee.salary;
-```
+### No Customers
+If agents don't have money, they can't buy. If they can't buy, shops have no revenue. If shops have no revenue, they can't pay workers. Workers have no money, can't buy...
 
-### Owner Dividend (Org → Leader)
-Weekly owner payment:
-1. Org pays 30 credits to leader
-2. Leader's personal wallet increases
-3. Only if org has sufficient funds
+### No Stock
+If factories stop producing, shops can't restock. If shops have no stock, agents can't buy food. Agents starve.
 
-```typescript
-// In processWeeklyEconomy()
-org.wallet.credits -= 30;
-leader.wallet.credits += 30;
-```
+### Too Much Competition
+If too many shops open, customers are spread thin. Each shop gets less revenue. Shops become unprofitable and close. But if they all close at once, there's nowhere to buy food.
 
-## Price Configuration
+## The Balancing Act
 
-From `data/config/balance.json`:
-```json
-{
-  "goods": {
-    "provisions": {
-      "retailPrice": 15,    // Agent pays this
-      "wholesalePrice": 7   // Shop pays this
-    }
-  },
-  "economy": {
-    "salary": {
-      "unskilled": { "min": 20, "max": 40 }
-    }
-  }
-}
-```
+A healthy economy requires:
+- **Enough production** - Factories making goods
+- **Enough distribution** - Shops selling to consumers
+- **Enough employment** - Workers earning wages
+- **Enough spending** - Consumers buying goods
 
-### Profit Margins
-- **Shop margin**: 15 - 7 = 8 credits (53%)
-- **Factory margin**: 7 - 0 = 7 credits (100%, produces from nothing)
-
-## Money Sinks
-
-Operating costs are the only money sink (money destroyed):
-- Shop operating: 10/week
-- Factory operating: 20/week
-- Total: ~70/week (with 2 shops + 1 factory)
-
-## Money Sources
-
-Currently, money is only created at simulation start:
-- Agents: 100-500 each × 21 = ~6,300 credits
-- Factory org: 10,000 credits
-- Shop orgs: 700 each × 2 = 1,400 credits
-- **Total: ~17,700 credits**
-
-Factory production creates VALUE (provisions) but not MONEY.
-
-## Economic Balance
-
-### For Shops to be Profitable
-Revenue must exceed costs:
-- Revenue: sales × margin = 10.5 × 8 = 84/week
-- Costs: employee(30) + owner(30) + operating(10) = 70/week
-- **Net: +14/week** ✓
-
-### For Factory to be Profitable
-- Revenue: wholesale sales × price = 21 × 7 = 147/week
-- Costs: employees(60) + owner(30) + operating(20) = 110/week
-- **Net: +37/week** ✓
-
-### For Agents to Survive
-- Income: salary = 20-40/week
-- Food cost: 15/week (eating ~once per week)
-- **Net: +5-25/week savings** ✓
-
-## Key Invariants
-
-1. All revenue goes to ORG wallets, not agent wallets
-2. Agents only receive money via salary or owner dividend
-3. Operating costs are a money sink (destroyed)
-4. Retail price > wholesale price (shops must profit)
-5. Salary > food cost (employees can survive)
-6. Weekly processing happens on week rollover only
+All four must stay in balance, or the system collapses.

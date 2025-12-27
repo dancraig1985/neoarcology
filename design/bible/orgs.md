@@ -1,137 +1,63 @@
 # Organizations
 
-Organizations (orgs) own businesses and employ agents. Every business is owned by an org, even sole proprietorships (micro-orgs).
+Organizations own businesses and employ workers. Every commercial enterprise - from a corner shop to a factory - is owned by an organization.
 
-## Key Files
-- `src/simulation/systems/OrgSystem.ts` - Org creation, production
-- `src/simulation/systems/EconomySystem.ts` - Weekly processing, dissolution
-- `src/types/entities.ts` - Organization type definition
+## Why Organizations?
 
-## Micro-Org Model
+Organizations separate personal and business finances. When you start a shop:
+- The shop's money is the organization's money, not yours
+- You extract profits through weekly dividends
+- If the business fails, you don't lose your personal savings (what's left of them)
 
-**Commercial businesses (shops, factories) are owned by organizations** for clean separation of personal and business finances.
+This also means your business can outlive you, or fail while you survive.
 
-Note: Personal locations (homes, hideouts) CAN be owned directly by agents via `ownerType: 'agent'`. The micro-org model is specifically for commercial operations with revenue/expenses.
+## Structure
 
-When an agent opens a shop:
-1. A new "micro-org" is created (e.g., "Alex Chen's Shop")
-2. The agent becomes the org's `leader`
-3. The shop location is added to `org.locations`
-4. Business capital goes to `org.wallet`, not agent's wallet
+Every organization has:
+- **One leader** - The owner who makes decisions and receives dividends
+- **A wallet** - Business funds, separate from the leader's personal money
+- **Locations** - The properties (shops, factories) owned by this org
 
-This model enables:
-- Clean separation of personal and business finances
-- Consistent payroll and revenue handling
-- Future expansion to multi-person companies
+## The Business Lifecycle
 
-## Organization Structure
+### Birth
+When an agent starts a business:
+1. A new organization is created
+2. The agent becomes its leader
+3. Most of their savings transfer to the org's wallet
+4. A location (shop) is created, owned by the org
 
-```typescript
-interface Organization {
-  id: string;
-  name: string;
-  leader: AgentRef;           // The owner/CEO
-  wallet: Wallet;             // Business finances
-  locations: LocationRef[];   // Owned properties
-  // ... other fields
-}
-```
+### Operation
+While running:
+- Revenue from sales goes to the org wallet
+- The org pays employee salaries weekly
+- The org pays operating costs weekly
+- The owner receives a dividend weekly
 
-### Leader
-- Every org has exactly ONE leader
-- Leader receives weekly dividend (30 credits)
-- If leader dies, org dissolves
-- Leader is NOT in the location's `employees` array
-
-### Wallet
-- Separate from leader's personal wallet
-- Receives revenue from sales
-- Pays employee salaries and operating costs
-- Pays owner dividend
-
-### Locations
-- Array of location IDs owned by this org
-- Can include factories, shops, etc.
-- All employees at these locations are paid by the org
-
-## Weekly Processing
-
-During weekly rollover, for each org:
-
-### 1. Pay Employees
-For each location owned by org:
-- Find employees at that location
-- Pay each employee's salary from org wallet
-- If can't afford, employee is released (fired)
-
-### 2. Pay Operating Costs
-For each location:
-- Deduct `operatingCost` from org wallet
-- If can't afford, warning logged but location stays
-
-### 3. Pay Owner Dividend
-- Transfer 30 credits from org to leader's personal wallet
-- Only if org has sufficient funds
-- This is how owners "extract" profits
-
-### 4. Check Dissolution
-Org dissolves if ANY:
-- **Bankrupt**: `wallet.credits < 0`
-- **Insolvent**: `wallet.credits < 50`
-- **Owner died**: `leader.status === 'dead'`
-
-## Dissolution Process
+### Death
+An organization dissolves when:
+- **Owner dies** - No leader means no business
+- **Bankruptcy** - Wallet goes negative
+- **Insolvency** - Not enough money to operate (can't pay bills or restock)
 
 When an org dissolves:
+- All employees are released (become unemployed)
+- All locations are removed
+- Any remaining money is lost
 
-1. **Log critical event** with reason (bankrupt/insolvent/owner died)
-2. **Release all employees** - status → 'available', clear employment
-3. **Release leader** (if alive) - status → 'available'
-4. **Remove all locations** from simulation
-5. **Remove org** from simulation
+## Owner Dividends
 
-## Creating Organizations
+The owner doesn't receive a salary - they receive **dividends** from profits. This happens weekly:
+1. Org pays all employees first
+2. Org pays operating costs
+3. Org pays owner their dividend (if funds available)
 
-### Via Code (Initial Setup)
-```typescript
-const org = createOrganization(
-  'org-1',           // id
-  'Sterling Inc.',   // name
-  'agent-0',         // leader id
-  'Victoria',        // leader name
-  10000,             // starting credits
-  0                  // phase
-);
-```
+If the org can't afford the dividend, the owner gets nothing that week. If this continues, the owner may starve while sitting on an unprofitable business.
 
-### Via Agent Action (Starting Business)
-When agent starts business:
-- Business capital = 70% of agent's credits
-- Opening cost = 200 credits (from template)
-- Total deducted from agent = capital + opening cost
+## Personal vs Commercial Property
 
-## Balance Considerations
+Not everything needs an organization:
+- **Commercial locations** (shops, factories) → Owned by orgs
+- **Personal locations** (homes, hideouts) → Can be owned directly by agents
 
-### Shop Org Economics (per week)
-- Revenue: ~157 credits (10.5 sales × 15)
-- Wholesale cost: ~73 credits (10.5 × 7)
-- Employee salary: ~30 credits
-- Owner dividend: 30 credits
-- Operating cost: 10 credits
-- **Net: ~14 credits profit**
-
-### Factory Org Economics (per week)
-- Revenue: ~147 credits (21 wholesale × 7)
-- Employee salary: ~60 credits (2 workers)
-- Owner dividend: 30 credits
-- Operating cost: 20 credits
-- **Net: ~37 credits profit**
-
-## Key Invariants
-
-1. Every business location has exactly one owner org
-2. Org leader is always an agent (never another org)
-3. Leader death triggers org dissolution
-4. Employees are paid from org wallet, not leader's wallet
-5. Revenue goes to org wallet, not leader's wallet
-6. Owner extracts profits via weekly dividend only
+The distinction is about revenue and expenses. A business has income and costs that need accounting. A home is just a place you own.

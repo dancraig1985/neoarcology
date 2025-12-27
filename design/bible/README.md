@@ -1,47 +1,36 @@
 # NeoArcology Simulation Bible
 
-This folder contains detailed documentation for each critical simulation system. These documents serve as context for development sessions and should be referenced when working on related systems.
+This folder documents the "rules of the game" - how the simulation works from a player's perspective. These are the laws that govern the world.
 
 ## Chapters
 
-| Chapter | Description | Key Files |
-|---------|-------------|-----------|
-| [Agents](./agents.md) | Agent behavior, needs, hunger, starvation | `AgentSystem.ts` |
-| [Organizations](./orgs.md) | Orgs, leaders, micro-orgs, dissolution | `OrgSystem.ts` |
-| [Economy](./economy.md) | Money flow, wallets, transactions, payroll | `EconomySystem.ts` |
-| [Inventory](./inventory.md) | Goods, sizes, capacity, transfers | `InventorySystem.ts` |
-| [Locations](./locations.md) | Locations, templates, tags, commerce | `LocationSystem.ts` |
-| [Production](./production.md) | Factory production, cycles, labor | `OrgSystem.ts` |
+| Chapter | What It Covers |
+|---------|----------------|
+| [Agents](./agents.md) | Life, death, hunger, and decision-making |
+| [Organizations](./orgs.md) | Business ownership, leadership, and dissolution |
+| [Economy](./economy.md) | How money flows through the world |
+| [Inventory](./inventory.md) | Goods, storage, and carrying capacity |
+| [Locations](./locations.md) | Places, ownership, and commerce |
+| [Production](./production.md) | How goods are created |
 
-## How to Use
+## The World in Brief
 
-When starting work on a system, read the relevant chapter(s) first to understand:
-- Current implementation details
-- Balance values and their rationale
-- Key invariants that must be maintained
-- Known issues and design decisions
+NeoArcology is a living city that runs autonomously. Agents wake up, get hungry, go to work, buy food, and sometimes start their own businesses. The economy emerges from these individual decisions.
 
-## Quick Reference
+### Core Loop
 
-### Money Flow
-```
-Factory produces → Wholesale to shops → Retail to agents
-       ↑                                        ↓
-  Factory pays                            Agents pay
-  employees + owner                       for provisions
-       ↑                                        ↓
-       ← ← ← MONEY CIRCULATES ← ← ← ← ← ← ← ← ←
-```
+1. **Time passes** - Agents get hungrier
+2. **Agents eat** - From their personal inventory
+3. **Agents buy** - When they run out of food
+4. **Shops restock** - From wholesale suppliers
+5. **Factories produce** - Using worker labor
+6. **Everyone gets paid** - Weekly salaries and dividends
+7. **Repeat**
 
-### Key Balance Values
-- Retail price: 15 credits
-- Wholesale price: 7 credits
-- Employee salary: 20-40/week
-- Owner dividend: 30/week
-- Entrepreneur threshold: 600 credits
+### Key Principles
 
-### Dissolution Conditions
-An org dissolves if ANY:
-- Bankrupt: credits < 0
-- Insolvent: credits < 50
-- Owner died: leader.status === 'dead'
+- **Agents are autonomous** - They make their own decisions based on needs and opportunities
+- **Money must circulate** - Revenue flows to businesses, wages flow to workers, spending flows back
+- **Everything has a cost** - Operating a business costs money; no free lunches
+- **Death is permanent** - Agents who starve are gone forever
+- **Businesses need owners** - When an owner dies, their business closes
