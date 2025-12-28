@@ -17,17 +17,9 @@ Create a 2D grid-based city with procedurally generated zones and a basic map vi
 interface CityCell {
   x: number;              // 0-31
   y: number;              // 0-31
-  zone: ZoneType;         // What type of area this is
+  zone: string;           // Zone ID (from config)
   maxHeight: number;      // Max floors buildings can have (1-120)
 }
-
-type ZoneType =
-  | 'downtown'      // Central business district, tallest buildings
-  | 'commercial'    // Shops, offices, mixed use
-  | 'industrial'    // Factories, warehouses
-  | 'residential'   // Apartments, housing
-  | 'slums'         // Cheap/informal housing, crime
-  | 'government';   // City services, admin buildings
 
 interface Location {
   // ... existing fields
@@ -39,16 +31,143 @@ interface Location {
 
 **Multiple locations per cell:** A single cell (city block) can have many locations at different floors, or even the same floor. We don't track individual buildings - just locations within the block.
 
-## Zone Characteristics
+## Data-Driven Zones
 
-| Zone | Max Height | Typical Locations |
-|------|------------|-------------------|
-| downtown | 80-120 | Corporate HQs, luxury retail, high-rise apartments |
-| commercial | 20-60 | Shops, offices, restaurants |
-| industrial | 5-20 | Factories, warehouses, workshops |
-| residential | 10-40 | Apartments, condos |
-| slums | 5-30 | Cheap apartments, informal markets |
-| government | 10-30 | City hall, services, transit hubs |
+Zones defined in `data/config/zones.json` (not hardcoded):
+
+```json
+{
+  "zones": {
+    "downtown": {
+      "name": "Downtown",
+      "color": "#4a90d9",
+      "heightRange": [80, 120],
+      "spawnWeight": 0.05,
+      "centerBias": 1.0,
+      "description": "Central business district, tallest buildings"
+    },
+    "commercial": {
+      "name": "Commercial",
+      "color": "#9b59b6",
+      "heightRange": [20, 60],
+      "spawnWeight": 0.20,
+      "centerBias": 0.6,
+      "description": "Shops, offices, mixed use"
+    },
+    "industrial": {
+      "name": "Industrial",
+      "color": "#e67e22",
+      "heightRange": [5, 20],
+      "spawnWeight": 0.15,
+      "centerBias": 0.2,
+      "avoidZones": ["residential"],
+      "description": "Factories, warehouses, workshops"
+    },
+    "residential": {
+      "name": "Residential",
+      "color": "#2ecc71",
+      "heightRange": [10, 40],
+      "spawnWeight": 0.35,
+      "centerBias": 0.3,
+      "description": "Apartments, condos"
+    },
+    "slums": {
+      "name": "Slums",
+      "color": "#7f8c8d",
+      "heightRange": [5, 30],
+      "spawnWeight": 0.15,
+      "centerBias": 0.1,
+      "edgeBias": 0.8,
+      "description": "Cheap apartments, informal markets"
+    },
+    "government": {
+      "name": "Government",
+      "color": "#3498db",
+      "heightRange": [10, 30],
+      "spawnWeight": 0.10,
+      "centerBias": 0.8,
+      "description": "City hall, services, transit hubs"
+    }
+  }
+}
+```
+
+**Zone properties:**
+- `heightRange`: [min, max] floors for buildings in this zone
+- `spawnWeight`: Relative probability during generation
+- `centerBias`: 0-1, how much this zone prefers city center
+- `edgeBias`: 0-1, how much this zone prefers city edges
+- `avoidZones`: Zones this shouldn't be adjacent to
+- `color`: For map visualization
+
+## Data-Driven Location Spawn Constraints
+
+Location templates specify where they can spawn in `data/templates/locations/*.json`:
+
+```json
+// data/templates/locations/factory.json
+{
+  "name": "Factory",
+  "template": "factory",
+  "tags": ["production", "wholesale"],
+  "spawnConstraints": {
+    "allowedZones": ["industrial"],
+    "floorRange": [0, 5],
+    "minDistanceFromCenter": 10,
+    "maxPerCity": 5
+  },
+  "balance": { ... }
+}
+
+// data/templates/locations/retail_shop.json
+{
+  "name": "Retail Shop",
+  "template": "retail_shop",
+  "tags": ["retail", "commerce"],
+  "spawnConstraints": {
+    "allowedZones": ["commercial", "downtown", "residential"],
+    "floorRange": [0, 3],
+    "preferGroundFloor": true
+  },
+  "balance": { ... }
+}
+
+// data/templates/locations/luxury_apartment.json
+{
+  "name": "Luxury Apartment",
+  "template": "luxury_apartment",
+  "tags": ["residential", "housing"],
+  "spawnConstraints": {
+    "allowedZones": ["downtown", "commercial"],
+    "floorRange": [20, 120],
+    "preferHighFloor": true
+  },
+  "balance": { ... }
+}
+
+// data/templates/locations/shelter.json
+{
+  "name": "Public Shelter",
+  "template": "shelter",
+  "tags": ["residential", "public"],
+  "spawnConstraints": {
+    "allowedZones": ["slums", "industrial"],
+    "floorRange": [0, 2],
+    "maxPerCity": 2
+  },
+  "balance": { ... }
+}
+```
+
+**Spawn constraint properties:**
+- `allowedZones`: Which zones this location can spawn in
+- `floorRange`: [min, max] floor this location can be on
+- `preferGroundFloor`: Bias toward floor 0
+- `preferHighFloor`: Bias toward max height
+- `minDistanceFromCenter`: Minimum grid distance from center
+- `maxDistanceFromCenter`: Maximum grid distance from center
+- `maxPerCity`: Limit on how many can exist
+- `minDistanceBetween`: Minimum distance between instances of this type
 
 ## Procedural Generation
 
@@ -156,33 +275,37 @@ Not interactive for now - just visualization. Click locations in tables, not map
 
 ## Objectives
 
-### Phase A: Grid & Zone System
-- [ ] Define CityCell and zone types
-- [ ] Implement noise-based zone generation
-- [ ] Generate height map per cell
+### Phase A: Data Config
+- [ ] Create `data/config/zones.json` with zone definitions
+- [ ] Add `spawnConstraints` to existing location templates
+- [ ] Create config loader for zones
+- [ ] Define CityCell type
+
+### Phase B: Grid & Zone Generation
+- [ ] Implement noise-based zone generation using zone config
+- [ ] Generate height map per cell from zone heightRange
 - [ ] Store grid in simulation state
 
-### Phase B: Location Coordinates
+### Phase C: Location Coordinates
 - [ ] Add x, y, floor to Location type
-- [ ] Update location templates with coordinate ranges
-- [ ] Locations spawned in appropriate zones
+- [ ] Implement location spawning that respects constraints
+- [ ] Validate spawn constraints against zone config
 
-### Phase C: City Generator
+### Phase D: City Generator
 - [ ] Create `generateCity()` main function
-- [ ] Generate zones and heights
-- [ ] Place initial locations
+- [ ] Generate zones and heights from config
+- [ ] Place initial locations respecting constraints
 - [ ] Create agents and orgs
 - [ ] Replace hardcoded Simulation.ts bootstrap
 
-### Phase D: Distance & Travel
+### Phase E: Distance Calculation
 - [ ] Implement distance calculation
 - [ ] Implement travel phase calculation
-- [ ] Add currentLocation to Agent
-- [ ] Basic travel state (travelingTo, progress)
+- [ ] Export for use by PLAN-006
 
-### Phase E: Map Visualization
+### Phase F: Map Visualization
 - [ ] Create MapPanel component for Observer UI
-- [ ] Render grid cells colored by zone
+- [ ] Render grid cells colored by zone (from config colors)
 - [ ] Show location markers
 - [ ] Add as new tab/panel in UI
 
@@ -190,9 +313,10 @@ Not interactive for now - just visualization. Click locations in tables, not map
 
 | File | Purpose |
 |------|---------|
+| `data/config/zones.json` | Zone definitions (data-driven) |
 | `src/generation/CityGenerator.ts` | Main generation orchestrator |
 | `src/generation/ZoneGenerator.ts` | Noise-based zone generation |
-| `src/generation/LocationPlacer.ts` | Place locations in appropriate zones |
+| `src/generation/LocationPlacer.ts` | Place locations respecting constraints |
 | `src/simulation/systems/TravelSystem.ts` | Distance and travel calculations |
 | `src/ui/panels/MapPanel.ts` | 2D map visualization |
 
@@ -200,7 +324,9 @@ Not interactive for now - just visualization. Click locations in tables, not map
 
 | File | Change |
 |------|--------|
-| `src/types/entities.ts` | Add x, y, floor to Location; currentLocation to Agent |
+| `src/types/entities.ts` | Add x, y, floor to Location |
+| `src/config/ConfigLoader.ts` | Load zones.json |
+| `data/templates/locations/*.json` | Add spawnConstraints |
 | `src/simulation/Simulation.ts` | Use generator instead of hardcoded bootstrap |
 | `src/ui/UIController.ts` | Add MapPanel to layout |
 
