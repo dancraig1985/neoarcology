@@ -19,7 +19,7 @@
     "inventoryCapacity": 20
   },
   "generation": {
-    "count": { "min": 12, "max": 15 },
+    "count": { "min": 24, "max": 30 },
     "spawnAtStart": true
   }
 }
