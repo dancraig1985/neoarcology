@@ -88,10 +88,54 @@ The `design/bible/` folder contains detailed documentation for each simulation s
 - Activity log: `src/simulation/ActivityLog.ts`
 - Config loader: `src/config/ConfigLoader.ts`
 - Types: `src/types/*.ts`
+- UI system: `src/ui/` (see UI Architecture below)
 
 **Planned:**
 - Agent AI: `src/simulation/ai/AgentAI.ts` (advanced decision making)
 - Encounter system: `src/simulation/systems/EncounterSystem.ts`
+
+## UI Architecture (Observer Mode)
+
+Pure Pixi.js UI with cyberpunk terminal aesthetic. No DOM overlays.
+
+### Structure
+```
+src/ui/
+  components/           # Reusable primitives
+    UIComponent.ts      # Base class (Container + width/height/layout)
+    Panel.ts            # Bordered container with optional header
+    Table.ts            # Data-driven table (columns from config)
+    DetailView.ts       # Key-value display for entity details
+    Button.ts           # Clickable button with hover state
+
+  panels/               # Composed UI regions
+    HeaderPanel.ts      # Title + time display
+    NavPanel.ts         # Entity type navigation (sidebar)
+    MainPanel.ts        # Table (left) + detail view (right)
+    LogPanel.ts         # Activity log with filtering
+    ControlsPanel.ts    # Time advance buttons
+
+  UIController.ts       # Bridges simulation state to UI
+  UITheme.ts            # Colors, spacing, fonts
+  UIConfig.ts           # Column/field definitions (extensibility point)
+```
+
+### Adding New Entity Columns
+Edit `src/ui/UIConfig.ts`:
+- Table columns: Add to `AGENT_COLUMNS`, `ORG_COLUMNS`, or `LOCATION_COLUMNS`
+- Detail fields: Add to `AGENT_DETAILS`, `ORG_DETAILS`, or `LOCATION_DETAILS`
+
+### Keyboard Shortcuts
+- `Space` - End Turn (+1 phase)
+- `D` - +Day (+4 phases)
+- `W` - +Week (+28 phases)
+- `M` - +Month (+112 phases)
+- `Y` - +Year (+1344 phases)
+
+### Derived Fields
+Some display fields are computed, not stored:
+- `Organization.leaderName` - Computed from `agents.find(a => a.id === org.leader).name`
+- Don't store derived data; compute in UI layer (MainPanel)
 
 ## Configuration (Data-Driven)
 
