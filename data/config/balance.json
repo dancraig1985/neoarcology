@@ -18,6 +18,9 @@
       "unskilled": { "min": 20, "max": 40 }
     }
   },
+  "generation": {
+    "initialWorkers": { "min": 3, "max": 5 }
+  },
   "goods": {
     "provisions": { "size": 0.1, "retailPrice": 15, "wholesalePrice": 7 },
     "small_arms": { "size": 1, "retailPrice": 100, "wholesalePrice": 70 },

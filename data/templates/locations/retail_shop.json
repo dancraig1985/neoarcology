@@ -14,5 +14,11 @@
     "employeeSlots": 1,
     "startingInventory": 20,
     "inventoryCapacity": 50
+  },
+  "generation": {
+    "count": { "min": 3, "max": 4 },
+    "spawnAtStart": true,
+    "ownerType": "micro_org",
+    "ownerCredits": { "min": 300, "max": 600 }
   }
 }

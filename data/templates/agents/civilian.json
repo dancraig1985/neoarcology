@@ -1,0 +1,25 @@
+{
+  "id": "civilian",
+  "name": "Civilian",
+  "description": "An ordinary citizen of NeoArcology",
+  "tags": ["civilian"],
+  "defaults": {
+    "stats": {
+      "force": { "min": 20, "max": 60 },
+      "mobility": { "min": 20, "max": 60 },
+      "tech": { "min": 20, "max": 60 },
+      "social": { "min": 20, "max": 60 },
+      "business": { "min": 20, "max": 60 },
+      "engineering": { "min": 20, "max": 60 }
+    },
+    "credits": { "min": 50, "max": 200 },
+    "provisions": { "min": 2, "max": 8 },
+    "hunger": { "min": 10, "max": 30 },
+    "morale": { "min": 20, "max": 80 },
+    "inventoryCapacity": 20
+  },
+  "generation": {
+    "count": { "min": 12, "max": 15 },
+    "spawnAtStart": true
+  }
+}

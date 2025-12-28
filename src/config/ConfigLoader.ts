@@ -61,6 +61,9 @@ export interface BalanceConfig {
       unskilled: { min: number; max: number };
     };
   };
+  generation: {
+    initialWorkers: { min: number; max: number };
+  };
   goods: Record<string, GoodsConfig>;
   defaultGoodsSize: number;
 }
@@ -129,6 +132,27 @@ export interface SpawnConstraints {
 }
 
 /**
+ * Range with min/max values for generation
+ */
+export interface MinMaxRange {
+  min: number;
+  max: number;
+}
+
+/**
+ * Generation hints for templates
+ */
+export interface GenerationHints {
+  count?: MinMaxRange;      // How many to spawn at city generation
+  spawnAtStart?: boolean;   // Should this spawn during initial generation
+  ownerType?: 'micro_org' | 'corporation'; // What type of org owns this
+  ownerCredits?: MinMaxRange; // Starting credits for owner org
+  ownedByCorporation?: boolean; // Is this owned by a corporation (not micro-org)
+  ownsLocations?: string[];  // Location types this org spawns with
+  leaderBecomesEmployed?: boolean; // Does the leader become employed by this org
+}
+
+/**
  * Entity template loaded from data/templates/
  * Only includes fields actually used by the code
  */
@@ -137,6 +161,37 @@ export interface EntityTemplate {
   name: string;
   description?: string;
   tags: string[] | null;
+  generation?: GenerationHints;
+}
+
+/**
+ * Agent template with defaults for stat generation
+ */
+export interface AgentTemplate extends EntityTemplate {
+  defaults?: {
+    stats?: {
+      force?: MinMaxRange;
+      mobility?: MinMaxRange;
+      tech?: MinMaxRange;
+      social?: MinMaxRange;
+      business?: MinMaxRange;
+      engineering?: MinMaxRange;
+    };
+    credits?: MinMaxRange;
+    provisions?: MinMaxRange;
+    hunger?: MinMaxRange;
+    morale?: MinMaxRange;
+    inventoryCapacity?: number;
+  };
+}
+
+/**
+ * Organization template with defaults
+ */
+export interface OrgTemplate extends EntityTemplate {
+  defaults?: {
+    credits?: MinMaxRange;
+  };
 }
 
 /**
@@ -175,12 +230,16 @@ export interface LoadedConfig {
   zones: Record<string, ZoneConfig>;
   transport: TransportConfig;
   templates: {
-    orgs: EntityTemplate[];
-    agents: EntityTemplate[];
+    orgs: OrgTemplate[];
+    agents: AgentTemplate[];
     locations: LocationTemplate[];
   };
   /** Convenience lookup: locationTemplates['retail_shop'] */
   locationTemplates: Record<string, LocationTemplate>;
+  /** Convenience lookup: agentTemplates['civilian'] */
+  agentTemplates: Record<string, AgentTemplate>;
+  /** Convenience lookup: orgTemplates['corporation'] */
+  orgTemplates: Record<string, OrgTemplate>;
 }
 
 /**
@@ -211,16 +270,26 @@ export async function loadConfig(): Promise<LoadedConfig> {
   console.log(`[ConfigLoader] Loaded ${Object.keys(transport.transportModes).length} transport modes`);
 
   // Load templates
-  const orgTemplates = await loadTemplates('/data/templates/orgs');
-  const agentTemplates = await loadTemplates('/data/templates/agents');
+  const orgTemplates = (await loadTemplates('/data/templates/orgs')) as OrgTemplate[];
+  const agentTemplates = (await loadTemplates('/data/templates/agents')) as AgentTemplate[];
   const locationTemplates = (await loadTemplates(
     '/data/templates/locations'
   )) as LocationTemplate[];
 
-  // Build location template lookup map
+  // Build lookup maps
   const locationTemplateMap: Record<string, LocationTemplate> = {};
   for (const template of locationTemplates) {
     locationTemplateMap[template.id] = template;
+  }
+
+  const agentTemplateMap: Record<string, AgentTemplate> = {};
+  for (const template of agentTemplates) {
+    agentTemplateMap[template.id] = template;
+  }
+
+  const orgTemplateMap: Record<string, OrgTemplate> = {};
+  for (const template of orgTemplates) {
+    orgTemplateMap[template.id] = template;
   }
 
   console.log(
@@ -238,6 +307,8 @@ export async function loadConfig(): Promise<LoadedConfig> {
       locations: locationTemplates,
     },
     locationTemplates: locationTemplateMap,
+    agentTemplates: agentTemplateMap,
+    orgTemplates: orgTemplateMap,
   };
 }
 
@@ -251,14 +322,12 @@ async function loadTemplates(basePath: string): Promise<EntityTemplate[]> {
 
   // Known template files (in production, this could be a manifest)
   const knownTemplates: Record<string, string[]> = {
-    '/data/templates/orgs': ['corporation.json', 'gang.json'],
-    '/data/templates/agents': ['combat.json'],
+    '/data/templates/orgs': ['corporation.json'],
+    '/data/templates/agents': ['civilian.json'],
     '/data/templates/locations': [
       'factory.json',
       'retail_shop.json',
       'restaurant.json',
-      'apartment.json',
-      'shelter.json',
     ],
   };
 

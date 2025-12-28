@@ -5,12 +5,17 @@
  * - Zone grid with height map
  * - Initial locations respecting spawn constraints
  * - Initial agents and orgs
+ *
+ * All generation parameters are read from templates and config files.
  */
 
 import {
   LoadedConfig,
   LocationTemplate,
+  AgentTemplate,
+  OrgTemplate,
   SpawnConstraints,
+  MinMaxRange,
 } from '../config/ConfigLoader';
 import { Agent, Location, Organization, Wallet } from '../types';
 import { CityGrid, GRID_SIZE } from './types';
@@ -75,6 +80,13 @@ function pickRandom<T>(array: T[], rand: () => number): T {
 }
 
 /**
+ * Random integer from MinMaxRange
+ */
+function randomFromRange(range: MinMaxRange, rand: () => number): number {
+  return Math.floor(rand() * (range.max - range.min + 1)) + range.min;
+}
+
+/**
  * Random integer in range [min, max]
  */
 function randomInt(min: number, max: number, rand: () => number): number {
@@ -100,7 +112,7 @@ function isValidZone(
   constraints: SpawnConstraints | undefined
 ): boolean {
   if (!constraints || constraints.allowedZones.length === 0) {
-    return true; // No constraints
+    return true;
   }
 
   const col = grid.cells[x];
@@ -148,25 +160,22 @@ function findValidPlacement(
 
     if (!isValidZone(grid, x, y, constraints)) continue;
 
-    // Check distance from center constraint
     if (constraints?.minDistanceFromCenter) {
       if (distanceFromCenter(x, y) < constraints.minDistanceFromCenter) continue;
     }
 
-    // Get cell's max height
     const col = grid.cells[x];
     if (!col) continue;
     const cell = col[y];
     if (!cell) continue;
 
-    // Determine floor
     let floor = 0;
     if (constraints) {
       const [minFloor, maxFloor] = constraints.floorRange;
       const effectiveMax = Math.min(maxFloor, cell.maxHeight);
 
       if (constraints.preferGroundFloor) {
-        floor = minFloor; // Usually 0
+        floor = minFloor;
       } else if (constraints.preferHighFloor) {
         floor = effectiveMax;
       } else {
@@ -194,51 +203,54 @@ function createWallet(credits: number): Wallet {
 }
 
 /**
- * Create a new agent
+ * Create a new agent from template
  */
-function createAgent(
+function createAgentFromTemplate(
   name: string,
-  credits: number,
+  template: AgentTemplate,
   phase: number,
   rand: () => number
 ): Agent {
+  const defaults = template.defaults ?? {};
+  const stats = defaults.stats ?? {};
+
   return {
     id: nextAgentId(),
     name,
-    template: 'civilian',
-    tags: ['civilian'],
+    template: template.id,
+    tags: template.tags ?? ['civilian'],
     created: phase,
     relationships: [],
     status: 'available',
     age: 0,
     stats: {
-      force: randomInt(20, 60, rand),
-      mobility: randomInt(20, 60, rand),
-      tech: randomInt(20, 60, rand),
-      social: randomInt(20, 60, rand),
-      business: randomInt(20, 60, rand),
-      engineering: randomInt(20, 60, rand),
+      force: stats.force ? randomFromRange(stats.force, rand) : randomInt(20, 60, rand),
+      mobility: stats.mobility ? randomFromRange(stats.mobility, rand) : randomInt(20, 60, rand),
+      tech: stats.tech ? randomFromRange(stats.tech, rand) : randomInt(20, 60, rand),
+      social: stats.social ? randomFromRange(stats.social, rand) : randomInt(20, 60, rand),
+      business: stats.business ? randomFromRange(stats.business, rand) : randomInt(20, 60, rand),
+      engineering: stats.engineering ? randomFromRange(stats.engineering, rand) : randomInt(20, 60, rand),
     },
     needs: {
-      hunger: randomInt(10, 30, rand),
+      hunger: defaults.hunger ? randomFromRange(defaults.hunger, rand) : randomInt(10, 30, rand),
     },
     inventory: {
-      provisions: randomInt(2, 8, rand),
+      provisions: defaults.provisions ? randomFromRange(defaults.provisions, rand) : randomInt(2, 8, rand),
     },
-    inventoryCapacity: 20,
+    inventoryCapacity: defaults.inventoryCapacity ?? 20,
     salary: 0,
-    wallet: createWallet(credits),
-    morale: randomInt(20, 80, rand),
+    wallet: createWallet(defaults.credits ? randomFromRange(defaults.credits, rand) : randomInt(50, 200, rand)),
+    morale: defaults.morale ? randomFromRange(defaults.morale, rand) : randomInt(20, 80, rand),
     personalGoals: [],
   };
 }
 
 /**
- * Create a new organization
+ * Create a new organization from template
  */
-function createOrg(
+function createOrgFromTemplate(
   name: string,
-  template: string,
+  template: OrgTemplate,
   leaderId: string,
   credits: number,
   phase: number
@@ -246,8 +258,8 @@ function createOrg(
   return {
     id: nextOrgId(),
     name,
-    template,
-    tags: template === 'corporation' ? ['corporation', 'legal'] : ['gang', 'criminal'],
+    template: template.id,
+    tags: template.tags ?? ['corporation'],
     created: phase,
     relationships: [],
     leader: leaderId,
@@ -302,7 +314,7 @@ function createLocationFromTemplate(
 }
 
 /**
- * Generate a complete city
+ * Generate a complete city using templates from config
  */
 export function generateCity(config: LoadedConfig, seed: number = Date.now()): GeneratedCity {
   const rand = seededRandom(seed);
@@ -314,80 +326,24 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   const organizations: Organization[] = [];
   const agents: Agent[] = [];
 
-  // Track location counts for maxPerCity constraints
-  const locationCounts: Record<string, number> = {};
-
   // Names for generation
   const firstNames = [
-    'Alex',
-    'Blake',
-    'Casey',
-    'Dana',
-    'Ellis',
-    'Finn',
-    'Grey',
-    'Harper',
-    'Indigo',
-    'Jordan',
-    'Kai',
-    'Lennox',
-    'Morgan',
-    'Nova',
-    'Quinn',
-    'Riley',
-    'Sage',
-    'Taylor',
-    'Vesper',
-    'Winter',
+    'Alex', 'Blake', 'Casey', 'Dana', 'Ellis', 'Finn', 'Grey', 'Harper',
+    'Indigo', 'Jordan', 'Kai', 'Lennox', 'Morgan', 'Nova', 'Quinn', 'Riley',
+    'Sage', 'Taylor', 'Vesper', 'Winter',
   ];
   const lastNames = [
-    'Sterling',
-    'Chen',
-    'Vasquez',
-    'Okonkwo',
-    'Kim',
-    'Nakamura',
-    'Petrov',
-    'Singh',
-    'Andersen',
-    'Okafor',
-    'Hassan',
-    'Rivera',
-    'Yamamoto',
-    'Johansson',
-    'Dubois',
+    'Sterling', 'Chen', 'Vasquez', 'Okonkwo', 'Kim', 'Nakamura', 'Petrov',
+    'Singh', 'Andersen', 'Okafor', 'Hassan', 'Rivera', 'Yamamoto', 'Johansson', 'Dubois',
   ];
 
   const shopNames = [
-    'Neon Goods',
-    'Synth Supply',
-    'Grid Mart',
-    'Sector Seven',
-    'Pulse Market',
-    'Vertex Shop',
-    'Arc Provisions',
-    'Helix Retail',
-    'Cipher Store',
-    'Nova Goods',
+    'Neon Goods', 'Synth Supply', 'Grid Mart', 'Sector Seven', 'Pulse Market',
+    'Vertex Shop', 'Arc Provisions', 'Helix Retail', 'Cipher Store', 'Nova Goods',
   ];
+  const factoryNames = ['Apex Manufacturing', 'Grid Works', 'Synth Industries', 'Vertex Production', 'Helix Factory'];
+  const restaurantNames = ['Neon Bites', 'Synth Eats', 'Grid Kitchen', 'Pulse Diner', 'Arc Cafe'];
 
-  const factoryNames = [
-    'Apex Manufacturing',
-    'Grid Works',
-    'Synth Industries',
-    'Vertex Production',
-    'Helix Factory',
-  ];
-
-  const restaurantNames = [
-    'Neon Bites',
-    'Synth Eats',
-    'Grid Kitchen',
-    'Pulse Diner',
-    'Arc Cafe',
-  ];
-
-  // Helper to get next name
   let shopIndex = 0;
   let factoryIndex = 0;
   let restaurantIndex = 0;
@@ -395,82 +351,111 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   function nextShopName(): string {
     return shopNames[shopIndex++ % shopNames.length] ?? 'Shop';
   }
-
   function nextFactoryName(): string {
     return factoryNames[factoryIndex++ % factoryNames.length] ?? 'Factory';
   }
-
   function nextRestaurantName(): string {
     return restaurantNames[restaurantIndex++ % restaurantNames.length] ?? 'Restaurant';
   }
-
   function nextAgentName(): string {
-    const first = pickRandom(firstNames, rand);
-    const last = pickRandom(lastNames, rand);
-    return `${first} ${last}`;
+    return `${pickRandom(firstNames, rand)} ${pickRandom(lastNames, rand)}`;
   }
 
-  // Create initial agents (12-15)
-  const numAgents = randomInt(12, 15, rand);
-  for (let i = 0; i < numAgents; i++) {
-    const credits = randomInt(50, 200, rand);
-    agents.push(createAgent(nextAgentName(), credits, 0, rand));
-  }
-
-  // Create corporations (2-3) with factories
-  const numCorps = randomInt(2, 3, rand);
-  for (let i = 0; i < numCorps; i++) {
-    const leader = agents[i];
-    if (!leader) continue;
-
-    const corpName = `${pickRandom(lastNames, rand)} Industries`;
-    const corp = createOrg(corpName, 'corporation', leader.id, randomInt(2000, 5000, rand), 0);
-
-    // Set leader as employed
-    leader.status = 'employed';
-    leader.employer = corp.id;
-
-    // Create factory for corporation
-    const factoryTemplate = config.locationTemplates['factory'];
-    if (factoryTemplate) {
-      const placement = findValidPlacement(grid, factoryTemplate.spawnConstraints, rand);
-      if (placement) {
-        const factory = createLocationFromTemplate(
-          nextFactoryName(),
-          factoryTemplate,
-          placement.x,
-          placement.y,
-          placement.floor,
-          corp.id,
-          0
-        );
-        locations.push(factory);
-        corp.locations.push(factory.id);
-        locationCounts['factory'] = (locationCounts['factory'] ?? 0) + 1;
-      }
+  // ==================
+  // 1. CREATE AGENTS
+  // ==================
+  const civilianTemplate = config.agentTemplates['civilian'];
+  if (civilianTemplate?.generation?.spawnAtStart && civilianTemplate.generation.count) {
+    const numAgents = randomFromRange(civilianTemplate.generation.count, rand);
+    for (let i = 0; i < numAgents; i++) {
+      agents.push(createAgentFromTemplate(nextAgentName(), civilianTemplate, 0, rand));
     }
-
-    organizations.push(corp);
   }
 
-  // Create retail shops (3-4) owned by micro-orgs
-  const numShops = randomInt(3, 4, rand);
-  for (let i = 0; i < numShops; i++) {
-    // Find an unemployed agent to be owner
-    const ownerIdx = agents.findIndex((a) => a.status === 'available');
-    if (ownerIdx === -1) break;
+  // ==================
+  // 2. CREATE CORPORATIONS WITH FACTORIES
+  // ==================
+  const corpTemplate = config.orgTemplates['corporation'];
+  const factoryTemplate = config.locationTemplates['factory'];
 
-    const owner = agents[ownerIdx];
-    if (!owner) continue;
+  if (corpTemplate?.generation?.spawnAtStart && corpTemplate.generation.count) {
+    const numCorps = randomFromRange(corpTemplate.generation.count, rand);
 
-    // Create micro-org for the shop
-    const shopOrg = createOrg(`${owner.name}'s Shop`, 'corporation', owner.id, randomInt(300, 600, rand), 0);
-    owner.status = 'employed';
-    owner.employer = shopOrg.id;
+    for (let i = 0; i < numCorps; i++) {
+      const leader = agents[i];
+      if (!leader) continue;
 
-    // Create the shop
-    const shopTemplate = config.locationTemplates['retail_shop'];
-    if (shopTemplate) {
+      // Get credits from template
+      const credits = corpTemplate.defaults?.credits
+        ? randomFromRange(corpTemplate.defaults.credits, rand)
+        : randomInt(2000, 5000, rand);
+
+      const corpName = `${pickRandom(lastNames, rand)} Industries`;
+      const corp = createOrgFromTemplate(corpName, corpTemplate, leader.id, credits, 0);
+
+      // Set leader as employed
+      if (corpTemplate.generation.leaderBecomesEmployed) {
+        leader.status = 'employed';
+        leader.employer = corp.id;
+      }
+
+      // Create factory for corporation (from ownsLocations)
+      if (corpTemplate.generation.ownsLocations?.includes('factory') && factoryTemplate) {
+        const placement = findValidPlacement(grid, factoryTemplate.spawnConstraints, rand);
+        if (placement) {
+          const factory = createLocationFromTemplate(
+            nextFactoryName(),
+            factoryTemplate,
+            placement.x,
+            placement.y,
+            placement.floor,
+            corp.id,
+            0
+          );
+          locations.push(factory);
+          corp.locations.push(factory.id);
+        }
+      }
+
+      organizations.push(corp);
+    }
+  }
+
+  // ==================
+  // 3. CREATE RETAIL SHOPS (with micro-orgs)
+  // ==================
+  const shopTemplate = config.locationTemplates['retail_shop'];
+  if (shopTemplate?.generation?.spawnAtStart && shopTemplate.generation.count) {
+    const numShops = randomFromRange(shopTemplate.generation.count, rand);
+
+    for (let i = 0; i < numShops; i++) {
+      const ownerIdx = agents.findIndex((a) => a.status === 'available');
+      if (ownerIdx === -1) break;
+
+      const owner = agents[ownerIdx];
+      if (!owner) continue;
+
+      // Create micro-org with credits from location template
+      const orgCredits = shopTemplate.generation.ownerCredits
+        ? randomFromRange(shopTemplate.generation.ownerCredits, rand)
+        : randomInt(300, 600, rand);
+
+      const shopOrg: Organization = {
+        id: nextOrgId(),
+        name: `${owner.name}'s Shop`,
+        template: 'micro_org',
+        tags: ['micro_org', 'legal'],
+        created: 0,
+        relationships: [],
+        leader: owner.id,
+        wallet: createWallet(orgCredits),
+        locations: [],
+      };
+
+      owner.status = 'employed';
+      owner.employer = shopOrg.id;
+
+      // Create the shop
       const placement = findValidPlacement(grid, shopTemplate.spawnConstraints, rand);
       if (placement) {
         const shop = createLocationFromTemplate(
@@ -485,26 +470,44 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         locations.push(shop);
         shopOrg.locations.push(shop.id);
       }
-    }
 
-    organizations.push(shopOrg);
+      organizations.push(shopOrg);
+    }
   }
 
-  // Create restaurants (2-3) owned by micro-orgs
-  const numRestaurants = randomInt(2, 3, rand);
-  for (let i = 0; i < numRestaurants; i++) {
-    const ownerIdx = agents.findIndex((a) => a.status === 'available');
-    if (ownerIdx === -1) break;
+  // ==================
+  // 4. CREATE RESTAURANTS (with micro-orgs)
+  // ==================
+  const restaurantTemplate = config.locationTemplates['restaurant'];
+  if (restaurantTemplate?.generation?.spawnAtStart && restaurantTemplate.generation.count) {
+    const numRestaurants = randomFromRange(restaurantTemplate.generation.count, rand);
 
-    const owner = agents[ownerIdx];
-    if (!owner) continue;
+    for (let i = 0; i < numRestaurants; i++) {
+      const ownerIdx = agents.findIndex((a) => a.status === 'available');
+      if (ownerIdx === -1) break;
 
-    const restaurantOrg = createOrg(`${owner.name}'s Restaurant`, 'corporation', owner.id, randomInt(200, 400, rand), 0);
-    owner.status = 'employed';
-    owner.employer = restaurantOrg.id;
+      const owner = agents[ownerIdx];
+      if (!owner) continue;
 
-    const restaurantTemplate = config.locationTemplates['restaurant'];
-    if (restaurantTemplate) {
+      const orgCredits = restaurantTemplate.generation.ownerCredits
+        ? randomFromRange(restaurantTemplate.generation.ownerCredits, rand)
+        : randomInt(200, 400, rand);
+
+      const restaurantOrg: Organization = {
+        id: nextOrgId(),
+        name: `${owner.name}'s Restaurant`,
+        template: 'micro_org',
+        tags: ['micro_org', 'legal'],
+        created: 0,
+        relationships: [],
+        leader: owner.id,
+        wallet: createWallet(orgCredits),
+        locations: [],
+      };
+
+      owner.status = 'employed';
+      owner.employer = restaurantOrg.id;
+
       const placement = findValidPlacement(grid, restaurantTemplate.spawnConstraints, rand);
       if (placement) {
         const restaurant = createLocationFromTemplate(
@@ -519,28 +522,36 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         locations.push(restaurant);
         restaurantOrg.locations.push(restaurant.id);
       }
-    }
 
-    organizations.push(restaurantOrg);
+      organizations.push(restaurantOrg);
+    }
   }
 
-  // Hire some unemployed agents as workers
-  const workers = agents.filter((a) => a.status === 'available');
-  for (const worker of workers.slice(0, Math.min(4, workers.length))) {
-    // Find a location that needs workers
-    const needsWorkers = locations.find((l) => l.employees.length < l.employeeSlots);
-    if (!needsWorkers) break;
+  // ==================
+  // 5. HIRE INITIAL WORKERS
+  // ==================
+  const workerConfig = config.balance.generation?.initialWorkers;
+  const salaryConfig = config.balance.economy.salary.unskilled;
 
-    worker.status = 'employed';
-    worker.employer = needsWorkers.owner;
-    worker.employedAt = needsWorkers.id;
-    worker.salary = randomInt(20, 40, rand);
-    needsWorkers.employees.push(worker.id);
+  if (workerConfig) {
+    const numWorkers = randomFromRange(workerConfig, rand);
+    const workers = agents.filter((a) => a.status === 'available');
+
+    for (const worker of workers.slice(0, Math.min(numWorkers, workers.length))) {
+      const needsWorkers = locations.find((l) => l.employees.length < l.employeeSlots);
+      if (!needsWorkers) break;
+
+      worker.status = 'employed';
+      worker.employer = needsWorkers.owner;
+      worker.employedAt = needsWorkers.id;
+      worker.salary = randomFromRange(salaryConfig, rand);
+      needsWorkers.employees.push(worker.id);
+    }
   }
 
   console.log(
     `[CityGenerator] Generated city with ${locations.length} locations, ` +
-      `${organizations.length} orgs, ${agents.length} agents`
+    `${organizations.length} orgs, ${agents.length} agents`
   );
 
   return { grid, locations, organizations, agents };
