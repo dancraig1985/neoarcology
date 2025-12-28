@@ -161,6 +161,7 @@ export class MainPanel extends Panel {
       case 'orgs':
         return this.orgTable;
       case 'locations':
+      default:
         return this.locationTable;
     }
   }
@@ -172,6 +173,7 @@ export class MainPanel extends Panel {
       case 'orgs':
         return this.orgDetail;
       case 'locations':
+      default:
         return this.locationDetail;
     }
   }

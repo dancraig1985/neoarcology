@@ -11,6 +11,8 @@ import { ControlsPanel } from './panels/ControlsPanel';
 import { NavPanel, type EntityType } from './panels/NavPanel';
 import { MainPanel } from './panels/MainPanel';
 import { LogPanel } from './panels/LogPanel';
+import { MapPanel } from './panels/MapPanel';
+import type { LoadedConfig } from '../config/ConfigLoader';
 
 export interface UIControllerCallbacks {
   onTick: (phases: number) => void;
@@ -20,6 +22,7 @@ export class UIController {
   private app: Application;
   private root: Container;
   private callbacks: UIControllerCallbacks;
+  private config: LoadedConfig;
 
   // Panels
   private headerPanel: HeaderPanel;
@@ -27,9 +30,11 @@ export class UIController {
   private navPanel: NavPanel;
   private mainPanel: MainPanel;
   private logPanel: LogPanel;
+  private mapPanel: MapPanel;
 
   // State
   private _currentEntityType: EntityType = 'agents';
+  private mapInitialized: boolean = false;
 
   /**
    * Get the currently selected entity type
@@ -38,9 +43,10 @@ export class UIController {
     return this._currentEntityType;
   }
 
-  constructor(app: Application, callbacks: UIControllerCallbacks) {
+  constructor(app: Application, callbacks: UIControllerCallbacks, config: LoadedConfig) {
     this.app = app;
     this.callbacks = callbacks;
+    this.config = config;
 
     // Clear stage and create root container
     app.stage.removeChildren();
@@ -78,6 +84,11 @@ export class UIController {
     const mainWidth = width - SPACING.navWidth;
     this.mainPanel = new MainPanel(mainWidth, middleHeight);
     this.root.addChild(this.mainPanel);
+
+    // Map panel (same position as main, hidden by default)
+    this.mapPanel = new MapPanel(mainWidth, middleHeight);
+    this.mapPanel.visible = false;
+    this.root.addChild(this.mapPanel);
 
     // Log panel (above controls)
     this.logPanel = new LogPanel(width, SPACING.logHeight, {
@@ -135,11 +146,31 @@ export class UIController {
     this.controlsPanel.updatePhase(state.time);
     this.mainPanel.update(state);
     this.logPanel.update();
+
+    // Initialize map if not done and we have a grid
+    if (!this.mapInitialized && state.grid) {
+      this.mapPanel.setGrid(state.grid, this.config.zones);
+      this.mapPanel.setLocations(state.locations); // Set initial locations
+      this.mapInitialized = true;
+    }
+
+    // Update location markers on map when viewing or when locations change
+    if (this._currentEntityType === 'map' || !this.mapInitialized) {
+      this.mapPanel.setLocations(state.locations);
+    }
   }
 
   private onEntityTypeSelect(type: EntityType): void {
     this._currentEntityType = type;
-    this.mainPanel.setEntityType(type);
+
+    if (type === 'map') {
+      this.mainPanel.visible = false;
+      this.mapPanel.visible = true;
+    } else {
+      this.mainPanel.visible = true;
+      this.mapPanel.visible = false;
+      this.mainPanel.setEntityType(type);
+    }
   }
 
   /**
@@ -194,5 +225,10 @@ export class UIController {
     this.mainPanel.resize(mainWidth, middleHeight);
     this.mainPanel.x = SPACING.navWidth;
     this.mainPanel.y = middleTop;
+
+    // Map panel (same position as main)
+    this.mapPanel.resize(mainWidth, middleHeight);
+    this.mapPanel.x = SPACING.navWidth;
+    this.mapPanel.y = middleTop;
   }
 }

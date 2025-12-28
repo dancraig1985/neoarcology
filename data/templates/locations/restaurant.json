@@ -2,7 +2,12 @@
   "id": "restaurant",
   "name": "Restaurant",
   "description": "An establishment serving food and drinks",
-  "tags": null,
+  "tags": ["retail", "food"],
+  "spawnConstraints": {
+    "allowedZones": ["commercial", "downtown", "residential"],
+    "floorRange": [0, 5],
+    "preferGroundFloor": true
+  },
   "balance": {
     "openingCost": 300,
     "operatingCost": 50,

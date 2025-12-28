@@ -66,6 +66,69 @@ export interface BalanceConfig {
 }
 
 /**
+ * Zone configuration from data/config/zones.json
+ * Defines city zone types and their procedural generation parameters
+ */
+export interface ZoneConfig {
+  name: string;
+  color: string;           // Hex color for map visualization
+  heightRange: [number, number]; // [min, max] floors for buildings
+  sizeRange: [number, number];   // [min, max] target cells for this zone
+  spawnWeight: number;     // Base probability for zone assignment
+  centerBias: number;      // 0-1, how much this zone prefers city center
+  edgeBias: number;        // 0-1, how much this zone prefers city edges
+  avoidZones: string[];    // Zone IDs this zone shouldn't be adjacent to
+  description: string;
+}
+
+/**
+ * Zones configuration file structure
+ */
+export interface ZonesConfig {
+  zones: Record<string, ZoneConfig>;
+}
+
+/**
+ * Distance threshold for transport mode
+ */
+export interface DistanceThreshold {
+  maxDistance: number;
+  phases: number;
+}
+
+/**
+ * Transport mode configuration
+ */
+export interface TransportModeConfig {
+  name: string;
+  description: string;
+  available: boolean;
+  requiresOwnership?: boolean;
+  distanceThresholds: DistanceThreshold[];
+}
+
+/**
+ * Transport configuration file structure
+ */
+export interface TransportConfig {
+  transportModes: Record<string, TransportModeConfig>;
+  defaultMode: string;
+}
+
+/**
+ * Spawn constraints for location templates
+ * Determines where locations can be placed in the city
+ */
+export interface SpawnConstraints {
+  allowedZones: string[];       // Zone IDs where this location can spawn
+  floorRange: [number, number]; // [min, max] floor for placement
+  preferGroundFloor?: boolean;  // Higher chance to spawn on floor 0
+  preferHighFloor?: boolean;    // Higher chance to spawn on upper floors
+  minDistanceFromCenter?: number; // Minimum grid distance from city center
+  maxPerCity?: number;          // Maximum instances in the entire city
+}
+
+/**
  * Entity template loaded from data/templates/
  * Only includes fields actually used by the code
  */
@@ -87,15 +150,18 @@ export interface ProductionConfig {
 }
 
 /**
- * Location template with balance section
+ * Location template with balance section and spawn constraints
  */
 export interface LocationTemplate extends EntityTemplate {
+  spawnConstraints?: SpawnConstraints;
   balance: {
-    openingCost: number;
-    operatingCost: number;
-    employeeSlots: number;
-    startingInventory: number;
-    inventoryCapacity: number;
+    openingCost?: number;
+    operatingCost?: number;
+    employeeSlots?: number;
+    startingInventory?: number;
+    inventoryCapacity?: number;
+    rentCost?: number;          // For residential locations
+    maxResidents?: number;      // For residential locations
     production?: ProductionConfig[]; // Optional: what goods this location produces
   };
 }
@@ -106,6 +172,8 @@ export interface LocationTemplate extends EntityTemplate {
 export interface LoadedConfig {
   simulation: SimulationConfig;
   balance: BalanceConfig;
+  zones: Record<string, ZoneConfig>;
+  transport: TransportConfig;
   templates: {
     orgs: EntityTemplate[];
     agents: EntityTemplate[];
@@ -131,6 +199,17 @@ export async function loadConfig(): Promise<LoadedConfig> {
   const balance = (await balanceResponse.json()) as BalanceConfig;
   console.log('[ConfigLoader] Loaded balance config');
 
+  // Load zones config
+  const zonesResponse = await fetch('/data/config/zones.json');
+  const zonesData = (await zonesResponse.json()) as ZonesConfig;
+  const zones = zonesData.zones;
+  console.log(`[ConfigLoader] Loaded ${Object.keys(zones).length} zone types`);
+
+  // Load transport config
+  const transportResponse = await fetch('/data/config/transport.json');
+  const transport = (await transportResponse.json()) as TransportConfig;
+  console.log(`[ConfigLoader] Loaded ${Object.keys(transport.transportModes).length} transport modes`);
+
   // Load templates
   const orgTemplates = await loadTemplates('/data/templates/orgs');
   const agentTemplates = await loadTemplates('/data/templates/agents');
@@ -151,6 +230,8 @@ export async function loadConfig(): Promise<LoadedConfig> {
   return {
     simulation,
     balance,
+    zones,
+    transport,
     templates: {
       orgs: orgTemplates,
       agents: agentTemplates,
@@ -172,7 +253,13 @@ async function loadTemplates(basePath: string): Promise<EntityTemplate[]> {
   const knownTemplates: Record<string, string[]> = {
     '/data/templates/orgs': ['corporation.json', 'gang.json'],
     '/data/templates/agents': ['combat.json'],
-    '/data/templates/locations': ['factory.json', 'retail_shop.json', 'restaurant.json'],
+    '/data/templates/locations': [
+      'factory.json',
+      'retail_shop.json',
+      'restaurant.json',
+      'apartment.json',
+      'shelter.json',
+    ],
   };
 
   const files = knownTemplates[basePath] ?? [];

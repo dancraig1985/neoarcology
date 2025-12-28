@@ -3,6 +3,11 @@
   "name": "Retail Shop",
   "description": "A small storefront selling goods to the public",
   "tags": ["retail"],
+  "spawnConstraints": {
+    "allowedZones": ["commercial", "downtown", "residential"],
+    "floorRange": [0, 3],
+    "preferGroundFloor": true
+  },
   "balance": {
     "openingCost": 200,
     "operatingCost": 10,

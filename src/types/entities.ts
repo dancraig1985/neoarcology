@@ -164,13 +164,10 @@ export interface Organization extends Entity {
  * Tags determine functionality (income, storage, fortified, etc.)
  */
 export interface Location extends Entity {
-  // Position
-  sector: string;
-  district: string;
-  coordinates: {
-    distance: number; // From city center
-    vertical: number; // Building floor (0 = ground)
-  };
+  // Position on city grid
+  x: number;        // Grid x coordinate (0-31)
+  y: number;        // Grid y coordinate (0-31)
+  floor: number;    // Building floor (0 = ground, up to cell maxHeight)
 
   // Properties
   size: number; // 1-5 scale

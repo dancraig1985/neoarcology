@@ -37,18 +37,18 @@ export function createLocation(
     tags: template.tags ?? [],
     created: phase,
     relationships: [],
-    sector: 'downtown',
-    district: 'market',
-    coordinates: { distance: Math.random() * 100, vertical: 0 },
+    x: 16, // Placeholder: center of grid (will be placed by CityGenerator)
+    y: 16,
+    floor: 0,
     size: 1,
     security: 10,
     owner: orgId,
     ownerType: 'org', // All businesses owned by orgs
     previousOwners: [],
     employees: [],
-    employeeSlots: locationConfig.employeeSlots,
+    employeeSlots: locationConfig.employeeSlots ?? 0,
     baseIncome: 0,
-    operatingCost: locationConfig.operatingCost,
+    operatingCost: locationConfig.operatingCost ?? 0,
     weeklyRevenue: 0,
     weeklyCosts: 0,
     agentCapacity: 10,
@@ -56,9 +56,9 @@ export function createLocation(
     occupants: [],
     vehicles: [],
     inventory: {
-      provisions: locationConfig.startingInventory,
+      provisions: locationConfig.startingInventory ?? 0,
     },
-    inventoryCapacity: locationConfig.inventoryCapacity,
+    inventoryCapacity: locationConfig.inventoryCapacity ?? 0,
   };
 }
 

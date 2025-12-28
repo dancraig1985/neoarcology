@@ -1,0 +1,70 @@
+{
+  "zones": {
+    "downtown": {
+      "name": "Downtown",
+      "color": "#4a90d9",
+      "heightRange": [80, 120],
+      "sizeRange": [80, 120],
+      "spawnWeight": 0.05,
+      "centerBias": 1.0,
+      "edgeBias": 0.0,
+      "avoidZones": [],
+      "description": "Central business district with the tallest skyscrapers"
+    },
+    "commercial": {
+      "name": "Commercial",
+      "color": "#9b59b6",
+      "heightRange": [40, 60],
+      "sizeRange": [100, 160],
+      "spawnWeight": 0.20,
+      "centerBias": 0.6,
+      "edgeBias": 0.2,
+      "avoidZones": [],
+      "description": "Shops, offices, and mixed-use buildings"
+    },
+    "industrial": {
+      "name": "Industrial",
+      "color": "#e67e22",
+      "heightRange": [5, 20],
+      "sizeRange": [140, 200],
+      "spawnWeight": 0.15,
+      "centerBias": 0.2,
+      "edgeBias": 0.5,
+      "avoidZones": ["residential"],
+      "description": "Factories, warehouses, and workshops"
+    },
+    "residential": {
+      "name": "Residential",
+      "color": "#2ecc71",
+      "heightRange": [10, 40],
+      "sizeRange": [120, 160],
+      "spawnWeight": 0.35,
+      "centerBias": 0.3,
+      "edgeBias": 0.4,
+      "avoidZones": ["industrial"],
+      "description": "Apartments and residential towers"
+    },
+    "slums": {
+      "name": "Slums",
+      "color": "#7f8c8d",
+      "heightRange": [5, 30],
+      "sizeRange": [180, 240],
+      "spawnWeight": 0.15,
+      "centerBias": 0.1,
+      "edgeBias": 0.8,
+      "avoidZones": ["downtown", "government"],
+      "description": "Cheap housing and informal markets"
+    },
+    "government": {
+      "name": "Government",
+      "color": "#3498db",
+      "heightRange": [10, 30],
+      "sizeRange": [5, 10],
+      "spawnWeight": 0.10,
+      "centerBias": 0.8,
+      "edgeBias": 0.0,
+      "avoidZones": ["slums", "industrial"],
+      "description": "City hall, services, and transit hubs"
+    }
+  }
+}

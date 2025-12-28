@@ -286,7 +286,8 @@ function tryOpenBusiness(
   const config = template.balance;
 
   // Check if agent can afford it
-  if (agent.wallet.credits < config.openingCost) {
+  const openingCost = config.openingCost ?? 0;
+  if (agent.wallet.credits < openingCost) {
     return { agent };
   }
 
@@ -323,7 +324,7 @@ function tryOpenBusiness(
   newOrg = addLocationToOrg(newOrg, locationId);
 
   // Deduct opening cost + business capital from agent
-  const totalCost = config.openingCost + businessCapital;
+  const totalCost = openingCost + businessCapital;
   const updatedAgent: Agent = {
     ...agent,
     status: 'employed', // Now running their own business

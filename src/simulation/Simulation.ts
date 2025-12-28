@@ -10,6 +10,7 @@ import { ActivityLog } from './ActivityLog';
 import { processAgentPhase, createAgent, countLivingAgents, countDeadAgents } from './systems/AgentSystem';
 import { processAgentEconomicDecision, processWeeklyEconomy } from './systems/EconomySystem';
 import { createOrganization, createFactoryLocation, processFactoryProduction, addLocationToOrg } from './systems/OrgSystem';
+import { generateCity } from '../generation/CityGenerator';
 
 // Agent names for test harness (20 names for expanded population)
 const TEST_NAMES = [
@@ -40,6 +41,7 @@ export interface SimulationState {
   agents: Agent[];
   locations: Location[];
   organizations: Organization[];
+  grid: import('../generation/types').CityGrid | null;
   isRunning: boolean;
   ticksPerSecond: number;
 }
@@ -196,6 +198,57 @@ export function createSimulation(config: LoadedConfig): SimulationState {
     agents,
     locations,
     organizations,
+    grid: null, // Legacy: no grid in test harness mode
+    isRunning: false,
+    ticksPerSecond: 10,
+  };
+}
+
+/**
+ * Create simulation with procedurally generated city
+ * Uses CityGenerator for proper zone-based layout
+ */
+export function createSimulationWithCity(config: LoadedConfig, seed?: number): SimulationState {
+  const time = createTimeState();
+
+  // Generate the city with zones, locations, agents, and orgs
+  const city = generateCity(config, seed);
+
+  // Log spawns for all agents
+  for (const agent of city.agents) {
+    ActivityLog.info(
+      time.currentPhase,
+      'spawn',
+      `spawned with ${agent.inventory['provisions'] ?? 0} provisions, ${agent.wallet.credits} credits`,
+      agent.id,
+      agent.name
+    );
+  }
+
+  // Log business openings
+  for (const loc of city.locations) {
+    const org = city.organizations.find((o) => o.id === loc.owner);
+    if (org) {
+      ActivityLog.info(
+        time.currentPhase,
+        'business',
+        `${org.name} opened "${loc.name}" at (${loc.x}, ${loc.y})`,
+        org.id,
+        org.name
+      );
+    }
+  }
+
+  console.log(`\n[Simulation] Generated city with ${city.organizations.length} orgs, ${city.locations.length} locations, ${city.agents.length} agents`);
+  console.log('[Simulation] Supply chain: Factory → Wholesale → Retail → Consumption');
+  console.log('[Simulation] Starting simulation...\n');
+
+  return {
+    time,
+    agents: city.agents,
+    locations: city.locations,
+    organizations: city.organizations,
+    grid: city.grid,
     isRunning: false,
     ticksPerSecond: 10,
   };
@@ -229,18 +282,18 @@ function createInitialShop(
     tags: template.tags ?? [],
     created: phase,
     relationships: [],
-    sector: 'downtown',
-    district: 'market',
-    coordinates: { distance: Math.random() * 50, vertical: 0 },
+    x: 16, // Placeholder: center of grid (will be placed by CityGenerator)
+    y: 16,
+    floor: 0,
     size: 1,
     security: 10,
     owner: orgId,
     ownerType: 'org', // Owned by org, not agent directly
     previousOwners: [],
     employees: [],
-    employeeSlots: locationConfig.employeeSlots,
+    employeeSlots: locationConfig.employeeSlots ?? 0,
     baseIncome: 0,
-    operatingCost: locationConfig.operatingCost,
+    operatingCost: locationConfig.operatingCost ?? 0,
     weeklyRevenue: 0,
     weeklyCosts: 0,
     agentCapacity: 10,
@@ -250,7 +303,7 @@ function createInitialShop(
     inventory: {
       provisions: 20, // Start with some inventory
     },
-    inventoryCapacity: locationConfig.inventoryCapacity,
+    inventoryCapacity: locationConfig.inventoryCapacity ?? 0,
   };
 }
 

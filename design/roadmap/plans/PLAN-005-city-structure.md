@@ -1,6 +1,6 @@
 # PLAN-005: City Structure & Procedural Generation
 
-**Status:** planned
+**Status:** completed
 **Priority:** P1 (high)
 **Dependencies:** PLAN-004 (completed)
 **Phase:** 2
@@ -276,38 +276,39 @@ Not interactive for now - just visualization. Click locations in tables, not map
 ## Objectives
 
 ### Phase A: Data Config
-- [ ] Create `data/config/zones.json` with zone definitions
-- [ ] Add `spawnConstraints` to existing location templates
-- [ ] Create config loader for zones
-- [ ] Define CityCell type
+- [x] Create `data/config/zones.json` with zone definitions
+- [x] Add `spawnConstraints` to existing location templates
+- [x] Create config loader for zones
+- [x] Define CityCell type
+- [x] Create `data/config/transport.json` with data-driven transport modes
 
 ### Phase B: Grid & Zone Generation
-- [ ] Implement noise-based zone generation using zone config
-- [ ] Generate height map per cell from zone heightRange
-- [ ] Store grid in simulation state
+- [x] Implement noise-based zone generation using zone config
+- [x] Generate height map per cell from zone heightRange
+- [x] Store grid in simulation state
 
 ### Phase C: Location Coordinates
-- [ ] Add x, y, floor to Location type
-- [ ] Implement location spawning that respects constraints
-- [ ] Validate spawn constraints against zone config
+- [x] Add x, y, floor to Location type
+- [x] Implement location spawning that respects constraints
+- [x] Validate spawn constraints against zone config
 
 ### Phase D: City Generator
-- [ ] Create `generateCity()` main function
-- [ ] Generate zones and heights from config
-- [ ] Place initial locations respecting constraints
-- [ ] Create agents and orgs
-- [ ] Replace hardcoded Simulation.ts bootstrap
+- [x] Create `generateCity()` main function
+- [x] Generate zones and heights from config
+- [x] Place initial locations respecting constraints
+- [x] Create agents and orgs
+- [x] Replace hardcoded Simulation.ts bootstrap with `createSimulationWithCity()`
 
 ### Phase E: Distance Calculation
-- [ ] Implement distance calculation
-- [ ] Implement travel phase calculation
-- [ ] Export for use by PLAN-006
+- [x] Implement distance calculation
+- [x] Implement travel phase calculation (data-driven)
+- [x] Export for use by PLAN-006
 
 ### Phase F: Map Visualization
-- [ ] Create MapPanel component for Observer UI
-- [ ] Render grid cells colored by zone (from config colors)
-- [ ] Show location markers
-- [ ] Add as new tab/panel in UI
+- [x] Create MapPanel component for Observer UI
+- [x] Render grid cells colored by zone (from config colors)
+- [x] Show location markers
+- [x] Add as new tab/panel in UI
 
 ## Key Files to Create
 

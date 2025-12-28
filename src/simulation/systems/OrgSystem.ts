@@ -71,18 +71,18 @@ export function createFactoryLocation(
     tags: template.tags ?? [],
     created: phase,
     relationships: [],
-    sector: 'industrial',
-    district: 'factory-zone',
-    coordinates: { distance: Math.random() * 100, vertical: 0 },
+    x: 24, // Placeholder: industrial area (will be placed by CityGenerator)
+    y: 24,
+    floor: 0,
     size: 3,
     security: 30,
     owner: orgId,
     ownerType: 'org',
     previousOwners: [],
     employees: [],
-    employeeSlots: locationConfig.employeeSlots,
+    employeeSlots: locationConfig.employeeSlots ?? 0,
     baseIncome: 0,
-    operatingCost: locationConfig.operatingCost,
+    operatingCost: locationConfig.operatingCost ?? 0,
     weeklyRevenue: 0,
     weeklyCosts: 0,
     agentCapacity: 50,
@@ -90,9 +90,9 @@ export function createFactoryLocation(
     occupants: [],
     vehicles: [],
     inventory: {
-      provisions: locationConfig.startingInventory,
+      provisions: locationConfig.startingInventory ?? 0,
     },
-    inventoryCapacity: locationConfig.inventoryCapacity,
+    inventoryCapacity: locationConfig.inventoryCapacity ?? 0,
   };
 }
 

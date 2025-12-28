@@ -6,7 +6,7 @@ import { Panel } from '../components/Panel';
 import { Button } from '../components/Button';
 import { COLORS, SPACING } from '../UITheme';
 
-export type EntityType = 'agents' | 'orgs' | 'locations';
+export type EntityType = 'agents' | 'orgs' | 'locations' | 'map';
 
 export interface NavPanelCallbacks {
   onSelect: (entityType: EntityType) => void;
@@ -31,6 +31,7 @@ export class NavPanel extends Panel {
       { type: 'agents', label: 'Agents' },
       { type: 'orgs', label: 'Organizations' },
       { type: 'locations', label: 'Locations' },
+      { type: 'map', label: 'City Map' },
     ];
 
     const content = this.getContent();

@@ -1,0 +1,17 @@
+{
+  "id": "apartment",
+  "name": "Apartment",
+  "description": "A residential unit for housing",
+  "tags": ["residential", "housing"],
+  "spawnConstraints": {
+    "allowedZones": ["residential", "commercial", "downtown"],
+    "floorRange": [1, 120],
+    "preferHighFloor": false
+  },
+  "balance": {
+    "openingCost": 500,
+    "operatingCost": 5,
+    "rentCost": 50,
+    "maxResidents": 1
+  }
+}

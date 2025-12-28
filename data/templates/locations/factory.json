@@ -3,6 +3,13 @@
   "name": "Factory",
   "description": "An industrial manufacturing facility",
   "tags": ["wholesale"],
+  "spawnConstraints": {
+    "allowedZones": ["industrial"],
+    "floorRange": [0, 5],
+    "preferGroundFloor": true,
+    "minDistanceFromCenter": 8,
+    "maxPerCity": 5
+  },
   "balance": {
     "openingCost": 1000,
     "operatingCost": 20,

@@ -319,10 +319,14 @@ export const LOCATION_DETAILS: DetailSection[] = [
     ],
   },
   {
-    title: 'Location',
+    title: 'Position',
     fields: [
-      { key: 'sector', label: 'Sector' },
-      { key: 'district', label: 'District' },
+      {
+        key: 'position',
+        label: 'Coordinates',
+        render: (l) => `(${(l as Location).x}, ${(l as Location).y})`,
+      },
+      { key: 'floor', label: 'Floor' },
     ],
   },
 ];

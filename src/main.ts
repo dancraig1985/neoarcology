@@ -5,7 +5,7 @@
 
 import { loadConfig, type LoadedConfig } from './config/ConfigLoader';
 import { initRenderer } from './renderer/Renderer';
-import { createSimulation, tick, getSummary, type SimulationState } from './simulation/Simulation';
+import { createSimulationWithCity, tick, getSummary, type SimulationState } from './simulation/Simulation';
 import { UIController } from './ui/UIController';
 
 // Simulation state
@@ -58,16 +58,16 @@ async function main() {
     config = await loadConfig();
     console.log('[Main] Configuration loaded\n');
 
-    // Create simulation with test agents
-    console.log('[Main] Creating simulation...');
-    simulation = createSimulation(config);
-    console.log('[Main] Simulation created\n');
+    // Create simulation with procedurally generated city
+    console.log('[Main] Generating city...');
+    simulation = createSimulationWithCity(config); // Random seed each time
+    console.log('[Main] City generated\n');
 
     // Create UI controller
     console.log('[Main] Initializing UI...');
     ui = new UIController(app, {
       onTick: (phases) => advanceSimulation(phases),
-    });
+    }, config);
 
     // Initial UI update
     ui.update(simulation);

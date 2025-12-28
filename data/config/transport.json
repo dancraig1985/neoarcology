@@ -1,0 +1,55 @@
+{
+  "transportModes": {
+    "walk": {
+      "name": "Walking",
+      "description": "On foot, slowest but always available",
+      "available": true,
+      "distanceThresholds": [
+        { "maxDistance": 5, "phases": 0 },
+        { "maxDistance": 12, "phases": 1 },
+        { "maxDistance": 20, "phases": 2 },
+        { "maxDistance": 999, "phases": 3 }
+      ]
+    },
+    "transit": {
+      "name": "Public Transit",
+      "description": "Metro, buses - fast and cheap",
+      "available": true,
+      "distanceThresholds": [
+        { "maxDistance": 15, "phases": 0 },
+        { "maxDistance": 30, "phases": 1 },
+        { "maxDistance": 999, "phases": 2 }
+      ]
+    },
+    "motorcycle": {
+      "name": "Motorcycle",
+      "description": "Personal vehicle, faster than transit",
+      "available": false,
+      "requiresOwnership": true,
+      "distanceThresholds": [
+        { "maxDistance": 20, "phases": 0 },
+        { "maxDistance": 999, "phases": 1 }
+      ]
+    },
+    "automobile": {
+      "name": "Automobile",
+      "description": "Car or van, can carry passengers/cargo",
+      "available": false,
+      "requiresOwnership": true,
+      "distanceThresholds": [
+        { "maxDistance": 25, "phases": 0 },
+        { "maxDistance": 999, "phases": 1 }
+      ]
+    },
+    "aerial": {
+      "name": "Aerial Transport",
+      "description": "VTOL, helicopter - fastest but expensive",
+      "available": false,
+      "requiresOwnership": true,
+      "distanceThresholds": [
+        { "maxDistance": 999, "phases": 0 }
+      ]
+    }
+  },
+  "defaultMode": "transit"
+}
