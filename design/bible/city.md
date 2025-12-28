@@ -108,6 +108,59 @@ Building heights vary by zone and add visual variety:
 
 Within zones, heights vary based on noise - some blocks taller, some shorter, creating an organic skyline.
 
+## Initial Population
+
+When a city is generated, it comes pre-populated with agents, organizations, and locations to bootstrap the economy.
+
+### Agents (12-15)
+
+Citizens are created with randomized attributes:
+- **Credits**: 50-200 (personal savings)
+- **Provisions**: 2-8 (food stockpile)
+- **Hunger**: 10-30% (starting hunger level)
+- **Stats**: Randomized 20-60 for each of the 6 stats
+- **Morale**: 20-80%
+
+### Corporations (2-3)
+
+Large businesses that own factories:
+- **Leader**: First few agents become corporate leaders
+- **Starting Capital**: 2,000-5,000 credits
+- **Assets**: 1 factory each, placed in industrial zones
+- Leader is marked as employed by their corporation
+
+### Retail Shops (3-4)
+
+Small businesses owned by micro-orgs:
+- **Owner**: Next available agents become shop owners
+- **Starting Capital**: 300-600 credits
+- **Placement**: Commercial, downtown, or residential zones
+- **Starting Inventory**: From template (usually ~20 provisions)
+
+### Restaurants (2-3)
+
+Food service businesses, also micro-orgs:
+- **Owner**: Next available agents
+- **Starting Capital**: 200-400 credits
+- **Placement**: Commercial or downtown zones
+- **Starting Inventory**: From template
+
+### Workers (Up to 4)
+
+Some remaining unemployed agents get hired:
+- Assigned to locations with open employee slots
+- **Starting Salary**: 20-40 credits/week
+- Added to location's employee list
+
+### The Result
+
+A typical starting city has:
+- ~12-15 agents (some owners, some workers, some unemployed)
+- ~7-10 organizations (2-3 corps + micro-orgs for shops/restaurants)
+- ~7-10 locations (factories, shops, restaurants)
+
+This creates a functioning economy from day one: factories produce goods, shops buy wholesale and sell retail, agents buy food to survive.
+
 ## The Map
 
 The Observer UI shows the city map with:
