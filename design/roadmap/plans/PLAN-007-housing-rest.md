@@ -143,7 +143,8 @@ Integrated with existing weekly tick:
 | `src/simulation/systems/AgentSystem.ts` | Process fatigue, rest |
 | `src/simulation/systems/EconomySystem.ts` | Process rent payments |
 | `src/ui/UIConfig.ts` | Add fatigue column, residence fields |
-| `data/config/balance.json` | Add rest parameters |
+| `data/config/agents.json` | Add rest/fatigue parameters |
+| `data/config/economy.json` | Add baseRent parameter |
 
 ## Key Files to Create
 
@@ -151,18 +152,28 @@ Integrated with existing weekly tick:
 |------|---------|
 | `data/templates/locations/apartment.json` | Residential template |
 | `data/templates/locations/shelter.json` | Public shelter template |
+| `data/templates/orgs/landlord.json` | Property management org (like small_business) |
 
-## Balance Parameters
+## Config Parameters
 
+**In `data/config/agents.json`** (agent behavior):
 ```json
 {
-  "rest": {
-    "fatiguePerPhase": 0.5,
+  "fatigue": {
+    "perPhase": 0.5,
     "restThreshold": 80,
     "forceRestThreshold": 100,
     "fullRestReset": 0,
     "shelterRestReset": 25,
-    "streetRestReset": 50,
+    "streetRestReset": 50
+  }
+}
+```
+
+**In `data/config/economy.json`** (economic parameters):
+```json
+{
+  "housing": {
     "baseRent": 50
   }
 }
@@ -182,3 +193,6 @@ Integrated with existing weekly tick:
 - Homelessness is a state, not a failure condition
 - Housing creates natural economic pressure to earn money
 - Residence location matters for travel (commute to work)
+- Builds on PLAN-006 travel system - agents must physically travel home to rest
+- Resting requires presence at location (like retail purchases)
+- Landlord orgs follow small_business pattern (owner receives dividend)
