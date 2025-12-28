@@ -1,26 +1,4 @@
 {
-  "agent": {
-    "hungerPerPhase": 0.89,
-    "hungerThreshold": 25,
-    "hungerMax": 100,
-    "provisionsPerMeal": 1,
-    "startingHungerMin": 0,
-    "startingHungerMax": 24,
-    "startingCreditsMin": 100,
-    "startingCreditsMax": 500,
-    "startingProvisionsMin": 2,
-    "startingProvisionsMax": 4,
-    "entrepreneurThreshold": 600,
-    "inventoryCapacity": 10
-  },
-  "economy": {
-    "salary": {
-      "unskilled": { "min": 20, "max": 40 }
-    }
-  },
-  "generation": {
-    "initialWorkers": { "min": 3, "max": 5 }
-  },
   "goods": {
     "provisions": { "size": 0.1, "retailPrice": 15, "wholesalePrice": 7 },
     "small_arms": { "size": 1, "retailPrice": 100, "wholesalePrice": 70 },
@@ -35,5 +13,9 @@
     "fuel": { "size": 0.5, "retailPrice": 30, "wholesalePrice": 20 },
     "cyberware": { "size": 0.3, "retailPrice": 300, "wholesalePrice": 200 }
   },
-  "defaultGoodsSize": 1
+  "defaultGoodsSize": 1,
+  "salary": {
+    "unskilled": { "min": 20, "max": 40 }
+  },
+  "entrepreneurThreshold": 600
 }

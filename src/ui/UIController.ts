@@ -149,7 +149,7 @@ export class UIController {
 
     // Initialize map if not done and we have a grid
     if (!this.mapInitialized && state.grid) {
-      this.mapPanel.setGrid(state.grid, this.config.zones);
+      this.mapPanel.setGrid(state.grid, this.config.city.zones);
       this.mapPanel.setLocations(state.locations); // Set initial locations
       this.mapInitialized = true;
     }

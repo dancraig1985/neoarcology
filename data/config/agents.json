@@ -1,0 +1,9 @@
+{
+  "hunger": {
+    "perPhase": 0.89,
+    "threshold": 25,
+    "max": 100,
+    "provisionsPerMeal": 1
+  },
+  "inventoryCapacity": 10
+}

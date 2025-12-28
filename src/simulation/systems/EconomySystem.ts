@@ -3,7 +3,7 @@
  */
 
 import type { Agent, Location, Organization } from '../../types';
-import type { BalanceConfig, LocationTemplate } from '../../config/ConfigLoader';
+import type { EconomyConfig, AgentsConfig, LocationTemplate } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import {
   purchaseFromLocation,
@@ -55,7 +55,8 @@ export function processAgentEconomicDecision(
   agent: Agent,
   locations: Location[],
   orgs: Organization[],
-  balance: BalanceConfig,
+  economyConfig: EconomyConfig,
+  agentsConfig: AgentsConfig,
   locationTemplates: Record<string, LocationTemplate>,
   phase: number
 ): { agent: Agent; locations: Location[]; orgs: Organization[]; newLocation?: Location; newOrg?: Organization } {
@@ -76,9 +77,9 @@ export function processAgentEconomicDecision(
   // 3. If has lots of credits: consider opening business
   // 4. Else: idle
 
-  const isHungry = agent.needs.hunger >= balance.agent.hungerThreshold;
-  const hasNoFood = (agent.inventory['provisions'] ?? 0) < balance.agent.provisionsPerMeal;
-  const provisionsPrice = balance.goods['provisions']?.retailPrice ?? 10;
+  const isHungry = agent.needs.hunger >= agentsConfig.hunger.threshold;
+  const hasNoFood = (agent.inventory['provisions'] ?? 0) < agentsConfig.hunger.provisionsPerMeal;
+  const provisionsPrice = economyConfig.goods['provisions']?.retailPrice ?? 10;
   const hasCredits = agent.wallet.credits >= provisionsPrice;
 
   // 0. Shop owners restock their inventory from wholesale locations
@@ -90,7 +91,7 @@ export function processAgentEconomicDecision(
       (loc) => ledOrg.locations.includes(loc.id) && loc.tags.includes('retail')
     );
     for (const retailLoc of orgRetailLocations) {
-      const result = tryRestockFromWholesale(ledOrg, retailLoc, updatedLocations, updatedOrgs, balance, phase);
+      const result = tryRestockFromWholesale(ledOrg, retailLoc, updatedLocations, updatedOrgs, economyConfig, phase);
       updatedLocations = result.locations;
       updatedOrgs = result.orgs;
     }
@@ -98,7 +99,7 @@ export function processAgentEconomicDecision(
 
   // 1. Try to buy provisions if hungry and no food
   if (isHungry && hasNoFood && hasCredits) {
-    const result = tryBuyProvisions(updatedAgent, updatedLocations, updatedOrgs, balance, phase);
+    const result = tryBuyProvisions(updatedAgent, updatedLocations, updatedOrgs, economyConfig, phase);
     updatedAgent = result.agent;
     updatedLocations = result.locations;
     updatedOrgs = result.orgs;
@@ -106,7 +107,7 @@ export function processAgentEconomicDecision(
 
   // 2. Try to get a job if unemployed
   if (updatedAgent.status === 'available' && !updatedAgent.employedAt) {
-    const result = tryGetJob(updatedAgent, updatedLocations, updatedOrgs, balance, phase);
+    const result = tryGetJob(updatedAgent, updatedLocations, updatedOrgs, economyConfig, phase);
     updatedAgent = result.agent;
     updatedLocations = result.locations;
   }
@@ -115,7 +116,7 @@ export function processAgentEconomicDecision(
   // Employed agents can quit to start a business (but not if already a business owner)
   let newOrg: Organization | undefined;
   const canStartBusiness =
-    updatedAgent.wallet.credits >= balance.agent.entrepreneurThreshold &&
+    updatedAgent.wallet.credits >= economyConfig.entrepreneurThreshold &&
     !leadsAnyOrg(updatedAgent, updatedOrgs) &&
     updatedAgent.status !== 'dead';
 
@@ -151,7 +152,7 @@ function tryBuyProvisions(
   agent: Agent,
   locations: Location[],
   orgs: Organization[],
-  balance: BalanceConfig,
+  economyConfig: EconomyConfig,
   phase: number
 ): { agent: Agent; locations: Location[]; orgs: Organization[] } {
   // Only buy from locations with 'retail' tag
@@ -171,7 +172,7 @@ function tryBuyProvisions(
   }
 
   // Try to buy 1 provision
-  const result = purchaseFromLocation(shop, agent, 'provisions', 1, balance, phase);
+  const result = purchaseFromLocation(shop, agent, 'provisions', 1, economyConfig, phase);
 
   if (result.success) {
     // Update the location in the array
@@ -180,7 +181,7 @@ function tryBuyProvisions(
     );
 
     // Transfer revenue to the org that owns the shop
-    const retailPrice = balance.goods['provisions']?.retailPrice ?? 10;
+    const retailPrice = economyConfig.goods['provisions']?.retailPrice ?? 10;
     const ownerOrg = orgs.find((org) => org.locations.includes(shop.id));
 
     if (ownerOrg) {
@@ -215,7 +216,7 @@ function tryGetJob(
   agent: Agent,
   locations: Location[],
   orgs: Organization[],
-  balance: BalanceConfig,
+  economyConfig: EconomyConfig,
   phase: number
 ): { agent: Agent; locations: Location[] } {
   const hiringLocations = getHiringLocations(locations);
@@ -243,7 +244,7 @@ function tryGetJob(
   }
 
   // Random salary within unskilled range
-  const salaryRange = balance.economy.salary.unskilled;
+  const salaryRange = economyConfig.salary.unskilled;
   const salary = Math.floor(
     Math.random() * (salaryRange.max - salaryRange.min + 1) + salaryRange.min
   );
@@ -347,14 +348,14 @@ function tryRestockFromWholesale(
   shop: Location,
   locations: Location[],
   orgs: Organization[],
-  balance: BalanceConfig,
+  economyConfig: EconomyConfig,
   phase: number
 ): { locations: Location[]; orgs: Organization[] } {
-  const goodsSizes: GoodsSizes = { goods: balance.goods, defaultGoodsSize: balance.defaultGoodsSize };
+  const goodsSizes: GoodsSizes = { goods: economyConfig.goods, defaultGoodsSize: economyConfig.defaultGoodsSize };
   const currentStock = getGoodsCount(shop, 'provisions');
   const restockThreshold = 15; // Restock when below this
   const shopCapacity = getAvailableCapacity(shop, goodsSizes);
-  const wholesalePrice = balance.goods['provisions']?.wholesalePrice ?? 5;
+  const wholesalePrice = economyConfig.goods['provisions']?.wholesalePrice ?? 5;
 
   // Only restock if inventory is low
   if (currentStock >= restockThreshold) {
@@ -392,7 +393,7 @@ function tryRestockFromWholesale(
 
   // Calculate how much to buy (limited by wholesaler stock, shop capacity, and buyer org credits)
   // shopCapacity is now space-based, so calculate max items that fit
-  const provisionSize = balance.goods['provisions']?.size ?? balance.defaultGoodsSize;
+  const provisionSize = economyConfig.goods['provisions']?.size ?? economyConfig.defaultGoodsSize;
   const maxItemsThatFit = Math.floor(shopCapacity / provisionSize);
   const wholesalerStock = getGoodsCount(wholesaler, 'provisions');
   const desiredAmount = Math.min(30, maxItemsThatFit); // Try to buy up to 30
@@ -474,7 +475,6 @@ export function processWeeklyEconomy(
   agents: Agent[],
   locations: Location[],
   orgs: Organization[],
-  _balance: BalanceConfig,
   phase: number
 ): { agents: Agent[]; locations: Location[]; orgs: Organization[] } {
   let updatedAgents = [...agents];
@@ -732,10 +732,10 @@ export function restockLocation(
   location: Location,
   owner: Agent,
   amount: number,
-  balance: BalanceConfig,
+  economyConfig: EconomyConfig,
   phase: number
 ): { location: Location; owner: Agent } {
-  const cost = amount * (balance.goods['provisions']?.retailPrice ?? 10);
+  const cost = amount * (economyConfig.goods['provisions']?.retailPrice ?? 10);
 
   if (owner.wallet.credits < cost) {
     return { location, owner };

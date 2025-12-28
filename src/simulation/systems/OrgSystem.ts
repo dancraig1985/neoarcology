@@ -4,7 +4,7 @@
  */
 
 import type { Organization, Location, AgentRef, LocationRef } from '../../types';
-import type { LocationTemplate, BalanceConfig, ProductionConfig } from '../../config/ConfigLoader';
+import type { LocationTemplate, ProductionConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import { addToInventory, getAvailableCapacity, getInventorySpaceUsed, type GoodsSizes } from './InventorySystem';
 
@@ -188,7 +188,6 @@ export function processFactoryProduction(
 export function processOrgWeeklyCosts(
   org: Organization,
   locations: Location[],
-  _balance: BalanceConfig,
   phase: number
 ): { org: Organization; locations: Location[] } {
   let updatedOrg = { ...org };

@@ -4,17 +4,5 @@
     "phasesPerWeek": 28,
     "phasesPerMonth": 112,
     "phasesPerYear": 1344
-  },
-  "economy": {
-    "startingCredits": {
-      "agent": { "min": 500, "max": 5000 },
-      "org": { "min": 10000, "max": 100000 }
-    },
-    "salaryMultiplier": 1.0
-  },
-  "generation": {
-    "initialAgents": 50,
-    "initialOrgs": 5,
-    "initialLocations": 20
   }
 }

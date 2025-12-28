@@ -5,6 +5,7 @@
 
 /**
  * Simulation configuration from data/config/simulation.json
+ * Core simulation parameters (time only)
  */
 export interface SimulationConfig {
   time: {
@@ -13,23 +14,10 @@ export interface SimulationConfig {
     phasesPerMonth: number;
     phasesPerYear: number;
   };
-  economy: {
-    startingCredits: {
-      agent: { min: number; max: number };
-      org: { min: number; max: number };
-    };
-    salaryMultiplier: number;
-  };
-  generation: {
-    initialAgents: number;
-    initialOrgs: number;
-    initialLocations: number;
-  };
 }
 
 /**
  * Goods category configuration (size, prices, etc.)
- * All data for a goods type is grouped together
  */
 export interface GoodsConfig {
   size: number;           // How much inventory space 1 unit occupies
@@ -38,38 +26,34 @@ export interface GoodsConfig {
 }
 
 /**
- * Balance configuration from data/config/balance.json
- * Designer-tunable parameters for game mechanics
+ * Economy configuration from data/config/economy.json
+ * All economic parameters: pricing, salaries, goods
  */
-export interface BalanceConfig {
-  agent: {
-    hungerPerPhase: number;
-    hungerThreshold: number;
-    hungerMax: number;
-    provisionsPerMeal: number;
-    startingHungerMin: number;
-    startingHungerMax: number;
-    startingCreditsMin: number;
-    startingCreditsMax: number;
-    startingProvisionsMin: number;
-    startingProvisionsMax: number;
-    entrepreneurThreshold: number;
-    inventoryCapacity: number;
-  };
-  economy: {
-    salary: {
-      unskilled: { min: number; max: number };
-    };
-  };
-  generation: {
-    initialWorkers: { min: number; max: number };
-  };
+export interface EconomyConfig {
   goods: Record<string, GoodsConfig>;
   defaultGoodsSize: number;
+  salary: {
+    unskilled: { min: number; max: number };
+  };
+  entrepreneurThreshold: number;
 }
 
 /**
- * Zone configuration from data/config/zones.json
+ * Agent behavior configuration from data/config/agents.json
+ * Runtime agent behavior (not generation defaults - those are in templates)
+ */
+export interface AgentsConfig {
+  hunger: {
+    perPhase: number;
+    threshold: number;
+    max: number;
+    provisionsPerMeal: number;
+  };
+  inventoryCapacity: number;
+}
+
+/**
+ * Zone configuration
  * Defines city zone types and their procedural generation parameters
  */
 export interface ZoneConfig {
@@ -85,10 +69,14 @@ export interface ZoneConfig {
 }
 
 /**
- * Zones configuration file structure
+ * City configuration from data/config/city.json
+ * Zone definitions and city generation parameters
  */
-export interface ZonesConfig {
+export interface CityConfig {
   zones: Record<string, ZoneConfig>;
+  generation: {
+    initialWorkers: { min: number; max: number };
+  };
 }
 
 /**
@@ -225,8 +213,9 @@ export interface LocationTemplate extends EntityTemplate {
  */
 export interface LoadedConfig {
   simulation: SimulationConfig;
-  balance: BalanceConfig;
-  zones: Record<string, ZoneConfig>;
+  economy: EconomyConfig;
+  agents: AgentsConfig;
+  city: CityConfig;
   transport: TransportConfig;
   templates: {
     orgs: OrgTemplate[];
@@ -247,26 +236,30 @@ export interface LoadedConfig {
 export async function loadConfig(): Promise<LoadedConfig> {
   console.log('[ConfigLoader] Loading configuration...');
 
-  // Load simulation config
+  // Load simulation config (time only)
   const simulationResponse = await fetch('/data/config/simulation.json');
   const simulation = (await simulationResponse.json()) as SimulationConfig;
   console.log('[ConfigLoader] Loaded simulation config');
 
-  // Load balance config
-  const balanceResponse = await fetch('/data/config/balance.json');
-  const balance = (await balanceResponse.json()) as BalanceConfig;
-  console.log('[ConfigLoader] Loaded balance config');
+  // Load economy config (goods, salaries, pricing)
+  const economyResponse = await fetch('/data/config/economy.json');
+  const economy = (await economyResponse.json()) as EconomyConfig;
+  console.log(`[ConfigLoader] Loaded economy config (${Object.keys(economy.goods).length} goods)`);
 
-  // Load zones config
-  const zonesResponse = await fetch('/data/config/zones.json');
-  const zonesData = (await zonesResponse.json()) as ZonesConfig;
-  const zones = zonesData.zones;
-  console.log(`[ConfigLoader] Loaded ${Object.keys(zones).length} zone types`);
+  // Load agents config (behavior parameters)
+  const agentsResponse = await fetch('/data/config/agents.json');
+  const agents = (await agentsResponse.json()) as AgentsConfig;
+  console.log('[ConfigLoader] Loaded agents config');
+
+  // Load city config (zones + generation)
+  const cityResponse = await fetch('/data/config/city.json');
+  const city = (await cityResponse.json()) as CityConfig;
+  console.log(`[ConfigLoader] Loaded city config (${Object.keys(city.zones).length} zones)`);
 
   // Load transport config
   const transportResponse = await fetch('/data/config/transport.json');
   const transport = (await transportResponse.json()) as TransportConfig;
-  console.log(`[ConfigLoader] Loaded ${Object.keys(transport.transportModes).length} transport modes`);
+  console.log(`[ConfigLoader] Loaded transport config (${Object.keys(transport.transportModes).length} modes)`);
 
   // Load templates
   const orgTemplates = (await loadTemplates('/data/templates/orgs')) as OrgTemplate[];
@@ -297,8 +290,9 @@ export async function loadConfig(): Promise<LoadedConfig> {
 
   return {
     simulation,
-    balance,
-    zones,
+    economy,
+    agents,
+    city,
     transport,
     templates: {
       orgs: orgTemplates,

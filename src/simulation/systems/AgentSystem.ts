@@ -3,7 +3,7 @@
  */
 
 import type { Agent } from '../../types';
-import type { BalanceConfig } from '../../config/ConfigLoader';
+import type { AgentsConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 
 /**
@@ -13,7 +13,7 @@ import { ActivityLog } from '../ActivityLog';
 export function processAgentPhase(
   agent: Agent,
   phase: number,
-  balance: BalanceConfig
+  agentsConfig: AgentsConfig
 ): Agent {
   // Skip dead agents
   if (agent.status === 'dead') {
@@ -21,10 +21,10 @@ export function processAgentPhase(
   }
 
   // Accumulate hunger
-  const newHunger = agent.needs.hunger + balance.agent.hungerPerPhase;
+  const newHunger = agent.needs.hunger + agentsConfig.hunger.perPhase;
 
   // Check if agent needs to eat (hunger >= threshold)
-  const isHungry = newHunger >= balance.agent.hungerThreshold;
+  const isHungry = newHunger >= agentsConfig.hunger.threshold;
 
   let updatedAgent: Agent = {
     ...agent,
@@ -36,13 +36,13 @@ export function processAgentPhase(
 
   // If hungry, attempt to eat
   if (isHungry && updatedAgent.status !== 'dead') {
-    updatedAgent = attemptToEat(updatedAgent, phase, balance);
+    updatedAgent = attemptToEat(updatedAgent, phase, agentsConfig);
   }
 
   // Check for starvation
-  if (updatedAgent.needs.hunger >= balance.agent.hungerMax) {
+  if (updatedAgent.needs.hunger >= agentsConfig.hunger.max) {
     updatedAgent = handleStarvation(updatedAgent, phase);
-  } else if (updatedAgent.needs.hunger >= balance.agent.hungerMax * 0.75) {
+  } else if (updatedAgent.needs.hunger >= agentsConfig.hunger.max * 0.75) {
     // Starving warning (75%+)
     ActivityLog.warning(
       phase,
@@ -51,7 +51,7 @@ export function processAgentPhase(
       updatedAgent.id,
       updatedAgent.name
     );
-  } else if (updatedAgent.needs.hunger >= balance.agent.hungerMax * 0.5) {
+  } else if (updatedAgent.needs.hunger >= agentsConfig.hunger.max * 0.5) {
     // Very hungry warning (50%+)
     ActivityLog.warning(
       phase,
@@ -68,13 +68,13 @@ export function processAgentPhase(
 /**
  * Attempt to eat provisions
  */
-function attemptToEat(agent: Agent, phase: number, balance: BalanceConfig): Agent {
+function attemptToEat(agent: Agent, phase: number, agentsConfig: AgentsConfig): Agent {
   const provisions = agent.inventory['provisions'] ?? 0;
 
-  if (provisions >= balance.agent.provisionsPerMeal) {
+  if (provisions >= agentsConfig.hunger.provisionsPerMeal) {
     // Eat successfully
     const oldHunger = agent.needs.hunger;
-    const newProvisions = provisions - balance.agent.provisionsPerMeal;
+    const newProvisions = provisions - agentsConfig.hunger.provisionsPerMeal;
 
     ActivityLog.info(
       phase,
@@ -134,63 +134,6 @@ function handleStarvation(agent: Agent, phase: number): Agent {
     employer: undefined,
     employedAt: undefined,
     salary: 0,
-  };
-}
-
-/**
- * Create a new agent with randomized starting values
- */
-export function createAgent(
-  id: string,
-  name: string,
-  balance: BalanceConfig,
-  phase: number
-): Agent {
-  const startingHunger =
-    Math.random() * (balance.agent.startingHungerMax - balance.agent.startingHungerMin) +
-    balance.agent.startingHungerMin;
-
-  const startingCredits =
-    Math.random() * (balance.agent.startingCreditsMax - balance.agent.startingCreditsMin) +
-    balance.agent.startingCreditsMin;
-
-  const startingProvisions =
-    Math.floor(
-      Math.random() * (balance.agent.startingProvisionsMax - balance.agent.startingProvisionsMin + 1)
-    ) + balance.agent.startingProvisionsMin;
-
-  return {
-    id,
-    name,
-    template: 'citizen',
-    tags: ['citizen'],
-    created: phase,
-    relationships: [],
-    status: 'available',
-    age: 0,
-    stats: {
-      force: 20 + Math.floor(Math.random() * 30),
-      mobility: 20 + Math.floor(Math.random() * 30),
-      tech: 20 + Math.floor(Math.random() * 30),
-      social: 20 + Math.floor(Math.random() * 30),
-      business: 20 + Math.floor(Math.random() * 30),
-      engineering: 20 + Math.floor(Math.random() * 30),
-    },
-    needs: {
-      hunger: startingHunger,
-    },
-    inventory: {
-      provisions: startingProvisions,
-    },
-    inventoryCapacity: balance.agent.inventoryCapacity,
-    salary: 0,
-    wallet: {
-      credits: Math.floor(startingCredits),
-      accounts: [],
-      stashes: [],
-    },
-    morale: 50,
-    personalGoals: [],
   };
 }
 

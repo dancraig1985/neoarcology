@@ -320,7 +320,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   const rand = seededRandom(seed);
 
   // Generate zone grid
-  const grid = generateZones(config.zones, seed);
+  const grid = generateZones(config.city.zones, seed);
 
   const locations: Location[] = [];
   const organizations: Organization[] = [];
@@ -539,8 +539,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   // ==================
   // 5. HIRE INITIAL WORKERS
   // ==================
-  const workerConfig = config.balance.generation?.initialWorkers;
-  const salaryConfig = config.balance.economy.salary.unskilled;
+  const workerConfig = config.city.generation?.initialWorkers;
+  const salaryConfig = config.economy.salary.unskilled;
 
   if (workerConfig) {
     const numWorkers = randomFromRange(workerConfig, rand);

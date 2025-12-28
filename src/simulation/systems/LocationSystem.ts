@@ -3,7 +3,7 @@
  */
 
 import type { Location, Agent } from '../../types';
-import type { LocationTemplate, BalanceConfig } from '../../config/ConfigLoader';
+import type { LocationTemplate, EconomyConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 
 /**
@@ -71,10 +71,10 @@ export function purchaseFromLocation(
   buyer: Agent,
   goodsType: string,
   quantity: number,
-  balance: BalanceConfig,
+  economyConfig: EconomyConfig,
   phase: number
 ): { location: Location; buyer: Agent; success: boolean } {
-  const goodsConfig = balance.goods[goodsType];
+  const goodsConfig = economyConfig.goods[goodsType];
   if (!goodsConfig) {
     return { location, buyer, success: false };
   }
@@ -258,7 +258,6 @@ export function processPayroll(
 export function processOperatingCosts(
   location: Location,
   owner: Agent,
-  _balance: BalanceConfig,
   phase: number
 ): { location: Location; owner: Agent } {
   const cost = location.operatingCost;
