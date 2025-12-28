@@ -12,6 +12,7 @@ This folder documents the "rules of the game" - how the simulation works from a 
 | [Inventory](./inventory.md) | Goods, storage, and carrying capacity |
 | [Locations](./locations.md) | Places, ownership, and commerce |
 | [Production](./production.md) | How goods are created |
+| [City](./city.md) | Zones, geography, and procedural generation |
 
 ## The World in Brief
 

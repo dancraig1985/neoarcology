@@ -74,6 +74,7 @@ The `design/bible/` folder contains detailed documentation for each simulation s
 | [inventory.md](design/bible/inventory.md) | Working on goods, storage, capacity |
 | [locations.md](design/bible/locations.md) | Working on locations, templates, commerce |
 | [production.md](design/bible/production.md) | Working on factories, production cycles |
+| [city.md](design/bible/city.md) | Working on zones, map, procedural generation |
 
 ## Key Files
 
@@ -85,6 +86,8 @@ The `design/bible/` folder contains detailed documentation for each simulation s
 - Org system: `src/simulation/systems/OrgSystem.ts` (production, org operations)
 - Location system: `src/simulation/systems/LocationSystem.ts` (commerce, hiring)
 - Inventory system: `src/simulation/systems/InventorySystem.ts` (goods, capacity)
+- Travel system: `src/simulation/systems/TravelSystem.ts` (distance, travel time)
+- City generation: `src/generation/` (zones, locations, procedural city)
 - Activity log: `src/simulation/ActivityLog.ts`
 - Config loader: `src/config/ConfigLoader.ts`
 - Types: `src/types/*.ts`
@@ -112,6 +115,7 @@ src/ui/
     HeaderPanel.ts      # Title + time display
     NavPanel.ts         # Entity type navigation (sidebar)
     MainPanel.ts        # Table (left) + detail view (right)
+    MapPanel.ts         # 2D city map visualization
     LogPanel.ts         # Activity log with filtering
     ControlsPanel.ts    # Time advance buttons
 
@@ -141,11 +145,13 @@ Some display fields are computed, not stored:
 
 - Simulation params: `data/config/simulation.json`
 - Balance config: `data/config/balance.json` (hunger, prices, salaries, goods)
+- Zone config: `data/config/zones.json` (zone types, colors, sizes for city generation)
+- Transport config: `data/config/transport.json` (travel modes, distance thresholds)
 
 **Templates (define entity defaults + tags):**
 - Org templates: `data/templates/orgs/*.json`
 - Agent archetypes: `data/templates/agents/*.json`
-- Location templates: `data/templates/locations/*.json` (includes production config)
+- Location templates: `data/templates/locations/*.json` (includes production config, spawn constraints)
 
 **Adding new "types" = adding new template JSON files, no code changes required.**
 
