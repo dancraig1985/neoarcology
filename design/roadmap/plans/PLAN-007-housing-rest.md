@@ -1,8 +1,8 @@
-# PLAN-006: Housing & Rest
+# PLAN-007: Housing & Rest
 
 **Status:** planned
 **Priority:** P1 (high)
-**Dependencies:** PLAN-005 (geography - agents need to travel home)
+**Dependencies:** PLAN-006 (geography - agents need to travel home)
 **Phase:** 3
 
 ## Goal
@@ -65,6 +65,32 @@ interface Location {
 - `apartment` - Single-agent residence, can be owned or rented
 - `shelter` - Public, free, partial rest only
 - Future: `luxury_apartment`, `safehouse`, `hotel`
+
+## Landlord Organizations
+
+Residential buildings are owned by **landlord orgs** (property management companies):
+
+```typescript
+// Landlord org owns apartment building(s)
+// Leader is the property manager/owner
+// Rent flows: Tenant → Org wallet → Owner dividend
+```
+
+**Initial generation** (from PLAN-005):
+- 1-2 landlord orgs created at city generation
+- Each owns 1 apartment building with multiple units
+- Leader is an agent who manages the property
+
+**Rent flow:**
+1. Tenant pays weekly rent → Landlord org wallet
+2. Org pays operating costs (maintenance, etc.)
+3. Org leader receives dividend (like shop owners)
+
+**Benefits of org ownership:**
+- Clean accounting (rent to org, not individual)
+- Leader can die → org dissolves → tenants evicted (creates drama)
+- Multiple buildings can be consolidated under one org
+- Future: agents can start property management businesses
 
 ## Weekly Cycle
 

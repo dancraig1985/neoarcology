@@ -1,8 +1,8 @@
-# PLAN-005: Geography & Travel
+# PLAN-006: Geography & Travel
 
 **Status:** planned
 **Priority:** P1 (high)
-**Dependencies:** PLAN-004 (completed)
+**Dependencies:** PLAN-005 (city structure)
 **Phase:** 3
 
 ## Goal
