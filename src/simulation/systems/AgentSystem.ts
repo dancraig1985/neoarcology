@@ -110,9 +110,13 @@ function attemptToEat(agent: Agent, phase: number, balance: BalanceConfig): Agen
 
 /**
  * Handle agent starvation (death)
+ * Clears employment and marks agent as dead
  */
 function handleStarvation(agent: Agent, phase: number): Agent {
-  console.log(`[DEBUG DEATH] ${agent.name} died! Credits: ${agent.wallet.credits}, Provisions: ${agent.inventory['provisions'] ?? 0}, Status: ${agent.status}, EmployedAt: ${agent.employedAt ?? 'none'}`);
+  // Log if they were employed when they died
+  if (agent.employer) {
+    console.log(`[DEATH] ${agent.name} died while employed by ${agent.employer}`);
+  }
 
   ActivityLog.critical(
     phase,
@@ -126,6 +130,10 @@ function handleStarvation(agent: Agent, phase: number): Agent {
     ...agent,
     status: 'dead',
     destroyed: phase,
+    // Clear employment - they're dead, they can't work
+    employer: undefined,
+    employedAt: undefined,
+    salary: 0,
   };
 }
 

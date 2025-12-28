@@ -10,6 +10,7 @@ import { ActivityLog } from './ActivityLog';
 import { processAgentPhase, createAgent, countLivingAgents, countDeadAgents } from './systems/AgentSystem';
 import { processAgentEconomicDecision, processWeeklyEconomy } from './systems/EconomySystem';
 import { createOrganization, createFactoryLocation, processFactoryProduction, addLocationToOrg } from './systems/OrgSystem';
+import { cleanupDeadEmployees } from './systems/LocationSystem';
 import { generateCity } from '../generation/CityGenerator';
 
 // Agent names for test harness (20 names for expanded population)
@@ -343,6 +344,9 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   updatedAgents = updatedAgents.map((agent) =>
     processAgentPhase(agent, newTime.currentPhase, config.balance)
   );
+
+  // 2b. Clean up dead employees from location employee lists
+  updatedLocations = cleanupDeadEmployees(updatedLocations, updatedAgents, newTime.currentPhase);
 
   // 3. Process economic decisions for each agent (buy food, restock shop, seek job, open business)
   for (let i = 0; i < updatedAgents.length; i++) {

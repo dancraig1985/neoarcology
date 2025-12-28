@@ -331,3 +331,37 @@ export function getLocationsWithGoods(
 ): Location[] {
   return locations.filter((loc) => (loc.inventory[goodsType] ?? 0) > 0);
 }
+
+/**
+ * Remove dead agents from location employee lists
+ * Call this after processing agent deaths
+ */
+export function cleanupDeadEmployees(
+  locations: Location[],
+  agents: Agent[],
+  phase: number
+): Location[] {
+  const deadAgentIds = new Set(
+    agents.filter((a) => a.status === 'dead').map((a) => a.id)
+  );
+
+  return locations.map((loc) => {
+    const aliveEmployees = loc.employees.filter((id) => !deadAgentIds.has(id));
+
+    // Log if we removed anyone
+    const removedCount = loc.employees.length - aliveEmployees.length;
+    if (removedCount > 0) {
+      ActivityLog.info(
+        phase,
+        'employment',
+        `removed ${removedCount} deceased employee(s) from ${loc.name}`,
+        loc.owner,
+        loc.name
+      );
+    }
+
+    return aliveEmployees.length !== loc.employees.length
+      ? { ...loc, employees: aliveEmployees }
+      : loc;
+  });
+}
