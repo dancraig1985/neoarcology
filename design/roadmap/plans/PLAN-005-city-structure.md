@@ -3,182 +3,219 @@
 **Status:** planned
 **Priority:** P1 (high)
 **Dependencies:** PLAN-004 (completed)
-**Phase:** 2 (was skipped, doing now)
+**Phase:** 2
 
 ## Goal
 
-Define the city's spatial structure and procedurally generate the initial city layout.
+Create a 2D grid-based city with procedurally generated zones and a basic map visualization.
 
-## Context
+## City Grid
 
-We skipped procedural generation (Phase 2) to get the Observer UI working. Now we need to define:
-- What sectors exist and how they relate to each other
-- How locations are positioned within the city
-- Initial city generation for a playable starting state
-
-**Key insight:** Keep it simple. We don't need a 2D grid - just a conceptual structure that enables distance calculations and logical groupings.
-
-## City Structure
-
-### Sectors (Conceptual Zones)
-
-The city is divided into **6 sectors** arranged in a ring around downtown:
-
-```
-        NORTH
-    NW        NE
-WEST  DOWNTOWN  EAST
-    SW        SE
-        SOUTH
-```
-
-**Sector relationships:**
-```typescript
-const SECTOR_ADJACENCY: Record<string, string[]> = {
-  'downtown': ['north', 'south', 'east', 'west', 'ne', 'nw', 'se', 'sw'],
-  'north': ['downtown', 'ne', 'nw'],
-  'south': ['downtown', 'se', 'sw'],
-  'east': ['downtown', 'ne', 'se'],
-  'west': ['downtown', 'nw', 'sw'],
-  'ne': ['downtown', 'north', 'east'],
-  'nw': ['downtown', 'north', 'west'],
-  'se': ['downtown', 'south', 'east'],
-  'sw': ['downtown', 'south', 'west'],
-};
-```
-
-**Sector character** (influences what spawns there):
-| Sector | Character | Typical Locations |
-|--------|-----------|-------------------|
-| downtown | Commercial hub | Corporate HQs, luxury retail |
-| north | Industrial | Factories, warehouses |
-| south | Residential | Apartments, markets |
-| east | Mixed commercial | Shops, offices |
-| west | Working class | Affordable housing, local shops |
-| ne/nw/se/sw | Transitional | Mix of adjacent sectors |
-
-### Districts (Subdivisions)
-
-Each sector contains **districts** - named neighborhoods:
-- Downtown: "financial", "plaza", "tower-row"
-- North: "factory-district", "warehouse-row", "freight-yard"
-- South: "riverside", "old-town", "suburbs"
-- etc.
-
-Districts are generated procedurally with thematic names.
-
-### Coordinates
+**32x32 grid** (1024 cells). Each cell represents a city block that can contain multiple locations at various floors.
 
 ```typescript
-interface Coordinates {
-  sector: string;       // Which sector (e.g., "north", "downtown")
-  district: string;     // Which district within sector
-  distance: number;     // 0-100, distance from downtown center
-  elevation: number;    // 0 = ground, higher = upper floors
+interface CityCell {
+  x: number;              // 0-31
+  y: number;              // 0-31
+  zone: ZoneType;         // What type of area this is
+  maxHeight: number;      // Max floors buildings can have (1-120)
+}
+
+type ZoneType =
+  | 'downtown'      // Central business district, tallest buildings
+  | 'commercial'    // Shops, offices, mixed use
+  | 'industrial'    // Factories, warehouses
+  | 'residential'   // Apartments, housing
+  | 'slums'         // Cheap/informal housing, crime
+  | 'government';   // City services, admin buildings
+
+interface Location {
+  // ... existing fields
+  x: number;        // Grid x (0-31)
+  y: number;        // Grid y (0-31)
+  floor: number;    // Which floor (0 = ground, up to cell's maxHeight)
 }
 ```
 
-**Distance meaning:**
-- 0-20: Downtown core
-- 20-50: Inner city
-- 50-80: Outer city
-- 80-100: City edge/outskirts
+**Multiple locations per cell:** A single cell (city block) can have many locations at different floors, or even the same floor. We don't track individual buildings - just locations within the block.
+
+## Zone Characteristics
+
+| Zone | Max Height | Typical Locations |
+|------|------------|-------------------|
+| downtown | 80-120 | Corporate HQs, luxury retail, high-rise apartments |
+| commercial | 20-60 | Shops, offices, restaurants |
+| industrial | 5-20 | Factories, warehouses, workshops |
+| residential | 10-40 | Apartments, condos |
+| slums | 5-30 | Cheap apartments, informal markets |
+| government | 10-30 | City hall, services, transit hubs |
 
 ## Procedural Generation
 
-### Initial City Generation
+### Zone Generation (Noise/Blob Algorithm)
 
-Generate a starting city with:
-1. **Core infrastructure** (always present)
-   - City Hall (downtown)
-   - Public transit hub (downtown)
-   - Central market (downtown)
+Use simplex noise or similar to create organic zone blobs:
 
-2. **Industrial sector** (north)
-   - 1-2 factories (wholesale production)
-   - 1 warehouse
-
-3. **Commercial locations** (scattered)
-   - 3-5 retail shops
-   - Placed in various sectors
-
-4. **Residential** (south, west)
-   - 1 apartment building (multi-unit)
-   - 1 public shelter
-
-5. **Starting agents**
-   - 10-15 agents with varied stats
-   - Distributed across residential locations
-   - Some employed, some available
-
-### Generation Algorithm
+1. **Downtown core**: Center of map (around 16,16), small radius
+2. **Government**: Adjacent to downtown
+3. **Commercial**: Rings around downtown, scattered pockets
+4. **Industrial**: Cluster on one side (e.g., north/east)
+5. **Residential**: Opposite side from industrial
+6. **Slums**: Buffer between industrial and residential, city edges
 
 ```typescript
-function generateCity(config: CityGenConfig): City {
-  // 1. Create sectors
-  // 2. Generate districts for each sector
-  // 3. Place required locations (factory, shops, etc.)
-  // 4. Generate agents
-  // 5. Assign agents to residences
-  // 6. Create initial orgs (corps, landlords)
-  // 7. Establish initial employment
+function generateZones(grid: CityCell[][]): void {
+  // 1. Place downtown at center
+  // 2. Use noise to create organic zone boundaries
+  // 3. Apply rules (industrial away from residential, etc.)
+  // 4. Fill remaining with residential/commercial mix
 }
 ```
 
+### Height Map Generation
+
+After zones are assigned:
+```typescript
+function generateHeights(grid: CityCell[][]): void {
+  // Base height from zone type
+  // Add noise variation within zone
+  // Downtown peaks at center, tapers toward edges
+  // Industrial stays low
+}
+```
+
+### Initial Location Placement
+
+Generate starting locations in appropriate zones:
+- Factories → industrial zone
+- Retail shops → commercial/downtown
+- Apartments → residential/downtown/slums
+- Warehouses → industrial
+- Shelters → slums/residential edges
+- City hall → government
+
+### Initial Agent & Org Generation
+
+- 10-15 starting agents
+- 2-3 corporations (factory owners, shop chains)
+- 1-2 landlord orgs (apartment owners)
+- Agents assigned residences and some employed
+
+## Travel System
+
+**Distance calculation:**
+```typescript
+function getDistance(from: Location, to: Location): number {
+  const dx = from.x - to.x;
+  const dy = from.y - to.y;
+  const horizontal = Math.sqrt(dx*dx + dy*dy);
+  const vertical = Math.abs(from.floor - to.floor) * 0.1; // floors add minor time
+  return horizontal + vertical;
+}
+```
+
+**Travel phases (public transit default):**
+```typescript
+function getTravelPhases(distance: number, method: 'walk' | 'transit'): number {
+  if (method === 'transit') {
+    if (distance <= 15) return 0;  // About half city - free
+    if (distance <= 30) return 1;  // Most of city
+    return 2;                       // Edge to edge (max)
+  } else { // walking
+    if (distance <= 5) return 0;
+    if (distance <= 12) return 1;
+    if (distance <= 20) return 2;
+    return 3;
+  }
+}
+```
+
+**Future vehicles** will extend the "0 phase" range.
+
+## Map Visualization (Observer UI)
+
+Basic 2D map panel showing:
+- Grid cells colored by zone type
+- Location markers (dots/icons)
+- Optional: height indicated by brightness/shade
+
+```
+┌─────────────────────────────┐
+│ MAP VIEW                    │
+│ ░░▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░ │  ░ = residential
+│ ░░▓▓████▓▓░░░░░░░░░░░░░░░░ │  ▓ = commercial
+│ ░░▓▓████▓▓▓▓░░░░▒▒▒▒░░░░░░ │  █ = downtown
+│ ░░░▓▓▓▓▓▓▓▓░░░░▒▒▒▒▒▒░░░░░ │  ▒ = industrial
+│ ░░░░░░░░░░░░░░░▒▒▒▒▒▒░░░░░ │  ▪ = slums
+│ ░░░░░░░░░░░░░░░░░░░░░░░░░░ │
+│         • = location        │
+└─────────────────────────────┘
+```
+
+Not interactive for now - just visualization. Click locations in tables, not map.
+
 ## Objectives
 
-### Phase A: Sector System
-- [ ] Define sector enum/constants
-- [ ] Implement sector adjacency lookup
-- [ ] Add sector character/tags
+### Phase A: Grid & Zone System
+- [ ] Define CityCell and zone types
+- [ ] Implement noise-based zone generation
+- [ ] Generate height map per cell
+- [ ] Store grid in simulation state
 
-### Phase B: District Generation
-- [ ] Create district name generator (thematic per sector)
-- [ ] Generate 2-4 districts per sector
-- [ ] Store districts in simulation state
+### Phase B: Location Coordinates
+- [ ] Add x, y, floor to Location type
+- [ ] Update location templates with coordinate ranges
+- [ ] Locations spawned in appropriate zones
 
-### Phase C: Coordinate System
-- [ ] Finalize Coordinates type
-- [ ] Update Location type with required coordinates
-- [ ] Implement coordinate generation for new locations
+### Phase C: City Generator
+- [ ] Create `generateCity()` main function
+- [ ] Generate zones and heights
+- [ ] Place initial locations
+- [ ] Create agents and orgs
+- [ ] Replace hardcoded Simulation.ts bootstrap
 
-### Phase D: City Generator
-- [ ] Create `generateCity()` function
-- [ ] Generate required infrastructure
-- [ ] Generate initial agents with distribution
-- [ ] Create starting orgs (corps, landlords)
+### Phase D: Distance & Travel
+- [ ] Implement distance calculation
+- [ ] Implement travel phase calculation
+- [ ] Add currentLocation to Agent
+- [ ] Basic travel state (travelingTo, progress)
 
-### Phase E: Bootstrap Integration
-- [ ] Replace hardcoded Simulation.ts bootstrap with generator
-- [ ] Make generation configurable (city size, agent count)
-- [ ] Ensure economy is viable from start
+### Phase E: Map Visualization
+- [ ] Create MapPanel component for Observer UI
+- [ ] Render grid cells colored by zone
+- [ ] Show location markers
+- [ ] Add as new tab/panel in UI
 
 ## Key Files to Create
 
 | File | Purpose |
 |------|---------|
-| `src/generation/CityGenerator.ts` | Main generation logic |
-| `src/generation/DistrictNames.ts` | Thematic name generation |
-| `src/generation/sectors.ts` | Sector definitions and adjacency |
-| `data/config/cityGen.json` | Generation parameters |
+| `src/generation/CityGenerator.ts` | Main generation orchestrator |
+| `src/generation/ZoneGenerator.ts` | Noise-based zone generation |
+| `src/generation/LocationPlacer.ts` | Place locations in appropriate zones |
+| `src/simulation/systems/TravelSystem.ts` | Distance and travel calculations |
+| `src/ui/panels/MapPanel.ts` | 2D map visualization |
 
 ## Key Files to Modify
 
 | File | Change |
 |------|--------|
-| `src/types/entities.ts` | Ensure coordinates are complete |
+| `src/types/entities.ts` | Add x, y, floor to Location; currentLocation to Agent |
 | `src/simulation/Simulation.ts` | Use generator instead of hardcoded bootstrap |
+| `src/ui/UIController.ts` | Add MapPanel to layout |
 
 ## Non-Goals (Defer)
 
-- Visual map rendering
-- Dynamic city growth (new buildings over time)
-- Terrain features (rivers, hills)
-- Multiple cities/regions
+- Interactive map (clicking to select locations)
+- 3D visualization
+- Pathfinding/routing
+- Dynamic city growth
+- Terrain features (water, parks)
 
 ## Notes
 
-- Sectors are conceptual, not geometric - don't overthink spatial accuracy
-- District names add flavor but don't affect mechanics
-- Generation should be deterministic given a seed (for reproducibility)
-- Start small: 20-30 locations, 10-15 agents
+- 32x32 = 1024 cells, but locations are sparse (maybe 50-100 initially)
+- One cell = one city block, can have multiple buildings/locations
+- Coordinates visible to agents and in UI
+- Map visualization is read-only, just shows what was generated
+- Travel mostly free (0 phases), max 2 phases across entire city

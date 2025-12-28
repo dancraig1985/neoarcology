@@ -1,96 +1,170 @@
-# PLAN-006: Geography & Travel
+# PLAN-006: Agent Travel & Proximity Decisions
 
 **Status:** planned
 **Priority:** P1 (high)
-**Dependencies:** PLAN-005 (city structure)
+**Dependencies:** PLAN-005 (city structure, distance calculation)
 **Phase:** 3
 
 ## Goal
 
-Give locations spatial positions and make agents travel between them, enabling proximity-based decisions and future vehicle systems.
+Make agents travel between locations and use proximity for decision-making.
 
 ## Context
 
-Currently locations exist in a void - no concept of distance or travel time. We need:
-- Locations to have positions (including vertical/elevation for high-rises)
-- Agents to have a current location
-- Travel time between locations
-- Decision-making based on proximity (closest shop, nearest factory)
+PLAN-005 creates the city grid and distance calculations. This plan makes agents actually use that system:
+- Agents have a current location
+- Traveling takes time (phases)
+- Decisions factor in distance (closest shop, nearest job)
 
-**Not in scope:** Vehicles (future plan), 2D/3D grid maps, pathfinding algorithms.
-
-## Coordinate System
-
-Use a simple abstract coordinate system, not a grid:
-
-```typescript
-interface Coordinates {
-  sector: string;        // e.g., "north", "industrial", "downtown"
-  district: string;      // e.g., "block-7", "tower-district"
-  distance: number;      // Distance from city center (0-100)
-  elevation: number;     // Floor/level (0 = ground, 50+ = high-rise)
-}
-```
-
-**Distance calculation:** Combine horizontal distance + sector penalties + elevation difference.
-- Same sector: base distance only
-- Adjacent sectors: +20 penalty
-- Opposite sectors: +50 penalty
-- Elevation difference: +1 per 10 floors (elevators, stairs)
-
-## Agent Location
+## Agent Location State
 
 ```typescript
 interface Agent {
   // ... existing fields
-  currentLocation?: LocationRef;  // Where agent currently is
-  travelingTo?: LocationRef;      // If in transit
-  travelProgress?: number;        // 0-100% of journey complete
+  currentLocation: LocationRef;   // Where agent is right now
+
+  // Travel state (only set while traveling)
+  travelingTo?: LocationRef;      // Destination
+  travelMethod?: 'walk' | 'transit';
+  travelPhasesRemaining?: number; // Phases until arrival
 }
 ```
 
-## Travel Mechanics
+## Travel Flow
 
-**Walking:** Base speed, always available
-- Speed: ~10 distance units per phase
-- Cost: Free
+1. Agent decides to go somewhere (shop, work, home)
+2. Calculate distance and travel phases
+3. If phases > 0, agent enters "traveling" state
+4. Each phase, decrement travelPhasesRemaining
+5. When 0, agent arrives at destination
 
-**Public Transit:** Faster but costs credits
-- Speed: ~30 distance units per phase
-- Cost: 2 credits per trip
-- Only available at ground level (elevation 0-5)
+```typescript
+function startTravel(
+  agent: Agent,
+  destination: Location,
+  method: 'walk' | 'transit'
+): Agent {
+  const from = getLocation(agent.currentLocation);
+  const distance = getDistance(from, destination);
+  const phases = getTravelPhases(distance, method);
 
-**Travel Time:** `ceil(distance / speed)` phases
+  if (phases === 0) {
+    // Instant travel
+    return { ...agent, currentLocation: destination.id };
+  }
+
+  return {
+    ...agent,
+    travelingTo: destination.id,
+    travelMethod: method,
+    travelPhasesRemaining: phases,
+  };
+}
+
+function processTravelTick(agent: Agent): Agent {
+  if (!agent.travelingTo) return agent;
+
+  const remaining = (agent.travelPhasesRemaining ?? 1) - 1;
+
+  if (remaining <= 0) {
+    // Arrived
+    return {
+      ...agent,
+      currentLocation: agent.travelingTo,
+      travelingTo: undefined,
+      travelMethod: undefined,
+      travelPhasesRemaining: undefined,
+    };
+  }
+
+  return { ...agent, travelPhasesRemaining: remaining };
+}
+```
+
+## Proximity-Based Decisions
+
+Update existing systems to prefer closer locations:
+
+### Shopping
+```typescript
+// Before: random shop selection
+// After: closest shop with stock
+function findNearestShop(agent: Agent, locations: Location[]): Location | null {
+  const shops = locations.filter(l => l.tags.includes('retail') && l.inventory.provisions > 0);
+  return shops.sort((a, b) =>
+    getDistance(agent.currentLocation, a) - getDistance(agent.currentLocation, b)
+  )[0] ?? null;
+}
+```
+
+### Restocking (Shop → Wholesale)
+```typescript
+// Shops buy from nearest wholesale location
+function findNearestWholesale(shop: Location, locations: Location[]): Location | null {
+  const wholesalers = locations.filter(l => l.tags.includes('wholesale'));
+  return wholesalers.sort((a, b) =>
+    getDistance(shop, a) - getDistance(shop, b)
+  )[0] ?? null;
+}
+```
+
+### Job Seeking
+```typescript
+// Prefer closer employers (but not exclusively)
+function findJob(agent: Agent, locations: Location[]): Location | null {
+  const hiring = locations.filter(l => l.employees.length < l.employeeSlots);
+  // Sort by distance, but allow some randomness
+  // Agents might take a slightly further job if it pays better
+}
+```
+
+## Travel Costs
+
+**Public transit:** 2 credits per trip (deducted when starting travel)
+**Walking:** Free
+
+Agents choose transit by default if they can afford it. Fall back to walking if broke.
+
+```typescript
+function chooseTransitMethod(agent: Agent): 'walk' | 'transit' {
+  const transitCost = 2;
+  if (agent.wallet.credits >= transitCost + 10) { // Keep buffer
+    return 'transit';
+  }
+  return 'walk';
+}
+```
 
 ## Objectives
 
-### Phase A: Location Coordinates
-- [ ] Add `coordinates` to Location type (already partially exists)
-- [ ] Update location templates with meaningful coordinates
-- [ ] Implement `calculateDistance(loc1, loc2)` function
-- [ ] Add sector definitions to simulation config
+### Phase A: Agent Location Tracking
+- [ ] Add currentLocation to Agent type
+- [ ] Initialize agents at their residence (or random location)
+- [ ] Track location in activity log
 
-### Phase B: Agent Location Tracking
-- [ ] Add `currentLocation` to Agent type
-- [ ] Initialize agents at a starting location
-- [ ] Track agent location changes in activity log
-
-### Phase C: Travel System
-- [ ] Add `travelingTo`, `travelProgress` to Agent
-- [ ] Implement `startTravel(agent, destination, method)` function
-- [ ] Process travel progress each phase
+### Phase B: Travel Processing
+- [ ] Implement startTravel() function
+- [ ] Process travel each phase in tick
 - [ ] Log travel start/arrival events
+- [ ] Deduct transit cost when applicable
 
-### Phase D: Proximity-Based Decisions
-- [ ] Update shop selection: agents go to closest retail location
-- [ ] Update restock: shops buy from closest wholesale location
-- [ ] Update job seeking: prefer closer employers
-- [ ] Add travel time to activity considerations
+### Phase C: Proximity Shopping
+- [ ] Update agent shopping to use nearest shop
+- [ ] Agent travels to shop, then buys
+- [ ] Handle "no nearby shop with stock" case
 
-### Phase E: UI Updates
-- [ ] Show agent's current location in detail view
-- [ ] Show location coordinates in detail view
-- [ ] Add "traveling" status indicator
+### Phase D: Proximity Restocking
+- [ ] Shops restock from nearest wholesale
+- [ ] Travel time for restock runs
+
+### Phase E: Proximity Employment
+- [ ] Job seeking prefers closer locations
+- [ ] Commute distance as factor in job decisions
+
+### Phase F: UI Updates
+- [ ] Show agent's current location in table/detail
+- [ ] Show "traveling to X" status
+- [ ] Add travel phases remaining to detail view
 
 ## Key Files to Modify
 
@@ -99,26 +173,18 @@ interface Agent {
 | `src/types/entities.ts` | Add travel fields to Agent |
 | `src/simulation/systems/AgentSystem.ts` | Process travel each phase |
 | `src/simulation/systems/EconomySystem.ts` | Use proximity for commerce |
-| `data/config/simulation.json` | Add sector definitions |
-| `data/templates/locations/*.json` | Add coordinates |
-
-## Key Files to Create
-
-| File | Purpose |
-|------|---------|
-| `src/simulation/systems/TravelSystem.ts` | Distance calculation, travel processing |
+| `src/ui/UIConfig.ts` | Add location/travel columns |
 
 ## Non-Goals (Defer)
 
-- Vehicle ownership and driving
-- Traffic/congestion simulation
-- Visual map representation
-- Pathfinding between obstacles
-- Public transit routes/schedules
+- Vehicle ownership
+- Route optimization
+- Traffic/congestion
+- Fast travel / teleportation
 
 ## Notes
 
-- Keep distance abstract - not tied to real-world units
-- Sectors are conceptual (industrial, residential, commercial) not geometric
-- Elevation enables future aerial vehicles to skip ground travel
-- Travel should feel like a cost/tradeoff, not tedious micromanagement
+- Most trips are 0 phases (instant) - travel is a light cost, not tedious
+- Transit vs walking is mostly about money, not major time difference
+- Agents don't pathfind - they just "go" places (abstracted)
+- Location proximity creates natural neighborhoods and commute patterns
