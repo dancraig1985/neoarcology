@@ -536,27 +536,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
     }
   }
 
-  // ==================
-  // 5. HIRE INITIAL WORKERS
-  // ==================
-  const workerConfig = config.city.generation?.initialWorkers;
-  const salaryConfig = config.economy.salary.unskilled;
-
-  if (workerConfig) {
-    const numWorkers = randomFromRange(workerConfig, rand);
-    const workers = agents.filter((a) => a.status === 'available');
-
-    for (const worker of workers.slice(0, Math.min(numWorkers, workers.length))) {
-      const needsWorkers = locations.find((l) => l.employees.length < l.employeeSlots);
-      if (!needsWorkers) break;
-
-      worker.status = 'employed';
-      worker.employer = needsWorkers.owner;
-      worker.employedAt = needsWorkers.id;
-      worker.salary = randomFromRange(salaryConfig, rand);
-      needsWorkers.employees.push(worker.id);
-    }
-  }
+  // Note: Locations start with empty employee slots.
+  // The simulation's hiring process will fill them as agents seek jobs.
 
   console.log(
     `[CityGenerator] Generated city with ${locations.length} locations, ` +

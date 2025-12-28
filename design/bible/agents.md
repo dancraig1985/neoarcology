@@ -41,20 +41,50 @@ Agents who accumulate enough savings may quit their job and open their own shop.
 
 ## Employment
 
+### Employment Status
+
+The `status` field indicates the agent's economic situation:
+- `available` - Unemployed, seeking work
+- `employed` - Has an income source (job or business ownership)
+- `dead` - No longer active
+
+**Important**: `status: 'employed'` means "has income" - both employees and business owners are "employed".
+
+### Employees vs Owners
+
+| Aspect | Employee | Owner |
+|--------|----------|-------|
+| `status` | employed | employed |
+| `employer` | org ID | org ID |
+| `employedAt` | location ID | undefined |
+| In `location.employees[]` | Yes | No |
+| Income source | Weekly salary | Weekly dividend |
+| Loses job if org bankrupt | Yes (fired) | N/A (org dissolves) |
+
+Key distinction:
+- **Employees** work at a specific location and appear in `location.employees[]`
+- **Owners** lead an org but don't occupy an employee slot - they receive dividends, not salary
+
 ### Getting Hired
-- Agent must be unemployed
-- Location must have open employee slots
-- Cannot work at a business you own
+- Agent must have `status: 'available'`
+- Location must have open employee slots (`employees.length < employeeSlots`)
+- Hiring sets: `status: 'employed'`, `employer: orgId`, `employedAt: locationId`, `salary: amount`
+- Agent is added to `location.employees[]`
 
 ### Being Employed
-- Receive weekly salary from employer
-- If employer can't pay, you're fired
+- Receive weekly salary from employer's org wallet
+- If employer can't pay, you're fired (back to `available`)
 - Can quit to start your own business (if wealthy enough)
 
 ## Entrepreneurship
 
 When an agent starts a business:
 - They create an organization to own it
-- Most of their savings become business capital
-- They become the organization's leader
+- Most of their savings become business capital (transferred to org wallet)
+- They become the organization's leader (`org.leader = agent.id`)
+- `status` becomes `employed`, `employer` set to new org ID
+- They are NOT added to any location's employee list
 - They now receive owner dividends instead of salary
+
+### Owner Dividend
+Org leaders receive a weekly dividend (30 credits) drawn from the org wallet. This is their income for running the business. Unlike salary, dividends are paid regardless of whether the org is profitable - though an insolvent org will dissolve.

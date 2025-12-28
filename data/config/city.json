@@ -66,8 +66,5 @@
       "avoidZones": ["slums", "industrial"],
       "description": "City hall, services, and transit hubs"
     }
-  },
-  "generation": {
-    "initialWorkers": { "min": 3, "max": 5 }
   }
 }

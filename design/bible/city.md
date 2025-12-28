@@ -49,7 +49,7 @@ Each generation is unique. Downtown might drift north, industrial might claim tw
 
 ## Zone Sizes
 
-Zones have target sizes (configurable in `zones.json`):
+Zones have target sizes (configurable in `city.json`):
 
 | Zone | Typical Size | Notes |
 |------|--------------|-------|
@@ -145,21 +145,24 @@ Food service businesses, also micro-orgs:
 - **Placement**: Commercial or downtown zones
 - **Starting Inventory**: From template
 
-### Workers (Up to 4)
+### Empty Employee Slots
 
-Some remaining unemployed agents get hired:
-- Assigned to locations with open employee slots
-- **Starting Salary**: 20-40 credits/week
-- Added to location's employee list
+Locations start with **no workers hired**. Employee slots are empty at generation time. The simulation's natural hiring process fills positions as unemployed agents seek jobs (see [Economy - Hiring](economy.md#hiring)).
+
+This means:
+- Factories produce nothing on turn 1 (no workers)
+- By turn 2-3, agents get hired and production begins
+- The economy bootstraps itself organically
 
 ### The Result
 
 A typical starting city has:
-- ~12-15 agents (some owners, some workers, some unemployed)
+- ~12-15 agents (some owners, most unemployed and job-seeking)
 - ~7-10 organizations (2-3 corps + micro-orgs for shops/restaurants)
 - ~7-10 locations (factories, shops, restaurants)
+- All employee slots empty, waiting to be filled
 
-This creates a functioning economy from day one: factories produce goods, shops buy wholesale and sell retail, agents buy food to survive.
+The economy doesn't function on turn 1 - it needs a few phases for workers to find jobs. This is intentional: the simulation bootstraps itself rather than starting in an artificial "perfect" state.
 
 ## The Map
 

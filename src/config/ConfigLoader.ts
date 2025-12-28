@@ -70,13 +70,10 @@ export interface ZoneConfig {
 
 /**
  * City configuration from data/config/city.json
- * Zone definitions and city generation parameters
+ * Zone definitions for procedural city generation
  */
 export interface CityConfig {
   zones: Record<string, ZoneConfig>;
-  generation: {
-    initialWorkers: { min: number; max: number };
-  };
 }
 
 /**

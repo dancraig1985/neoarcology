@@ -56,6 +56,33 @@ Agents only receive money through:
 
 There's no other way to get money in the current simulation.
 
+## Hiring
+
+### How Hiring Works
+
+Locations don't hire - the simulation matches unemployed agents to open positions each tick.
+
+Each phase, unemployed agents (`status: 'available'`) look for jobs:
+1. Find locations with open slots (`employees.length < employeeSlots`)
+2. Get hired at the first available position
+3. Salary is set randomly within the unskilled range (from `economy.json`)
+
+### At City Generation
+
+Locations start with **empty employee slots**. No workers are pre-assigned. The simulation's normal hiring process fills positions as agents seek jobs. This means:
+- Factories won't produce on turn 1 (no workers yet)
+- By turn 2-3, unemployed agents find jobs and production begins
+- The economy bootstraps itself naturally
+
+### Employee Slots
+
+Each location template defines `employeeSlots`:
+- Factory: 3 slots (more workers = more production)
+- Shop: 1 slot (owner doesn't count - they're the leader, not an employee)
+- Restaurant: 2 slots
+
+Owners never occupy employee slots. A shop with 1 `employeeSlots` can have 1 worker plus the owner.
+
 ## Profit and Loss
 
 For a business to survive:
