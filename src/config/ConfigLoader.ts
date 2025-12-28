@@ -145,9 +145,8 @@ export interface MinMaxRange {
 export interface GenerationHints {
   count?: MinMaxRange;      // How many to spawn at city generation
   spawnAtStart?: boolean;   // Should this spawn during initial generation
-  ownerType?: 'micro_org' | 'corporation'; // What type of org owns this
-  ownerCredits?: MinMaxRange; // Starting credits for owner org
-  ownedByCorporation?: boolean; // Is this owned by a corporation (not micro-org)
+  ownerOrgTemplate?: string; // Org template ID for auto-created owner (e.g., 'small_business')
+  ownerCredits?: MinMaxRange; // Starting credits for owner org (overrides org template default)
   ownsLocations?: string[];  // Location types this org spawns with
   leaderBecomesEmployed?: boolean; // Does the leader become employed by this org
 }
@@ -322,7 +321,7 @@ async function loadTemplates(basePath: string): Promise<EntityTemplate[]> {
 
   // Known template files (in production, this could be a manifest)
   const knownTemplates: Record<string, string[]> = {
-    '/data/templates/orgs': ['corporation.json'],
+    '/data/templates/orgs': ['corporation.json', 'small_business.json'],
     '/data/templates/agents': ['civilian.json'],
     '/data/templates/locations': [
       'factory.json',

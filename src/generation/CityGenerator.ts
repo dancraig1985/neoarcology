@@ -422,10 +422,13 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   }
 
   // ==================
-  // 3. CREATE RETAIL SHOPS (with micro-orgs)
+  // 3. CREATE RETAIL SHOPS (with small business orgs)
   // ==================
   const shopTemplate = config.locationTemplates['retail_shop'];
-  if (shopTemplate?.generation?.spawnAtStart && shopTemplate.generation.count) {
+  const shopOrgTemplateId = shopTemplate?.generation?.ownerOrgTemplate ?? 'small_business';
+  const shopOrgTemplate = config.orgTemplates[shopOrgTemplateId];
+
+  if (shopTemplate?.generation?.spawnAtStart && shopTemplate.generation.count && shopOrgTemplate) {
     const numShops = randomFromRange(shopTemplate.generation.count, rand);
 
     for (let i = 0; i < numShops; i++) {
@@ -435,25 +438,26 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
       const owner = agents[ownerIdx];
       if (!owner) continue;
 
-      // Create micro-org with credits from location template
+      // Credits: location template override > org template default > fallback
       const orgCredits = shopTemplate.generation.ownerCredits
         ? randomFromRange(shopTemplate.generation.ownerCredits, rand)
-        : randomInt(300, 600, rand);
+        : shopOrgTemplate.defaults?.credits
+          ? randomFromRange(shopOrgTemplate.defaults.credits, rand)
+          : randomInt(300, 600, rand);
 
-      const shopOrg: Organization = {
-        id: nextOrgId(),
-        name: `${owner.name}'s Shop`,
-        template: 'micro_org',
-        tags: ['micro_org', 'legal'],
-        created: 0,
-        relationships: [],
-        leader: owner.id,
-        wallet: createWallet(orgCredits),
-        locations: [],
-      };
+      const shopOrg = createOrgFromTemplate(
+        `${owner.name}'s Shop`,
+        shopOrgTemplate,
+        owner.id,
+        orgCredits,
+        0
+      );
 
-      owner.status = 'employed';
-      owner.employer = shopOrg.id;
+      // Set owner as employed if template specifies
+      if (shopOrgTemplate.generation?.leaderBecomesEmployed) {
+        owner.status = 'employed';
+        owner.employer = shopOrg.id;
+      }
 
       // Create the shop
       const placement = findValidPlacement(grid, shopTemplate.spawnConstraints, rand);
@@ -476,10 +480,13 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   }
 
   // ==================
-  // 4. CREATE RESTAURANTS (with micro-orgs)
+  // 4. CREATE RESTAURANTS (with small business orgs)
   // ==================
   const restaurantTemplate = config.locationTemplates['restaurant'];
-  if (restaurantTemplate?.generation?.spawnAtStart && restaurantTemplate.generation.count) {
+  const restaurantOrgTemplateId = restaurantTemplate?.generation?.ownerOrgTemplate ?? 'small_business';
+  const restaurantOrgTemplate = config.orgTemplates[restaurantOrgTemplateId];
+
+  if (restaurantTemplate?.generation?.spawnAtStart && restaurantTemplate.generation.count && restaurantOrgTemplate) {
     const numRestaurants = randomFromRange(restaurantTemplate.generation.count, rand);
 
     for (let i = 0; i < numRestaurants; i++) {
@@ -489,24 +496,26 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
       const owner = agents[ownerIdx];
       if (!owner) continue;
 
+      // Credits: location template override > org template default > fallback
       const orgCredits = restaurantTemplate.generation.ownerCredits
         ? randomFromRange(restaurantTemplate.generation.ownerCredits, rand)
-        : randomInt(200, 400, rand);
+        : restaurantOrgTemplate.defaults?.credits
+          ? randomFromRange(restaurantOrgTemplate.defaults.credits, rand)
+          : randomInt(200, 400, rand);
 
-      const restaurantOrg: Organization = {
-        id: nextOrgId(),
-        name: `${owner.name}'s Restaurant`,
-        template: 'micro_org',
-        tags: ['micro_org', 'legal'],
-        created: 0,
-        relationships: [],
-        leader: owner.id,
-        wallet: createWallet(orgCredits),
-        locations: [],
-      };
+      const restaurantOrg = createOrgFromTemplate(
+        `${owner.name}'s Restaurant`,
+        restaurantOrgTemplate,
+        owner.id,
+        orgCredits,
+        0
+      );
 
-      owner.status = 'employed';
-      owner.employer = restaurantOrg.id;
+      // Set owner as employed if template specifies
+      if (restaurantOrgTemplate.generation?.leaderBecomesEmployed) {
+        owner.status = 'employed';
+        owner.employer = restaurantOrg.id;
+      }
 
       const placement = findValidPlacement(grid, restaurantTemplate.spawnConstraints, rand);
       if (placement) {

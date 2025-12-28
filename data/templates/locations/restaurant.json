@@ -18,7 +18,7 @@
   "generation": {
     "count": { "min": 2, "max": 3 },
     "spawnAtStart": true,
-    "ownerType": "micro_org",
+    "ownerOrgTemplate": "small_business",
     "ownerCredits": { "min": 200, "max": 400 }
   }
 }
