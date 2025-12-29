@@ -97,15 +97,16 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   let updatedOrgs = [...state.organizations];
 
   // 1. Process production for all locations with production config
+  // Only employees physically present at the location contribute to production
   const goodsSizes = { goods: config.economy.goods, defaultGoodsSize: config.economy.defaultGoodsSize };
   updatedLocations = updatedLocations.map((loc) => {
     const template = config.locationTemplates[loc.template];
-    return processFactoryProduction(loc, template?.balance.production, newTime.currentPhase, goodsSizes);
+    return processFactoryProduction(loc, template?.balance.production, newTime.currentPhase, goodsSizes, updatedAgents);
   });
 
-  // 2. Process biological needs (hunger, eating from inventory)
+  // 2. Process biological needs (hunger, eating, travel)
   updatedAgents = updatedAgents.map((agent) =>
-    processAgentPhase(agent, newTime.currentPhase, config.agents)
+    processAgentPhase(agent, newTime.currentPhase, config.agents, updatedLocations)
   );
 
   // 2b. Clean up dead employees from location employee lists
@@ -123,6 +124,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
       config.economy,
       config.agents,
       config.locationTemplates,
+      config.transport,
       newTime.currentPhase
     );
 

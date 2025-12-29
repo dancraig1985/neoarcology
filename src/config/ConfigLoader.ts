@@ -128,7 +128,8 @@ export interface MinMaxRange {
  * Generation hints for templates
  */
 export interface GenerationHints {
-  count?: MinMaxRange;      // How many to spawn at city generation
+  count?: MinMaxRange;      // How many to spawn at city generation (total)
+  countPerZone?: MinMaxRange; // How many to spawn per zone type
   spawnAtStart?: boolean;   // Should this spawn during initial generation
   ownerOrgTemplate?: string; // Org template ID for auto-created owner (e.g., 'small_business')
   ownerCredits?: MinMaxRange; // Starting credits for owner org (overrides org template default)
@@ -318,6 +319,7 @@ async function loadTemplates(basePath: string): Promise<EntityTemplate[]> {
       'factory.json',
       'retail_shop.json',
       'restaurant.json',
+      'public_space.json',
     ],
   };
 

@@ -3,7 +3,7 @@
  */
 
 import type { Agent, Location, Organization } from '../../types';
-import type { EconomyConfig, AgentsConfig, LocationTemplate } from '../../config/ConfigLoader';
+import type { EconomyConfig, AgentsConfig, LocationTemplate, TransportConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import {
   purchaseFromLocation,
@@ -15,6 +15,7 @@ import {
 } from './LocationSystem';
 import { transferInventory, getGoodsCount, getAvailableCapacity, type GoodsSizes } from './InventorySystem';
 import { createOrganization, addLocationToOrg } from './OrgSystem';
+import { findNearestLocation, isTraveling, startTravel, redirectTravel } from './TravelSystem';
 
 // Location name generator
 const SHOP_NAMES = [
@@ -58,6 +59,7 @@ export function processAgentEconomicDecision(
   economyConfig: EconomyConfig,
   agentsConfig: AgentsConfig,
   locationTemplates: Record<string, LocationTemplate>,
+  transportConfig: TransportConfig,
   phase: number
 ): { agent: Agent; locations: Location[]; orgs: Organization[]; newLocation?: Location; newOrg?: Organization } {
   // Skip dead agents
@@ -69,6 +71,27 @@ export function processAgentEconomicDecision(
   let updatedLocations = [...locations];
   let updatedOrgs = [...orgs];
   let newLocation: Location | undefined;
+
+  // SURVIVAL PRIORITY: Emergency hunger (>80) overrides everything
+  // If agent is about to starve, redirect to food source immediately
+  const EMERGENCY_HUNGER = 80;
+  const hasFood = (updatedAgent.inventory['provisions'] ?? 0) >= agentsConfig.hunger.provisionsPerMeal;
+
+  if (updatedAgent.needs.hunger > EMERGENCY_HUNGER && !hasFood) {
+    const redirectResult = handleEmergencyHunger(
+      updatedAgent,
+      updatedLocations,
+      updatedOrgs,
+      economyConfig,
+      transportConfig,
+      phase
+    );
+    updatedAgent = redirectResult.agent;
+    // If emergency handling started travel or redirected, skip normal decisions
+    if (isTraveling(updatedAgent)) {
+      return { agent: updatedAgent, locations: updatedLocations, orgs: updatedOrgs };
+    }
+  }
 
   // Decision priority:
   // 0. If shop owner + low inventory: restock shop
@@ -99,10 +122,33 @@ export function processAgentEconomicDecision(
 
   // 1. Try to buy provisions if hungry and no food
   if (isHungry && hasNoFood && hasCredits) {
-    const result = tryBuyProvisions(updatedAgent, updatedLocations, updatedOrgs, economyConfig, phase);
+    const result = tryBuyProvisions(updatedAgent, updatedLocations, updatedOrgs, economyConfig, transportConfig, phase);
     updatedAgent = result.agent;
     updatedLocations = result.locations;
     updatedOrgs = result.orgs;
+  }
+
+  // 1b. Employed agents should go to work if not already there
+  // Skip if already traveling (includes travel to shop for food)
+  if (
+    updatedAgent.employedAt &&
+    !isTraveling(updatedAgent) &&
+    updatedAgent.currentLocation !== updatedAgent.employedAt
+  ) {
+    const workplace = updatedLocations.find((loc) => loc.id === updatedAgent.employedAt);
+    if (workplace) {
+      const travelingAgent = startTravel(updatedAgent, workplace, updatedLocations, transportConfig);
+      if (travelingAgent !== updatedAgent) {
+        ActivityLog.info(
+          phase,
+          'travel',
+          `commuting to ${workplace.name}`,
+          updatedAgent.id,
+          updatedAgent.name
+        );
+        updatedAgent = travelingAgent;
+      }
+    }
   }
 
   // 2. Try to get a job if unemployed
@@ -147,15 +193,22 @@ export function processAgentEconomicDecision(
 /**
  * Try to buy provisions from a retail location (has 'retail' tag)
  * Revenue goes to the org that owns the shop
+ * Requires agent to be physically present at the shop
  */
 function tryBuyProvisions(
   agent: Agent,
   locations: Location[],
   orgs: Organization[],
   economyConfig: EconomyConfig,
+  transportConfig: TransportConfig,
   phase: number
 ): { agent: Agent; locations: Location[]; orgs: Organization[] } {
-  // Only buy from locations with 'retail' tag
+  // If already traveling, can't start another action
+  if (isTraveling(agent)) {
+    return { agent, locations, orgs };
+  }
+
+  // Find all retail locations with provisions
   const retailLocations = locations.filter(
     (loc) => loc.tags.includes('retail') && (loc.inventory['provisions'] ?? 0) > 0
   );
@@ -165,33 +218,57 @@ function tryBuyProvisions(
     return { agent, locations, orgs };
   }
 
-  // Pick a random retail location
-  const shop = retailLocations[Math.floor(Math.random() * retailLocations.length)];
-  if (!shop) {
+  // Check if agent is already at a retail location with provisions
+  const currentShop = agent.currentLocation
+    ? retailLocations.find((loc) => loc.id === agent.currentLocation)
+    : null;
+
+  if (!currentShop) {
+    // Not at a shop - need to travel to nearest one
+    const nearestShop = findNearestLocation(
+      agent,
+      locations,
+      (loc) => loc.tags.includes('retail') && (loc.inventory['provisions'] ?? 0) > 0
+    );
+
+    if (nearestShop) {
+      const travelingAgent = startTravel(agent, nearestShop, locations, transportConfig);
+      if (travelingAgent !== agent) {
+        ActivityLog.info(
+          phase,
+          'travel',
+          `heading to ${nearestShop.name} to buy provisions`,
+          agent.id,
+          agent.name
+        );
+      }
+      return { agent: travelingAgent, locations, orgs };
+    }
+
     return { agent, locations, orgs };
   }
 
-  // Try to buy 1 provision
-  const result = purchaseFromLocation(shop, agent, 'provisions', 1, economyConfig, phase);
+  // Agent is at a shop with provisions - try to buy
+  const result = purchaseFromLocation(currentShop, agent, 'provisions', 1, economyConfig, phase);
 
   if (result.success) {
     // Update the location in the array
     const updatedLocations = locations.map((loc) =>
-      loc.id === shop.id ? result.location : loc
+      loc.id === currentShop.id ? result.location : loc
     );
 
     // Transfer revenue to the org that owns the shop
     const retailPrice = economyConfig.goods['provisions']?.retailPrice ?? 10;
-    const ownerOrg = orgs.find((org) => org.locations.includes(shop.id));
+    const ownerOrg = orgs.find((org) => org.locations.includes(currentShop.id));
 
     if (ownerOrg) {
-      console.log(`[DEBUG RETAIL] ${agent.name} bought from ${shop.name}, ${ownerOrg.name} receives ${retailPrice} credits (was: ${ownerOrg.wallet.credits}, now: ${ownerOrg.wallet.credits + retailPrice})`);
+      console.log(`[DEBUG RETAIL] ${agent.name} bought from ${currentShop.name}, ${ownerOrg.name} receives ${retailPrice} credits (was: ${ownerOrg.wallet.credits}, now: ${ownerOrg.wallet.credits + retailPrice})`);
     } else {
-      console.log(`[DEBUG RETAIL] WARNING: No owner org found for shop ${shop.id}! Shop locations in orgs:`, orgs.map(o => ({ name: o.name, locations: o.locations })));
+      console.log(`[DEBUG RETAIL] WARNING: No owner org found for shop ${currentShop.id}! Shop locations in orgs:`, orgs.map(o => ({ name: o.name, locations: o.locations })));
     }
 
     const updatedOrgs = orgs.map((org) => {
-      if (org.locations.includes(shop.id)) {
+      if (org.locations.includes(currentShop.id)) {
         return {
           ...org,
           wallet: {
@@ -207,6 +284,81 @@ function tryBuyProvisions(
   }
 
   return { agent, locations, orgs };
+}
+
+/**
+ * Handle emergency hunger - redirect agent to nearest shop
+ * Called when hunger > 80 and agent has no food
+ */
+function handleEmergencyHunger(
+  agent: Agent,
+  locations: Location[],
+  _orgs: Organization[],
+  _economyConfig: EconomyConfig,
+  transportConfig: TransportConfig,
+  phase: number
+): { agent: Agent } {
+  // Find a shop with provisions
+  const nearestShop = findNearestLocation(
+    agent,
+    locations,
+    (loc) => loc.tags.includes('retail') && (loc.inventory['provisions'] ?? 0) > 0
+  );
+
+  if (!nearestShop) {
+    // No shops with food - nothing we can do
+    ActivityLog.warning(
+      phase,
+      'hunger',
+      `is in emergency hunger but no shops have food!`,
+      agent.id,
+      agent.name
+    );
+    return { agent };
+  }
+
+  // Already at a shop? Buy will happen in normal flow
+  if (agent.currentLocation === nearestShop.id) {
+    return { agent };
+  }
+
+  // If traveling, check if already going to a shop with provisions
+  if (isTraveling(agent)) {
+    const destination = locations.find((l) => l.id === agent.travelingTo);
+    const isGoingToShop =
+      destination &&
+      destination.tags.includes('retail') &&
+      (destination.inventory['provisions'] ?? 0) > 0;
+
+    if (isGoingToShop) {
+      // Already going to a shop - no redirect needed
+      return { agent };
+    }
+
+    // Redirect to nearest shop
+    const redirectedAgent = redirectTravel(agent, nearestShop, locations, transportConfig);
+    ActivityLog.warning(
+      phase,
+      'hunger',
+      `emergency! Redirecting to ${nearestShop.name}`,
+      agent.id,
+      agent.name
+    );
+    return { agent: redirectedAgent };
+  }
+
+  // Not traveling - start travel to shop
+  const travelingAgent = startTravel(agent, nearestShop, locations, transportConfig);
+  if (travelingAgent !== agent) {
+    ActivityLog.warning(
+      phase,
+      'hunger',
+      `emergency! Heading to ${nearestShop.name}`,
+      agent.id,
+      agent.name
+    );
+  }
+  return { agent: travelingAgent };
 }
 
 /**

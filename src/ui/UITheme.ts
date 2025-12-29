@@ -90,4 +90,5 @@ export const CATEGORY_ICONS: Record<string, string> = {
   dissolution: 'D',
   dividend: '%',
   wholesale: 'W',
+  travel: '>',
 } as const;

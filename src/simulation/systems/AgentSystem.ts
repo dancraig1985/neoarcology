@@ -1,35 +1,57 @@
 /**
- * AgentSystem - Processes agent needs, hunger, eating, and starvation
+ * AgentSystem - Processes agent needs, hunger, eating, travel, and starvation
  */
 
-import type { Agent } from '../../types';
+import type { Agent, Location } from '../../types';
 import type { AgentsConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
+import { processTravel, isTraveling } from './TravelSystem';
 
 /**
  * Process a single agent for one phase
- * Handles hunger accumulation, eating, and starvation
+ * Handles travel, hunger accumulation, eating, and starvation
  */
 export function processAgentPhase(
   agent: Agent,
   phase: number,
-  agentsConfig: AgentsConfig
+  agentsConfig: AgentsConfig,
+  locations: Location[]
 ): Agent {
   // Skip dead agents
   if (agent.status === 'dead') {
     return agent;
   }
 
+  let updatedAgent = agent;
+
+  // Process travel if agent is in transit
+  if (isTraveling(updatedAgent)) {
+    const wasTraveling = updatedAgent.travelingTo;
+    updatedAgent = processTravel(updatedAgent);
+
+    // Check if just arrived
+    if (!isTraveling(updatedAgent) && wasTraveling) {
+      const destination = locations.find((l) => l.id === updatedAgent.currentLocation);
+      ActivityLog.info(
+        phase,
+        'travel',
+        `arrived at ${destination?.name ?? 'destination'}`,
+        updatedAgent.id,
+        updatedAgent.name
+      );
+    }
+  }
+
   // Accumulate hunger
-  const newHunger = agent.needs.hunger + agentsConfig.hunger.perPhase;
+  const newHunger = updatedAgent.needs.hunger + agentsConfig.hunger.perPhase;
 
   // Check if agent needs to eat (hunger >= threshold)
   const isHungry = newHunger >= agentsConfig.hunger.threshold;
 
-  let updatedAgent: Agent = {
-    ...agent,
+  updatedAgent = {
+    ...updatedAgent,
     needs: {
-      ...agent.needs,
+      ...updatedAgent.needs,
       hunger: newHunger,
     },
   };

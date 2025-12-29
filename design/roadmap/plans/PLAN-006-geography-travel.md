@@ -1,6 +1,6 @@
 # PLAN-006: Agent Location & Travel
 
-**Status:** planned
+**Status:** completed
 **Priority:** P1 (high)
 **Dependencies:** PLAN-005 (completed)
 **Phase:** 3
@@ -218,47 +218,47 @@ Agents use transit if they can afford it (credits > transit cost + buffer).
 ## Objectives
 
 ### Phase A: Public Spaces
-- [ ] Create `public_space` location template
-- [ ] Generate 1-2 public spaces per zone at city creation
-- [ ] Public spaces have no owner (ownerType: 'none')
+- [x] Create `public_space` location template
+- [x] Generate 1-2 public spaces per zone at city creation
+- [x] Public spaces have no owner (ownerType: 'none')
 
 ### Phase B: Agent Location State
-- [ ] Add currentLocation to Agent type
-- [ ] Add travel fields (travelingTo, travelingFrom, travelMethod, travelPhasesRemaining)
-- [ ] Initialize agents at starting locations:
+- [x] Add currentLocation to Agent type
+- [x] Add travel fields (travelingTo, travelingFrom, travelMethod, travelPhasesRemaining)
+- [x] Initialize agents at starting locations:
   - Owners → their business
   - Others → nearest public space
-- [ ] Update CityGenerator to assign initial locations
+- [x] Update CityGenerator to assign initial locations
 
 ### Phase C: Travel Processing
-- [ ] Implement startTravel() function in TravelSystem
-- [ ] Implement redirectTravel() for mid-transit destination changes
-- [ ] Process travel each phase (decrement phases, complete arrival)
-- [ ] Log travel start/arrival/redirect events to ActivityLog
-- [ ] Deduct transit cost when applicable
+- [x] Implement startTravel() function in TravelSystem
+- [x] Implement redirectTravel() for mid-transit destination changes
+- [x] Process travel each phase (decrement phases, complete arrival)
+- [x] Log travel start/arrival/redirect events to ActivityLog
+- [ ] Deduct transit cost when applicable (deferred - agents use walk for now)
 
 ### Phase D: Presence-Required Actions
-- [ ] Retail purchases require agent at shop location
-- [ ] Agent must travel to shop before buying
-- [ ] Traveling agents can redirect if priorities change
+- [x] Retail purchases require agent at shop location
+- [x] Agent must travel to shop before buying
+- [x] Traveling agents can redirect if priorities change
 
 ### Phase E: Survival Priority
-- [ ] Implement hunger priority check
-- [ ] Emergency hunger triggers redirect to nearest shop
-- [ ] Agent leaves work when hungry and out of food
-- [ ] Prevent death-by-overwork
+- [x] Implement hunger priority check
+- [x] Emergency hunger triggers redirect to nearest shop
+- [x] Agent leaves work when hungry and out of food
+- [x] Prevent death-by-overwork
 
 ### Phase F: Work Presence
-- [ ] Workers must travel to workplace to "work"
-- [ ] Track time spent at workplace
-- [ ] Production only happens when workers are present
-- [ ] Commute factors into daily routine
+- [x] Workers must travel to workplace to "work"
+- [ ] Track time spent at workplace (deferred - not needed for MVP)
+- [x] Production only happens when workers are present
+- [x] Commute factors into daily routine
 
 ### Phase G: UI Updates
-- [ ] Show agent's current location in table/detail view
-- [ ] Show "Traveling to [location]" status when in transit
-- [ ] Show travel phases remaining
-- [ ] Add [TRAV] filter to activity log
+- [x] Show agent's current location in table/detail view
+- [x] Show "Traveling to [location]" status when in transit
+- [x] Show travel phases remaining
+- [x] Add [TRAV] filter to activity log
 
 ## Key Files to Create
 

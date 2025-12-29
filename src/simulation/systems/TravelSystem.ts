@@ -7,7 +7,7 @@
  * Transport modes are data-driven via data/config/transport.json
  */
 
-import { Location } from '../../types';
+import { Agent, Location, TravelMethod } from '../../types';
 import { TransportConfig, TransportModeConfig } from '../../config/ConfigLoader';
 
 /**
@@ -114,4 +114,141 @@ export function isAdjacent(a: Location, b: Location): boolean {
  */
 export function isWithinRange(from: Location, to: Location, maxDistance: number): boolean {
   return getDistance(from, to) <= maxDistance;
+}
+
+/**
+ * Start travel to a destination.
+ * If travel would take 0 phases, agent arrives instantly.
+ */
+export function startTravel(
+  agent: Agent,
+  destination: Location,
+  locations: Location[],
+  config: TransportConfig,
+  method: TravelMethod = 'walk'
+): Agent {
+  const from = locations.find((l) => l.id === agent.currentLocation);
+
+  if (!from) {
+    // Agent has no current location - can't travel (maybe already in transit?)
+    return agent;
+  }
+
+  // Already at destination
+  if (from.id === destination.id) {
+    return agent;
+  }
+
+  const distance = getDistance(from, destination);
+  const phases = getTravelPhases(distance, config, method);
+
+  if (phases === 0) {
+    // Instant travel
+    return { ...agent, currentLocation: destination.id };
+  }
+
+  return {
+    ...agent,
+    currentLocation: undefined, // No longer at old location
+    travelingFrom: from.id,
+    travelingTo: destination.id,
+    travelMethod: method,
+    travelPhasesRemaining: phases,
+  };
+}
+
+/**
+ * Redirect an agent to a new destination while traveling.
+ * Travel time is recalculated from the original departure point.
+ */
+export function redirectTravel(
+  agent: Agent,
+  newDestination: Location,
+  locations: Location[],
+  config: TransportConfig
+): Agent {
+  if (!agent.travelingTo) return agent; // Not traveling
+
+  // Already going there
+  if (agent.travelingTo === newDestination.id) return agent;
+
+  // Calculate from origin location (simplification - in reality would be current position)
+  const fromLoc = locations.find((l) => l.id === agent.travelingFrom);
+  if (!fromLoc) return agent;
+
+  const distance = getDistance(fromLoc, newDestination);
+  const phases = getTravelPhases(distance, config, agent.travelMethod ?? 'walk');
+
+  return {
+    ...agent,
+    travelingTo: newDestination.id,
+    travelPhasesRemaining: phases, // Reset travel time to new destination
+  };
+}
+
+/**
+ * Process one phase of travel for an agent.
+ * Returns the agent with decremented phases, or arrived at destination.
+ */
+export function processTravel(agent: Agent): Agent {
+  if (!agent.travelingTo || agent.travelPhasesRemaining === undefined) {
+    return agent; // Not traveling
+  }
+
+  const remaining = agent.travelPhasesRemaining - 1;
+
+  if (remaining <= 0) {
+    // Arrived at destination
+    return {
+      ...agent,
+      currentLocation: agent.travelingTo,
+      travelingFrom: undefined,
+      travelingTo: undefined,
+      travelMethod: undefined,
+      travelPhasesRemaining: undefined,
+    };
+  }
+
+  // Still traveling
+  return {
+    ...agent,
+    travelPhasesRemaining: remaining,
+  };
+}
+
+/**
+ * Check if an agent is currently traveling
+ */
+export function isTraveling(agent: Agent): boolean {
+  return agent.travelingTo !== undefined;
+}
+
+/**
+ * Check if an agent is at a specific location
+ */
+export function isAtLocation(agent: Agent, locationId: string): boolean {
+  return agent.currentLocation === locationId;
+}
+
+/**
+ * Find the nearest location matching a predicate
+ */
+export function findNearestLocation(
+  agent: Agent,
+  locations: Location[],
+  predicate: (loc: Location) => boolean
+): Location | null {
+  const agentLoc = locations.find((l) => l.id === agent.currentLocation);
+
+  // Filter matching locations
+  const matching = locations.filter(predicate);
+  if (matching.length === 0) return null;
+
+  // If agent has no current location (in transit), just return first match
+  if (!agentLoc) return matching[0] ?? null;
+
+  // Sort by distance and return closest
+  return (
+    matching.sort((a, b) => getDistance(agentLoc, a) - getDistance(agentLoc, b))[0] ?? null
+  );
 }

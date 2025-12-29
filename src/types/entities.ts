@@ -90,6 +90,15 @@ export interface Agent extends Entity {
   // Personal finances
   wallet: Wallet;
 
+  // Physical location - agent is either at a location OR in transit
+  currentLocation?: LocationRef; // Where agent IS (undefined = in transit)
+
+  // Travel state (only set while traveling)
+  travelingFrom?: LocationRef; // Origin of current travel
+  travelingTo?: LocationRef; // Destination
+  travelMethod?: TravelMethod; // How they're traveling
+  travelPhasesRemaining?: number; // Phases until arrival
+
   // Current activity
   currentAction?: Action;
 
@@ -99,6 +108,8 @@ export interface Agent extends Entity {
   // Personal goals (may conflict with org goals)
   personalGoals: PersonalGoal[];
 }
+
+export type TravelMethod = 'walk' | 'transit';
 
 export type AgentStatus =
   | 'available'

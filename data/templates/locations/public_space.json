@@ -1,0 +1,20 @@
+{
+  "id": "public_space",
+  "name": "Public Space",
+  "description": "A public area where people gather - parks, plazas, transit stations",
+  "tags": ["public"],
+  "spawnConstraints": {
+    "allowedZones": ["downtown", "commercial", "residential", "slums", "government"],
+    "floorRange": [0, 0],
+    "preferGroundFloor": true
+  },
+  "balance": {
+    "operatingCost": 0,
+    "employeeSlots": 0,
+    "inventoryCapacity": 0
+  },
+  "generation": {
+    "spawnAtStart": true,
+    "countPerZone": { "min": 1, "max": 2 }
+  }
+}

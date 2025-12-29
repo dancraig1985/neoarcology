@@ -16,6 +16,7 @@ const FILTER_CATEGORIES = [
   'commerce',
   'production',
   'employment',
+  'travel',
   'hunger',
   'death',
   'spawn',
@@ -180,6 +181,8 @@ export class LogPanel extends Panel {
         return ['employment', 'hire', 'fire', 'salary', 'payroll', 'business', 'dividend'].includes(
           category
         );
+      case 'travel':
+        return ['travel'].includes(category);
       case 'hunger':
         return ['hunger'].includes(category);
       case 'death':
@@ -299,7 +302,7 @@ export class LogPanel extends Panel {
     entry: LogEntry
   ): 'agents' | 'orgs' | 'locations' {
     // Categories that typically involve agents
-    if (['hunger', 'death', 'purchase', 'spawn'].includes(entry.category)) {
+    if (['hunger', 'death', 'purchase', 'spawn', 'travel'].includes(entry.category)) {
       return 'agents';
     }
     // Categories that typically involve orgs

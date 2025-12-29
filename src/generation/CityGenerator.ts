@@ -192,6 +192,54 @@ function findValidPlacement(
 }
 
 /**
+ * Find a valid placement within a specific zone
+ */
+function findValidPlacementInZone(
+  grid: CityGrid,
+  zoneId: string,
+  constraints: SpawnConstraints | undefined,
+  rand: () => number,
+  attempts: number = 100
+): { x: number; y: number; floor: number } | null {
+  for (let i = 0; i < attempts; i++) {
+    const x = randomInt(0, GRID_SIZE - 1, rand);
+    const y = randomInt(0, GRID_SIZE - 1, rand);
+
+    const col = grid.cells[x];
+    if (!col) continue;
+    const cell = col[y];
+    if (!cell) continue;
+
+    // Must be in the specific zone
+    if (cell.zone !== zoneId) continue;
+
+    if (constraints?.minDistanceFromCenter) {
+      if (distanceFromCenter(x, y) < constraints.minDistanceFromCenter) continue;
+    }
+
+    let floor = 0;
+    if (constraints) {
+      const [minFloor, maxFloor] = constraints.floorRange;
+      const effectiveMax = Math.min(maxFloor, cell.maxHeight);
+
+      if (constraints.preferGroundFloor) {
+        floor = minFloor;
+      } else if (constraints.preferHighFloor) {
+        floor = effectiveMax;
+      } else {
+        floor = randomInt(minFloor, effectiveMax, rand);
+      }
+    }
+
+    if (isValidFloor(grid, x, y, floor, constraints)) {
+      return { x, y, floor };
+    }
+  }
+
+  return null;
+}
+
+/**
  * Create initial wallet with specified credits
  */
 function createWallet(credits: number): Wallet {
@@ -240,6 +288,7 @@ function createAgentFromTemplate(
     inventoryCapacity: defaults.inventoryCapacity ?? 20,
     salary: 0,
     wallet: createWallet(defaults.credits ? randomFromRange(defaults.credits, rand) : randomInt(50, 200, rand)),
+    currentLocation: undefined, // Will be assigned after locations are generated
     morale: defaults.morale ? randomFromRange(defaults.morale, rand) : randomInt(20, 80, rand),
     personalGoals: [],
   };
@@ -269,7 +318,7 @@ function createOrgFromTemplate(
 }
 
 /**
- * Create a location from template
+ * Create a location from template (owned by an org)
  */
 function createLocationFromTemplate(
   name: string,
@@ -314,6 +363,47 @@ function createLocationFromTemplate(
 }
 
 /**
+ * Create a public location (no owner)
+ */
+function createPublicLocation(
+  name: string,
+  template: LocationTemplate,
+  x: number,
+  y: number,
+  floor: number,
+  phase: number
+): Location {
+  return {
+    id: nextLocationId(),
+    name,
+    template: template.id,
+    tags: template.tags ?? [],
+    created: phase,
+    relationships: [],
+    x,
+    y,
+    floor,
+    size: 1,
+    security: 5,
+    owner: '',
+    ownerType: 'none',
+    previousOwners: [],
+    employees: [],
+    employeeSlots: 0,
+    baseIncome: 0,
+    operatingCost: 0,
+    weeklyRevenue: 0,
+    weeklyCosts: 0,
+    agentCapacity: 50, // Public spaces can hold many people
+    vehicleCapacity: 0,
+    occupants: [],
+    vehicles: [],
+    inventory: {},
+    inventoryCapacity: 0,
+  };
+}
+
+/**
  * Generate a complete city using templates from config
  */
 export function generateCity(config: LoadedConfig, seed: number = Date.now()): GeneratedCity {
@@ -343,10 +433,18 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   ];
   const factoryNames = ['Apex Manufacturing', 'Grid Works', 'Synth Industries', 'Vertex Production', 'Helix Factory'];
   const restaurantNames = ['Neon Bites', 'Synth Eats', 'Grid Kitchen', 'Pulse Diner', 'Arc Cafe'];
+  const publicSpaceNames: Record<string, string[]> = {
+    downtown: ['Central Plaza', 'Metro Hub', 'Tower Square', 'Skyline Park'],
+    commercial: ['Market Square', 'Commerce Court', 'Trade Plaza', 'Shopping Promenade'],
+    residential: ['Community Park', 'Neighborhood Green', 'Local Square', 'Block Garden'],
+    slums: ['Street Corner', 'Informal Market', 'The Lot', 'Underpass'],
+    government: ['Civic Plaza', 'Transit Center', 'City Steps', 'Admin Square'],
+  };
 
   let shopIndex = 0;
   let factoryIndex = 0;
   let restaurantIndex = 0;
+  const publicSpaceIndex: Record<string, number> = {};
 
   function nextShopName(): string {
     return shopNames[shopIndex++ % shopNames.length] ?? 'Shop';
@@ -356,6 +454,12 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   }
   function nextRestaurantName(): string {
     return restaurantNames[restaurantIndex++ % restaurantNames.length] ?? 'Restaurant';
+  }
+  function nextPublicSpaceName(zone: string): string {
+    const names = publicSpaceNames[zone] ?? ['Public Space'];
+    const idx = publicSpaceIndex[zone] ?? 0;
+    publicSpaceIndex[zone] = idx + 1;
+    return names[idx % names.length] ?? 'Public Space';
   }
   function nextAgentName(): string {
     return `${pickRandom(firstNames, rand)} ${pickRandom(lastNames, rand)}`;
@@ -536,8 +640,65 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
     }
   }
 
+  // ==================
+  // 5. CREATE PUBLIC SPACES (per zone)
+  // ==================
+  const publicSpaceTemplate = config.locationTemplates['public_space'];
+
+  if (publicSpaceTemplate?.generation?.spawnAtStart && publicSpaceTemplate.generation.countPerZone) {
+    const allowedZones = publicSpaceTemplate.spawnConstraints?.allowedZones ?? [];
+
+    for (const zoneId of allowedZones) {
+      const numSpaces = randomFromRange(publicSpaceTemplate.generation.countPerZone, rand);
+
+      for (let i = 0; i < numSpaces; i++) {
+        // Find a cell in this specific zone
+        const placement = findValidPlacementInZone(grid, zoneId, publicSpaceTemplate.spawnConstraints, rand);
+        if (placement) {
+          const publicSpace = createPublicLocation(
+            nextPublicSpaceName(zoneId),
+            publicSpaceTemplate,
+            placement.x,
+            placement.y,
+            placement.floor,
+            0
+          );
+          locations.push(publicSpace);
+        }
+      }
+    }
+  }
+
   // Note: Locations start with empty employee slots.
   // The simulation's hiring process will fill them as agents seek jobs.
+
+  // ==================
+  // 6. ASSIGN INITIAL AGENT LOCATIONS
+  // ==================
+  // Business owners → their business location
+  // Unemployed → a random public space
+
+  const publicSpaces = locations.filter((l) => l.tags.includes('public'));
+
+  for (const agent of agents) {
+    if (agent.employer) {
+      // Agent is employed (owner) - find the org's first location
+      const org = organizations.find((o) => o.id === agent.employer);
+      if (org && org.locations.length > 0) {
+        const firstLocationId = org.locations[0];
+        agent.currentLocation = firstLocationId;
+        agent.employedAt = firstLocationId;
+      } else if (publicSpaces.length > 0) {
+        // Fallback to a public space
+        agent.currentLocation = pickRandom(publicSpaces, rand).id;
+      }
+    } else {
+      // Unemployed agent - place at a random public space
+      if (publicSpaces.length > 0) {
+        agent.currentLocation = pickRandom(publicSpaces, rand).id;
+      }
+    }
+  }
 
   console.log(
     `[CityGenerator] Generated city with ${locations.length} locations, ` +

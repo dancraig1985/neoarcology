@@ -3,7 +3,7 @@
  * PLAN-003: Minimal implementation for supply chain
  */
 
-import type { Organization, Location, AgentRef, LocationRef } from '../../types';
+import type { Organization, Location, Agent, AgentRef, LocationRef } from '../../types';
 import type { LocationTemplate, ProductionConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import { addToInventory, getAvailableCapacity, getInventorySpaceUsed, type GoodsSizes } from './InventorySystem';
@@ -99,28 +99,51 @@ export function createFactoryLocation(
 /**
  * Process production for a location with production config
  * Supports multiple goods with different production rates and intervals
- * Production = employees × amountPerEmployee (when phase aligns with cycle)
+ * Production = present employees × amountPerEmployee (when phase aligns with cycle)
  * No employees = no production
+ * Workers must be physically present at the location to produce
  */
 export function processFactoryProduction(
   location: Location,
   productionConfig: ProductionConfig[] | undefined,
   phase: number,
-  goodsSizes?: GoodsSizes
+  goodsSizes?: GoodsSizes,
+  agents?: Agent[]
 ): Location {
   // No production config = not a producing location
   if (!productionConfig || productionConfig.length === 0) {
     return location;
   }
 
-  const employeeCount = location.employees.length;
+  const totalEmployees = location.employees.length;
 
-  // No workers = no production
-  if (employeeCount === 0) {
+  // No workers employed = no production
+  if (totalEmployees === 0) {
     ActivityLog.warning(
       phase,
       'production',
       `no workers - production halted (need ${location.employeeSlots} workers)`,
+      location.id,
+      location.name
+    );
+    return location;
+  }
+
+  // Count only employees who are physically present at the location
+  let presentEmployeeCount = totalEmployees; // Default to all if agents not provided
+  if (agents) {
+    presentEmployeeCount = location.employees.filter((empId) => {
+      const emp = agents.find((a) => a.id === empId);
+      return emp && emp.currentLocation === location.id;
+    }).length;
+  }
+
+  // No workers present = no production
+  if (presentEmployeeCount === 0) {
+    ActivityLog.info(
+      phase,
+      'production',
+      `${totalEmployees} workers employed but none present - no production this phase`,
       location.id,
       location.name
     );
@@ -151,8 +174,8 @@ export function processFactoryProduction(
       continue;
     }
 
-    // Production scales with number of employees
-    const productionAmount = employeeCount * config.amountPerEmployee;
+    // Production scales with number of present employees
+    const productionAmount = presentEmployeeCount * config.amountPerEmployee;
 
     // Produce up to available capacity (respects goods sizes)
     const { holder, added } = addToInventory(
@@ -172,7 +195,7 @@ export function processFactoryProduction(
       ActivityLog.info(
         phase,
         'production',
-        `${employeeCount} workers produced ${added} ${config.good}${cycleDesc} (space: ${spaceUsed.toFixed(1)}/${updatedLocation.inventoryCapacity})`,
+        `${presentEmployeeCount} workers produced ${added} ${config.good}${cycleDesc} (space: ${spaceUsed.toFixed(1)}/${updatedLocation.inventoryCapacity})`,
         location.id,
         location.name
       );

@@ -79,8 +79,24 @@ export const AGENT_COLUMNS: ColumnDef<Agent>[] = [
   {
     key: 'employer',
     label: 'Employer',
-    width: 130,
-    render: (a) => a.employer ?? '-',
+    width: 100,
+    render: (a) => a.employer ? a.employer.slice(0, 12) : '-',
+  },
+  {
+    key: 'location',
+    label: 'Location',
+    width: 100,
+    render: (a) => {
+      if (a.travelingTo) {
+        const phases = a.travelPhasesRemaining ?? 0;
+        return `→ ${phases}p`;
+      }
+      if (a.currentLocation) {
+        // Show shortened location ID
+        return a.currentLocation.slice(0, 10);
+      }
+      return '-';
+    },
   },
 ];
 
@@ -186,6 +202,32 @@ export const AGENT_DETAILS: DetailSection[] = [
       { key: 'name', label: 'Name' },
       { key: 'status', label: 'Status' },
       { key: 'created', label: 'Born (phase)' },
+    ],
+  },
+  {
+    title: 'Location',
+    fields: [
+      {
+        key: 'currentLocation',
+        label: 'At',
+        render: (a) => {
+          const agent = a as Agent;
+          if (agent.travelingTo) {
+            return `In transit (${agent.travelPhasesRemaining ?? 0} phases remaining)`;
+          }
+          return agent.currentLocation ?? 'Unknown';
+        },
+      },
+      {
+        key: 'travelingTo',
+        label: 'Traveling To',
+        render: (a) => (a as Agent).travelingTo ?? '-',
+      },
+      {
+        key: 'employedAt',
+        label: 'Workplace',
+        render: (a) => (a as Agent).employedAt ?? '-',
+      },
     ],
   },
   {
