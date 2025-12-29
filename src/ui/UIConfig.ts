@@ -77,26 +77,14 @@ export const AGENT_COLUMNS: ColumnDef<Agent>[] = [
     render: (a) => (a.inventory['provisions'] ?? 0).toString(),
   },
   {
-    key: 'employer',
+    key: 'employerName',
     label: 'Employer',
-    width: 100,
-    render: (a) => a.employer ? a.employer.slice(0, 12) : '-',
+    width: 110,
   },
   {
-    key: 'location',
+    key: 'locationName',
     label: 'Location',
-    width: 100,
-    render: (a) => {
-      if (a.travelingTo) {
-        const phases = a.travelPhasesRemaining ?? 0;
-        return `→ ${phases}p`;
-      }
-      if (a.currentLocation) {
-        // Show shortened location ID
-        return a.currentLocation.slice(0, 10);
-      }
-      return '-';
-    },
+    width: 120,
   },
 ];
 
@@ -208,32 +196,30 @@ export const AGENT_DETAILS: DetailSection[] = [
     title: 'Location',
     fields: [
       {
-        key: 'currentLocation',
-        label: 'At',
+        key: 'locationName',
+        label: 'Current Location',
+      },
+      {
+        key: 'travelPhasesRemaining',
+        label: 'Travel Time',
         render: (a) => {
           const agent = a as Agent;
-          if (agent.travelingTo) {
-            return `In transit (${agent.travelPhasesRemaining ?? 0} phases remaining)`;
+          if (agent.travelPhasesRemaining !== undefined) {
+            return `${agent.travelPhasesRemaining} phases`;
           }
-          return agent.currentLocation ?? 'Unknown';
+          return '-';
         },
       },
       {
-        key: 'travelingTo',
-        label: 'Traveling To',
-        render: (a) => (a as Agent).travelingTo ?? '-',
-      },
-      {
-        key: 'employedAt',
+        key: 'workplaceName',
         label: 'Workplace',
-        render: (a) => (a as Agent).employedAt ?? '-',
       },
     ],
   },
   {
     title: 'Employment',
     fields: [
-      { key: 'employer', label: 'Employer', render: (a) => (a as Agent).employer ?? 'Unemployed' },
+      { key: 'employerName', label: 'Employer' },
       { key: 'salary', label: 'Salary/week' },
     ],
   },

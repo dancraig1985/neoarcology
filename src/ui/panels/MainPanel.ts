@@ -25,6 +25,9 @@ const DETAIL_WIDTH = 280;
 // Enriched org type with computed fields for display
 type OrgWithLeaderName = Organization & { leaderName: string };
 
+// Enriched agent type with computed fields for display
+type AgentWithNames = Agent & { employerName: string; locationName: string };
+
 export class MainPanel extends Panel {
   private currentEntityType: EntityType = 'agents';
   private currentState: SimulationState | null = null;
@@ -35,7 +38,7 @@ export class MainPanel extends Panel {
   private divider: Graphics;
 
   // Tables for each entity type
-  private agentTable: Table<Agent>;
+  private agentTable: Table<AgentWithNames>;
   private orgTable: Table<OrgWithLeaderName>;
   private locationTable: Table<Location>;
 
@@ -71,8 +74,8 @@ export class MainPanel extends Panel {
     this.addChild(this.detailContainer);
 
     // Create tables
-    this.agentTable = new Table<Agent>(tableWidth, contentHeight, {
-      columns: AGENT_COLUMNS,
+    this.agentTable = new Table<AgentWithNames>(tableWidth, contentHeight, {
+      columns: AGENT_COLUMNS as typeof AGENT_COLUMNS,
       onRowClick: (agent) => this.handleRowClick('agents', agent),
     });
 
@@ -154,7 +157,7 @@ export class MainPanel extends Panel {
     this.updateDetailView();
   }
 
-  private getCurrentTable(): Table<Agent> | Table<OrgWithLeaderName> | Table<Location> {
+  private getCurrentTable(): Table<AgentWithNames> | Table<OrgWithLeaderName> | Table<Location> {
     switch (this.currentEntityType) {
       case 'agents':
         return this.agentTable;
@@ -183,8 +186,26 @@ export class MainPanel extends Panel {
 
     switch (this.currentEntityType) {
       case 'agents':
+        // Enrich agents with employer and location names, then sort
+        const enrichedAgents: AgentWithNames[] = this.currentState.agents.map((agent) => {
+          const employer = this.currentState!.organizations.find((o) => o.id === agent.employer);
+          // For location, check both currentLocation and travelingTo
+          let locationName = '-';
+          if (agent.travelingTo) {
+            const dest = this.currentState!.locations.find((l) => l.id === agent.travelingTo);
+            locationName = dest ? `→ ${dest.name}` : '→ ?';
+          } else if (agent.currentLocation) {
+            const loc = this.currentState!.locations.find((l) => l.id === agent.currentLocation);
+            locationName = loc?.name ?? '-';
+          }
+          return {
+            ...agent,
+            employerName: employer?.name ?? '-',
+            locationName,
+          };
+        });
         // Sort: living first, then dead
-        const sortedAgents = [...this.currentState.agents].sort((a, b) => {
+        const sortedAgents = enrichedAgents.sort((a, b) => {
           if (a.status === 'dead' && b.status !== 'dead') return 1;
           if (a.status !== 'dead' && b.status === 'dead') return -1;
           return 0;
@@ -212,7 +233,24 @@ export class MainPanel extends Panel {
       case 'agents': {
         const agent = this.currentState.agents.find((a) => a.id === this.selectedEntityId);
         if (agent) {
-          this.agentDetail.setData(agent.name, agent);
+          // Enrich with computed names for detail view
+          const employer = this.currentState.organizations.find((o) => o.id === agent.employer);
+          let locationName = '-';
+          if (agent.travelingTo) {
+            const dest = this.currentState.locations.find((l) => l.id === agent.travelingTo);
+            locationName = dest ? `→ ${dest.name}` : '→ ?';
+          } else if (agent.currentLocation) {
+            const loc = this.currentState.locations.find((l) => l.id === agent.currentLocation);
+            locationName = loc?.name ?? '-';
+          }
+          const workplaceLoc = this.currentState.locations.find((l) => l.id === agent.employedAt);
+          const enrichedAgent = {
+            ...agent,
+            employerName: employer?.name ?? '-',
+            locationName,
+            workplaceName: workplaceLoc?.name ?? '-',
+          };
+          this.agentDetail.setData(agent.name, enrichedAgent);
         }
         break;
       }
