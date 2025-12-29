@@ -47,6 +47,53 @@ interface Agent {
 | Getting paid | Direct deposit / automatic |
 | Getting hired | Phone interview / remote process |
 
+## Public Spaces
+
+Agents need somewhere to "be" when not working, shopping, or at home. **Public spaces** serve as default locations:
+
+| Zone | Public Space Examples |
+|------|----------------------|
+| Downtown | Plaza, transit hub |
+| Commercial | Mall atrium, market square |
+| Industrial | Factory yard (limited) |
+| Residential | Park, community center |
+| Slums | Street corner, informal market |
+| Government | City hall steps, transit station |
+
+**Location template:** `public_space`
+```json
+{
+  "id": "public_space",
+  "tags": ["public"],
+  "spawnConstraints": {
+    "allowedZones": ["downtown", "commercial", "residential", "slums", "government"],
+    "floorRange": [0, 0],
+    "preferGroundFloor": true
+  },
+  "balance": {
+    "employeeSlots": 0,
+    "inventoryCapacity": 0
+  },
+  "generation": {
+    "spawnAtStart": true,
+    "count": { "min": 1, "max": 2 },
+    "perZone": true
+  }
+}
+```
+
+**Uses:**
+- Default location for unemployed agents at city generation
+- Where agents go when idle (no work, not hungry, not tired)
+- Future: leisure activities, social encounters, recruiting
+
+**Initial Agent Placement:**
+| Agent Type | Starting Location |
+|------------|-------------------|
+| Business owner | Their business location |
+| Employed worker | Workplace OR nearest public space |
+| Unemployed | Nearest public space to spawn point |
+
 ## Survival Priority
 
 **Critical**: Agents must not work themselves to death. Decision priority:
@@ -81,7 +128,7 @@ For MVP, we can simplify: agents work in bursts and handle hunger interruptions.
 
 ## Travel Flow
 
-1. Agent decides to go somewhere (shop, work)
+1. Agent decides to go somewhere (shop, work, public space)
 2. Calculate distance and travel phases using TravelSystem
 3. If phases > 0, enter "traveling" state
 4. Each phase: decrement travelPhasesRemaining, increase hunger
@@ -108,6 +155,36 @@ function startTravel(agent: Agent, destination: Location): Agent {
   };
 }
 ```
+
+## Mid-Transit Destination Changes
+
+Agents can **redirect** while traveling if priorities change (e.g., emergency hunger):
+
+```typescript
+function redirectTravel(agent: Agent, newDestination: Location, locations: Location[]): Agent {
+  if (!agent.travelingTo) return agent; // Not traveling
+
+  // Calculate position "in transit" - approximate as midpoint or use travelingFrom
+  const fromLoc = locations.find(l => l.id === agent.travelingFrom);
+  const distance = getDistance(fromLoc, newDestination);
+  const phases = getTravelPhases(distance, agent.travelMethod ?? 'walk');
+
+  return {
+    ...agent,
+    travelingTo: newDestination.id,
+    travelPhasesRemaining: phases, // Reset travel time to new destination
+  };
+}
+```
+
+**When to redirect:**
+- Emergency hunger while going to work → redirect to nearest shop
+- Job acquired while going to public space → redirect to workplace
+- Better opportunity discovered mid-transit
+
+**No redirect needed for:**
+- Eating from inventory (can do while traveling)
+- Getting paid (magical/automatic)
 
 ## Proximity-Based Decisions
 
@@ -140,52 +217,67 @@ Agents use transit if they can afford it (credits > transit cost + buffer).
 
 ## Objectives
 
-### Phase A: Agent Location State
+### Phase A: Public Spaces
+- [ ] Create `public_space` location template
+- [ ] Generate 1-2 public spaces per zone at city creation
+- [ ] Public spaces have no owner (ownerType: 'none')
+
+### Phase B: Agent Location State
 - [ ] Add currentLocation to Agent type
 - [ ] Add travel fields (travelingTo, travelingFrom, travelMethod, travelPhasesRemaining)
-- [ ] Initialize agents at a starting location (workplace for owners, random for others)
+- [ ] Initialize agents at starting locations:
+  - Owners → their business
+  - Others → nearest public space
 - [ ] Update CityGenerator to assign initial locations
 
-### Phase B: Travel Processing
+### Phase C: Travel Processing
 - [ ] Implement startTravel() function in TravelSystem
+- [ ] Implement redirectTravel() for mid-transit destination changes
 - [ ] Process travel each phase (decrement phases, complete arrival)
-- [ ] Log travel start/arrival events to ActivityLog
+- [ ] Log travel start/arrival/redirect events to ActivityLog
 - [ ] Deduct transit cost when applicable
 
-### Phase C: Presence-Required Actions
+### Phase D: Presence-Required Actions
 - [ ] Retail purchases require agent at shop location
 - [ ] Agent must travel to shop before buying
-- [ ] Handle "already traveling" state (can't start new travel)
+- [ ] Traveling agents can redirect if priorities change
 
-### Phase D: Survival Priority
+### Phase E: Survival Priority
 - [ ] Implement hunger priority check
-- [ ] Emergency hunger overrides current activity
+- [ ] Emergency hunger triggers redirect to nearest shop
 - [ ] Agent leaves work when hungry and out of food
 - [ ] Prevent death-by-overwork
 
-### Phase E: Work Presence
+### Phase F: Work Presence
 - [ ] Workers must travel to workplace to "work"
 - [ ] Track time spent at workplace
 - [ ] Production only happens when workers are present
 - [ ] Commute factors into daily routine
 
-### Phase F: UI Updates
+### Phase G: UI Updates
 - [ ] Show agent's current location in table/detail view
 - [ ] Show "Traveling to [location]" status when in transit
 - [ ] Show travel phases remaining
 - [ ] Add [TRAV] filter to activity log
+
+## Key Files to Create
+
+| File | Purpose |
+|------|---------|
+| `data/templates/locations/public_space.json` | Public space template (parks, plazas) |
 
 ## Key Files to Modify
 
 | File | Change |
 |------|--------|
 | `src/types/entities.ts` | Add location/travel fields to Agent |
-| `src/simulation/systems/TravelSystem.ts` | Add startTravel, processTravel functions |
+| `src/simulation/systems/TravelSystem.ts` | Add startTravel, redirectTravel, processTravel |
 | `src/simulation/systems/AgentSystem.ts` | Process travel each phase, hunger priority |
 | `src/simulation/systems/EconomySystem.ts` | Check presence before retail purchase |
 | `src/simulation/systems/LocationSystem.ts` | Track worker presence for production |
-| `src/generation/CityGenerator.ts` | Assign initial locations to agents |
+| `src/generation/CityGenerator.ts` | Generate public spaces, assign initial agent locations |
 | `src/ui/UIConfig.ts` | Add location/travel columns to agent table |
+| `src/config/ConfigLoader.ts` | Add public_space to known templates |
 
 ## Non-Goals (Defer)
 
@@ -199,6 +291,9 @@ Agents use transit if they can afford it (credits > transit cost + buffer).
 
 - Most trips are 0-1 phases - travel is a light friction, not tedious
 - Agents can eat from inventory while traveling (no presence required)
+- Agents can redirect mid-transit if priorities change (no forced arrival)
 - Wholesale remains instant/magical until we add cargo vehicles
 - Location proximity creates natural neighborhoods and commute patterns
+- Public spaces give agents somewhere to "be" when idle
 - Config is in `data/config/city.json` (zones) and `data/config/transport.json` (travel modes)
+- Future: public spaces can host leisure activities, social encounters, street vendors
