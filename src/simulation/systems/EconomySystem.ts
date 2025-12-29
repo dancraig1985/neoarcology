@@ -93,6 +93,26 @@ export function processAgentEconomicDecision(
     }
   }
 
+  // HOMELESS CHECK: If agent has no location and isn't traveling, go to nearest public space
+  if (!updatedAgent.currentLocation && !isTraveling(updatedAgent)) {
+    const publicSpace = findNearestLocation(
+      updatedAgent,
+      updatedLocations,
+      (loc) => loc.tags.includes('public')
+    );
+    if (publicSpace) {
+      // Set agent directly at public space (they're homeless, instant arrival)
+      updatedAgent = { ...updatedAgent, currentLocation: publicSpace.id };
+      ActivityLog.info(
+        phase,
+        'travel',
+        `went to ${publicSpace.name} (homeless)`,
+        updatedAgent.id,
+        updatedAgent.name
+      );
+    }
+  }
+
   // Decision priority:
   // 0. If shop owner + low inventory: restock shop
   // 1. If hungry + has credits + shop has goods: buy provisions
@@ -776,6 +796,7 @@ export function processWeeklyEconomy(
       );
 
       // Release all employees from all org locations
+      // Also clear currentLocation since the location is being deleted
       for (const location of orgLocations) {
         for (const empId of location.employees) {
           const empIndex = updatedAgents.findIndex((a) => a.id === empId);
@@ -788,6 +809,8 @@ export function processWeeklyEconomy(
                 employedAt: undefined,
                 employer: undefined,
                 salary: 0,
+                // Clear location since workplace is being deleted
+                currentLocation: emp.currentLocation === location.id ? undefined : emp.currentLocation,
               };
             }
           }
@@ -796,13 +819,17 @@ export function processWeeklyEconomy(
       }
 
       // Release the leader too (if alive)
+      // Leader's location is also being deleted
       if (leaderForCheck && leaderForCheck.status !== 'dead') {
         const leaderIdx = updatedAgents.findIndex((a) => a.id === org.leader);
         if (leaderIdx !== -1) {
+          const leaderLocation = leaderForCheck.currentLocation;
+          const isAtDeletedLocation = orgLocations.some((loc) => loc.id === leaderLocation);
           updatedAgents[leaderIdx] = {
             ...leaderForCheck,
             status: 'available',
             employer: undefined,
+            currentLocation: isAtDeletedLocation ? undefined : leaderLocation,
           };
         }
       }
