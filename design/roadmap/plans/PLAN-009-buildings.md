@@ -58,10 +58,6 @@ interface Building extends Entity {
 
   // Current locations housed here (derived, not stored)
   // Use: locations.filter(l => l.building === building.id)
-
-  // Building properties
-  condition: number;   // 0-100, affects desirability
-  security: number;    // Building-wide security level
 }
 ```
 
@@ -126,8 +122,7 @@ Zones specify which building types can spawn there (data-driven):
   "floorTags": {
     "ground": ["commercial", "residential"],
     "upper": ["residential"]
-  },
-  "securityRange": { "min": 30, "max": 70 }
+  }
 }
 
 {
@@ -140,8 +135,7 @@ Zones specify which building types can spawn there (data-driven):
     "ground": ["commercial", "public"],
     "mid": ["office", "commercial"],
     "upper": ["residential"]
-  },
-  "securityRange": { "min": 50, "max": 90 }
+  }
 }
 
 {
@@ -153,8 +147,7 @@ Zones specify which building types can spawn there (data-driven):
   "floorTags": {
     "ground": ["commercial", "residential"],
     "upper": ["residential"]
-  },
-  "securityRange": { "min": 10, "max": 40 }
+  }
 }
 ```
 
@@ -329,6 +322,8 @@ These have direct (x, y) coordinates with `building: undefined`.
 
 ## Non-Goals (Defer)
 
+- Building condition/maintenance
+- Building security level
 - Building ownership (who owns the building vs units)
 - Building damage/destruction
 - Building upgrades/renovation
@@ -343,4 +338,4 @@ These have direct (x, y) coordinates with `building: undefined`.
 - Floor 0 is always ground level
 - Empty buildings are fine - they represent available real estate
 - When agent starts business, it finds a building with space
-- Security can be per-building or per-location (location overrides)
+- Agents should "know" about buildings (can query which building they're in, etc.)
