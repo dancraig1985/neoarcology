@@ -1,8 +1,8 @@
-# PLAN-009: Housing & Rest
+# PLAN-010: Housing & Rest
 
 **Status:** planned
 **Priority:** P1 (high)
-**Dependencies:** PLAN-008 (leisure - establishes "go somewhere when idle" pattern)
+**Dependencies:** PLAN-009 (buildings - locations need building containers for apartments)
 **Phase:** 3
 
 ## Goal
