@@ -17,6 +17,7 @@ const FILTER_CATEGORIES = [
   'production',
   'employment',
   'travel',
+  'leisure',
   'hunger',
   'death',
   'spawn',
@@ -183,6 +184,8 @@ export class LogPanel extends Panel {
         );
       case 'travel':
         return ['travel'].includes(category);
+      case 'leisure':
+        return ['leisure'].includes(category);
       case 'hunger':
         return ['hunger'].includes(category);
       case 'death':

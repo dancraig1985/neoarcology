@@ -6,6 +6,7 @@ import type { Agent, Location } from '../../types';
 import type { AgentsConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import { processTravel, isTraveling } from './TravelSystem';
+import { setDead } from './AgentStateHelpers';
 
 /**
  * Process a single agent for one phase
@@ -132,7 +133,7 @@ function attemptToEat(agent: Agent, phase: number, agentsConfig: AgentsConfig): 
 
 /**
  * Handle agent starvation (death)
- * Clears employment and marks agent as dead
+ * Uses centralized setDead helper to clear all state atomically
  */
 function handleStarvation(agent: Agent, phase: number): Agent {
   // Log if they were employed when they died
@@ -148,15 +149,7 @@ function handleStarvation(agent: Agent, phase: number): Agent {
     agent.name
   );
 
-  return {
-    ...agent,
-    status: 'dead',
-    destroyed: phase,
-    // Clear employment - they're dead, they can't work
-    employer: undefined,
-    employedAt: undefined,
-    salary: 0,
-  };
+  return setDead(agent, phase);
 }
 
 /**

@@ -82,6 +82,7 @@ The `design/bible/` folder contains detailed documentation for each simulation s
 **Implemented:**
 - Simulation controller: `src/simulation/Simulation.ts`
 - Time/tick engine: `src/simulation/TickEngine.ts`
+- Agent state helpers: `src/simulation/systems/AgentStateHelpers.ts` (centralized state transitions)
 - Agent system: `src/simulation/systems/AgentSystem.ts` (hunger, eating, death)
 - Economy system: `src/simulation/systems/EconomySystem.ts` (transactions, payroll, business)
 - Org system: `src/simulation/systems/OrgSystem.ts` (production, org operations)
@@ -184,6 +185,48 @@ Some display fields are computed, not stored:
 - **Balance.json is for global parameters only**. Hunger rates, price multipliers, salary ranges—not per-entity config.
 - **Code reads from config, never hardcodes tunable values**. Designers should be able to tweak gameplay by editing JSON.
 
+## Agent State Management
+
+Agent state is managed through centralized helpers in `AgentStateHelpers.ts`. **Always use these helpers instead of directly mutating agent fields.**
+
+### Why Centralized Helpers?
+- **Atomic updates**: Related fields are always updated together (e.g., employment requires updating `status`, `employer`, `employedAt`, and `salary` atomically)
+- **Automatic cleanup**: Entity deletion propagates to all agent references
+- **Single source of truth**: State transitions happen in one place, not scattered across systems
+
+### Available Helpers
+
+| Helper | Purpose |
+|--------|---------|
+| `setEmployment(agent, locationId, orgId, salary)` | Hire an agent (sets status, employer, employedAt, salary) |
+| `clearEmployment(agent)` | Fire/quit (clears all employment fields, sets status to available) |
+| `setTravel(agent, fromId, toId, method, phases)` | Start travel (clears currentLocation, sets travel fields) |
+| `setLocation(agent, locationId)` | Arrive at location (sets currentLocation, clears travel fields) |
+| `setDead(agent, phase)` | Kill an agent (clears all state, sets status to dead) |
+| `onLocationDeleted(locationId, agents)` | Clean up all agents referencing a deleted location |
+| `onOrgDissolved(orgId, agents)` | Clean up all agents employed by a dissolved org |
+| `onOrgDissolvedWithLocations(orgId, locationIds, agents)` | Combined cleanup for org + its locations |
+
+### State Invariants
+
+These invariants are enforced by the helpers and checked by `validateAgentState()`:
+
+```
+// Employment: all-or-nothing
+status === 'employed' ⟺ (employer AND employedAt AND salary > 0)
+status !== 'employed' ⟹ salary === 0
+
+// Location: either at a location OR traveling, never both
+currentLocation !== undefined ⟺ travelingTo === undefined
+travelingTo !== undefined ⟹ (travelingFrom AND travelPhasesRemaining)
+```
+
+### When NOT to Use Helpers
+
+- **Reading state**: Use predicates like `isAgentTraveling()`, `isAgentEmployed()`, `isAgentAlive()`
+- **Incremental updates**: Things like hunger accumulation can directly update `agent.needs.hunger`
+- **Non-agent state**: Helpers are for agent state; location/org state is managed separately
+
 ## Common Pitfalls
 
 - Using hardcoded types instead of tags
@@ -192,6 +235,7 @@ Some display fields are computed, not stored:
 - Adding template fields that no code uses (YAGNI violation)
 - Duplicating data between balance.json and template files (DRY violation)
 - Copy-pasting logic instead of extracting shared functions (DRY violation)
+- **Directly modifying agent state fields** instead of using `AgentStateHelpers` (causes inconsistent state)
 
 ### Economy Pitfalls
 - **Revenue to wrong wallet**: Revenue must go to ORG wallet, not agent/leader wallet

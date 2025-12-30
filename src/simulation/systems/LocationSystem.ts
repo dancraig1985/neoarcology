@@ -5,6 +5,7 @@
 import type { Location, Agent } from '../../types';
 import type { LocationTemplate, EconomyConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
+import { setEmployment, clearEmployment } from './AgentStateHelpers';
 
 /**
  * Create a new location (business) - owned by an organization
@@ -53,7 +54,6 @@ export function createLocation(
     weeklyCosts: 0,
     agentCapacity: 10,
     vehicleCapacity: 0,
-    occupants: [],
     vehicles: [],
     inventory: {
       provisions: locationConfig.startingInventory ?? 0,
@@ -130,6 +130,7 @@ export function purchaseFromLocation(
 
 /**
  * Hire an agent at a location
+ * Uses centralized setEmployment helper for atomic state update
  */
 export function hireAgent(
   location: Location,
@@ -146,25 +147,20 @@ export function hireAgent(
   );
 
   // Set employer to the org that owns the location (if org-owned)
-  const employer = location.ownerType === 'org' ? location.owner : undefined;
+  const employer = location.ownerType === 'org' ? (location.owner ?? '') : '';
 
   return {
     location: {
       ...location,
       employees: [...location.employees, agent.id],
     },
-    agent: {
-      ...agent,
-      status: 'employed',
-      employedAt: location.id,
-      employer,
-      salary,
-    },
+    agent: setEmployment(agent, location.id, employer, salary),
   };
 }
 
 /**
  * Fire/release an agent from a location
+ * Uses centralized clearEmployment helper for atomic state update
  */
 export function releaseAgent(
   location: Location,
@@ -185,13 +181,7 @@ export function releaseAgent(
       ...location,
       employees: location.employees.filter((id) => id !== agent.id),
     },
-    agent: {
-      ...agent,
-      status: 'available',
-      employedAt: undefined,
-      employer: undefined,
-      salary: 0,
-    },
+    agent: clearEmployment(agent),
   };
 }
 

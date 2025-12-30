@@ -16,6 +16,7 @@ import {
 import { transferInventory, getGoodsCount, getAvailableCapacity, type GoodsSizes } from './InventorySystem';
 import { createOrganization, addLocationToOrg } from './OrgSystem';
 import { findNearestLocation, isTraveling, startTravel, redirectTravel } from './TravelSystem';
+import { setLocation, clearEmployment, onOrgDissolvedWithLocations } from './AgentStateHelpers';
 
 // Location name generator
 const SHOP_NAMES = [
@@ -101,8 +102,8 @@ export function processAgentEconomicDecision(
       (loc) => loc.tags.includes('public')
     );
     if (publicSpace) {
-      // Set agent directly at public space (they're homeless, instant arrival)
-      updatedAgent = { ...updatedAgent, currentLocation: publicSpace.id };
+      // Set agent directly at public space using atomic helper
+      updatedAgent = setLocation(updatedAgent, publicSpace.id);
       ActivityLog.info(
         phase,
         'travel',
@@ -118,7 +119,8 @@ export function processAgentEconomicDecision(
   // 1. If hungry + has credits + shop has goods: buy provisions
   // 2. If unemployed + shops hiring: seek job
   // 3. If has lots of credits: consider opening business
-  // 4. Else: idle
+  // 4. If idle at non-public location: go to public space to hang out
+  // 5. Else: stay where you are
 
   const isHungry = agent.needs.hunger >= agentsConfig.hunger.threshold;
   const hasNoFood = (agent.inventory['provisions'] ?? 0) < agentsConfig.hunger.provisionsPerMeal;
@@ -168,6 +170,17 @@ export function processAgentEconomicDecision(
         );
         updatedAgent = travelingAgent;
       }
+    } else {
+      // Workplace no longer exists - agent is effectively unemployed
+      // This can happen if the location was deleted while agent was traveling
+      ActivityLog.info(
+        phase,
+        'employment',
+        `workplace no longer exists, now unemployed`,
+        updatedAgent.id,
+        updatedAgent.name
+      );
+      updatedAgent = clearEmployment(updatedAgent);
     }
   }
 
@@ -204,6 +217,39 @@ export function processAgentEconomicDecision(
       updatedAgent = result.agent;
       newLocation = result.newLocation;
       newOrg = result.newOrg;
+    }
+  }
+
+  // 4. Idle agents at non-public locations go to public spaces to hang out
+  // This prevents agents from loitering at shops after buying food
+  if (
+    updatedAgent.status === 'available' &&
+    !isHungry &&
+    !isTraveling(updatedAgent) &&
+    updatedAgent.currentLocation
+  ) {
+    const currentLoc = updatedLocations.find((l) => l.id === updatedAgent.currentLocation);
+    const isAtPublicSpace = currentLoc?.tags.includes('public');
+
+    if (currentLoc && !isAtPublicSpace) {
+      const publicSpace = findNearestLocation(
+        updatedAgent,
+        updatedLocations,
+        (loc) => loc.tags.includes('public')
+      );
+      if (publicSpace) {
+        const travelingAgent = startTravel(updatedAgent, publicSpace, updatedLocations, transportConfig);
+        if (travelingAgent !== updatedAgent) {
+          ActivityLog.info(
+            phase,
+            'leisure',
+            `heading to ${publicSpace.name} to hang out`,
+            updatedAgent.id,
+            updatedAgent.name
+          );
+          updatedAgent = travelingAgent;
+        }
+      }
     }
   }
 
@@ -468,8 +514,9 @@ function tryOpenBusiness(
   const orgId = getNextOrgId();
   const orgName = `${agent.name}'s Shop`;
 
-  // Org gets most of the agent's credits as business capital
-  const businessCapital = Math.floor(agent.wallet.credits * 0.7); // 70% goes to business
+  // Org gets 70% of credits REMAINING after opening cost (not 70% of total)
+  const creditsAfterOpeningCost = agent.wallet.credits - openingCost;
+  const businessCapital = Math.floor(creditsAfterOpeningCost * 0.7); // 70% of remaining goes to business
 
   let newOrg = createOrganization(
     orgId,
@@ -795,43 +842,14 @@ export function processWeeklyEconomy(
         org.name
       );
 
-      // Release all employees from all org locations
-      // Also clear currentLocation since the location is being deleted
-      for (const location of orgLocations) {
-        for (const empId of location.employees) {
-          const empIndex = updatedAgents.findIndex((a) => a.id === empId);
-          if (empIndex !== -1) {
-            const emp = updatedAgents[empIndex];
-            if (emp && emp.status !== 'dead') {
-              updatedAgents[empIndex] = {
-                ...emp,
-                status: 'available',
-                employedAt: undefined,
-                employer: undefined,
-                salary: 0,
-                // Clear location since workplace is being deleted
-                currentLocation: emp.currentLocation === location.id ? undefined : emp.currentLocation,
-              };
-            }
-          }
-        }
-        locationsToRemove.push(location.id);
-      }
+      // Use centralized helper to handle all agent state cleanup atomically
+      // Clears employment, location, and travel state for affected agents
+      const deletedLocationIds = orgLocations.map((loc) => loc.id);
+      updatedAgents = onOrgDissolvedWithLocations(org.id, deletedLocationIds, updatedAgents);
 
-      // Release the leader too (if alive)
-      // Leader's location is also being deleted
-      if (leaderForCheck && leaderForCheck.status !== 'dead') {
-        const leaderIdx = updatedAgents.findIndex((a) => a.id === org.leader);
-        if (leaderIdx !== -1) {
-          const leaderLocation = leaderForCheck.currentLocation;
-          const isAtDeletedLocation = orgLocations.some((loc) => loc.id === leaderLocation);
-          updatedAgents[leaderIdx] = {
-            ...leaderForCheck,
-            status: 'available',
-            employer: undefined,
-            currentLocation: isAtDeletedLocation ? undefined : leaderLocation,
-          };
-        }
+      // Mark locations for removal
+      for (const location of orgLocations) {
+        locationsToRemove.push(location.id);
       }
 
       orgsToRemove.push(org.id);
@@ -901,6 +919,44 @@ function processOrgPayroll(
   }
 
   return { org: updatedOrg, employees: paidEmployees, unpaidEmployees };
+}
+
+/**
+ * Fix any homeless agents by sending them to the nearest public space
+ * Called after weekly economy processing to catch agents displaced by org dissolution
+ */
+export function fixHomelessAgents(
+  agents: Agent[],
+  locations: Location[],
+  phase: number
+): Agent[] {
+  return agents.map((agent) => {
+    // Skip dead agents or agents who already have a location or are traveling
+    if (agent.status === 'dead') return agent;
+    if (agent.currentLocation) return agent;
+    if (isTraveling(agent)) return agent;
+
+    // Agent is homeless - find nearest public space
+    const publicSpace = findNearestLocation(
+      agent,
+      locations,
+      (loc) => loc.tags.includes('public')
+    );
+
+    if (publicSpace) {
+      ActivityLog.info(
+        phase,
+        'travel',
+        `went to ${publicSpace.name} (displaced)`,
+        agent.id,
+        agent.name
+      );
+      return setLocation(agent, publicSpace.id);
+    }
+
+    // No public space found - leave agent homeless (shouldn't happen)
+    return agent;
+  });
 }
 
 /**

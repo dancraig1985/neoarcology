@@ -111,14 +111,13 @@ export interface Agent extends Entity {
 
 export type TravelMethod = 'walk' | 'transit';
 
+/**
+ * Agent Status
+ */
 export type AgentStatus =
-  | 'available'
-  | 'employed'
-  | 'on_mission'
-  | 'wounded'
-  | 'captured'
-  | 'dead'
-  | 'retired';
+  | 'available'   // Not employed, can seek work or start business
+  | 'employed'    // Working at a location for an org
+  | 'dead';       // Deceased, no longer active
 
 /**
  * Action - what an agent is currently doing
@@ -204,7 +203,6 @@ export interface Location extends Entity {
   vehicleCapacity: number;
 
   // Current state
-  occupants: AgentRef[];
   vehicles: VehicleRef[];
 
   // Inventory

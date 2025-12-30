@@ -9,6 +9,7 @@
 
 import { Agent, Location, TravelMethod } from '../../types';
 import { TransportConfig, TransportModeConfig } from '../../config/ConfigLoader';
+import { setTravel, setLocation } from './AgentStateHelpers';
 
 /**
  * Calculate Euclidean distance between two locations on the grid
@@ -119,6 +120,7 @@ export function isWithinRange(from: Location, to: Location, maxDistance: number)
 /**
  * Start travel to a destination.
  * If travel would take 0 phases, agent arrives instantly.
+ * Uses centralized helpers for atomic state updates.
  */
 export function startTravel(
   agent: Agent,
@@ -143,18 +145,12 @@ export function startTravel(
   const phases = getTravelPhases(distance, config, method);
 
   if (phases === 0) {
-    // Instant travel
-    return { ...agent, currentLocation: destination.id };
+    // Instant travel - use setLocation for atomic update
+    return setLocation(agent, destination.id);
   }
 
-  return {
-    ...agent,
-    currentLocation: undefined, // No longer at old location
-    travelingFrom: from.id,
-    travelingTo: destination.id,
-    travelMethod: method,
-    travelPhasesRemaining: phases,
-  };
+  // Start travel - use setTravel for atomic update
+  return setTravel(agent, from.id, destination.id, method, phases);
 }
 
 /**
@@ -189,6 +185,7 @@ export function redirectTravel(
 /**
  * Process one phase of travel for an agent.
  * Returns the agent with decremented phases, or arrived at destination.
+ * Uses centralized setLocation helper for atomic arrival state.
  */
 export function processTravel(agent: Agent): Agent {
   if (!agent.travelingTo || agent.travelPhasesRemaining === undefined) {
@@ -198,15 +195,8 @@ export function processTravel(agent: Agent): Agent {
   const remaining = agent.travelPhasesRemaining - 1;
 
   if (remaining <= 0) {
-    // Arrived at destination
-    return {
-      ...agent,
-      currentLocation: agent.travelingTo,
-      travelingFrom: undefined,
-      travelingTo: undefined,
-      travelMethod: undefined,
-      travelPhasesRemaining: undefined,
-    };
+    // Arrived at destination - use setLocation for atomic update
+    return setLocation(agent, agent.travelingTo);
   }
 
   // Still traveling

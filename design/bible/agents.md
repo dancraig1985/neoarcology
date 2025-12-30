@@ -22,6 +22,7 @@ Death is permanent. A dead agent:
 - No longer participates in the simulation
 - Loses all possessions (credits, inventory)
 - If they owned a business, it closes (see Organizations)
+- **Use `setDead()` from AgentStateHelpers** - it clears all state atomically
 
 ## Economic Behavior
 
@@ -70,6 +71,7 @@ Key distinction:
 - Location must have open employee slots (`employees.length < employeeSlots`)
 - Hiring sets: `status: 'employed'`, `employer: orgId`, `employedAt: locationId`, `salary: amount`
 - Agent is added to `location.employees[]`
+- **Use `setEmployment()` from AgentStateHelpers** - never set these fields individually
 
 ### Being Employed
 - Receive weekly salary from employer's org wallet

@@ -353,7 +353,6 @@ function createLocationFromTemplate(
     weeklyCosts: 0,
     agentCapacity: 10,
     vehicleCapacity: 0,
-    occupants: [],
     vehicles: [],
     inventory: {
       provisions: balance.startingInventory ?? 0,
@@ -396,7 +395,6 @@ function createPublicLocation(
     weeklyCosts: 0,
     agentCapacity: 50, // Public spaces can hold many people
     vehicleCapacity: 0,
-    occupants: [],
     vehicles: [],
     inventory: {},
     inventoryCapacity: 0,

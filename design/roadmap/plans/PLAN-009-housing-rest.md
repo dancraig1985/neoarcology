@@ -1,8 +1,8 @@
-# PLAN-007: Housing & Rest
+# PLAN-009: Housing & Rest
 
 **Status:** planned
 **Priority:** P1 (high)
-**Dependencies:** PLAN-006 (geography - agents need to travel home)
+**Dependencies:** PLAN-008 (leisure - establishes "go somewhere when idle" pattern)
 **Phase:** 3
 
 ## Goal

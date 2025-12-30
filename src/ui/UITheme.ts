@@ -91,4 +91,5 @@ export const CATEGORY_ICONS: Record<string, string> = {
   dividend: '%',
   wholesale: 'W',
   travel: '>',
+  leisure: '~',
 } as const;

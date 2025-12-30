@@ -87,7 +87,6 @@ export function createFactoryLocation(
     weeklyCosts: 0,
     agentCapacity: 50,
     vehicleCapacity: 10,
-    occupants: [],
     vehicles: [],
     inventory: {
       provisions: locationConfig.startingInventory ?? 0,

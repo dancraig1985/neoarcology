@@ -8,7 +8,7 @@ import type { LoadedConfig } from '../config/ConfigLoader';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
 import { processAgentPhase, countLivingAgents, countDeadAgents } from './systems/AgentSystem';
-import { processAgentEconomicDecision, processWeeklyEconomy } from './systems/EconomySystem';
+import { processAgentEconomicDecision, processWeeklyEconomy, fixHomelessAgents } from './systems/EconomySystem';
 import { processFactoryProduction } from './systems/OrgSystem';
 import { cleanupDeadEmployees } from './systems/LocationSystem';
 import { generateCity } from '../generation/CityGenerator';
@@ -154,6 +154,10 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     updatedAgents = weeklyResult.agents;
     updatedLocations = weeklyResult.locations;
     updatedOrgs = weeklyResult.orgs;
+
+    // 4b. Fix any homeless agents created by org dissolution
+    // (e.g., employees at deleted locations)
+    updatedAgents = fixHomelessAgents(updatedAgents, updatedLocations, newTime.currentPhase);
   }
 
   return {
