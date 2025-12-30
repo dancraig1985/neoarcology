@@ -112,6 +112,8 @@ Zones specify which building types can spawn there (data-driven):
 
 ## Building Templates
 
+Buildings specify which location tags they allow (simple list, no floor-level zoning for MVP):
+
 ```json
 {
   "id": "residential_tower",
@@ -119,10 +121,7 @@ Zones specify which building types can spawn there (data-driven):
   "tags": ["residential", "high_rise"],
   "floors": { "min": 20, "max": 50 },
   "unitsPerFloor": { "min": 4, "max": 8 },
-  "floorTags": {
-    "ground": ["commercial", "residential"],
-    "upper": ["residential"]
-  }
+  "allowedLocationTags": ["residential", "commercial"]
 }
 
 {
@@ -131,11 +130,7 @@ Zones specify which building types can spawn there (data-driven):
   "tags": ["mixed_use", "mega_structure"],
   "floors": { "min": 80, "max": 150 },
   "unitsPerFloor": { "min": 10, "max": 20 },
-  "floorTags": {
-    "ground": ["commercial", "public"],
-    "mid": ["office", "commercial"],
-    "upper": ["residential"]
-  }
+  "allowedLocationTags": ["residential", "commercial", "office", "public"]
 }
 
 {
@@ -144,10 +139,16 @@ Zones specify which building types can spawn there (data-driven):
   "tags": ["residential", "low_rise"],
   "floors": { "min": 2, "max": 5 },
   "unitsPerFloor": { "min": 2, "max": 4 },
-  "floorTags": {
-    "ground": ["commercial", "residential"],
-    "upper": ["residential"]
-  }
+  "allowedLocationTags": ["residential", "commercial"]
+}
+
+{
+  "id": "warehouse",
+  "name": "Warehouse",
+  "tags": ["industrial"],
+  "floors": { "min": 1, "max": 3 },
+  "unitsPerFloor": { "min": 1, "max": 2 },
+  "allowedLocationTags": ["industrial", "wholesale"]
 }
 ```
 
@@ -193,11 +194,11 @@ function placeLocation(
 ): Location {
   // Find buildings that:
   // 1. Have space (occupied units < total capacity)
-  // 2. Allow this location type on some floor (check floorTags)
+  // 2. Allow this location's tags (location.tags intersects building.allowedLocationTags)
 
   const suitable = buildings.filter(b => {
     const hasSpace = getBuildingOccupancy(b, existingLocations) < b.floors * b.unitsPerFloor;
-    const allowsType = buildingAllowsLocationType(b, location.tags);
+    const allowsType = location.tags.some(tag => b.allowedLocationTags.includes(tag));
     return hasSpace && allowsType;
   });
 
@@ -207,7 +208,7 @@ function placeLocation(
   const building = pickBuilding(suitable, location);
 
   // Find available floor + unit
-  const { floor, unit } = findAvailableSlot(building, location.tags, existingLocations);
+  const { floor, unit } = findAvailableSlot(building, existingLocations);
 
   return {
     ...location,
@@ -288,8 +289,8 @@ These have direct (x, y) coordinates with `building: undefined`.
 ### Phase E: Location Placement
 - [ ] Create `placeLocationInBuilding()` function
 - [ ] Update location creation to find suitable building
-- [ ] Respect building floor tags (commercial on ground, residential above)
-- [ ] Handle "no suitable building" gracefully
+- [ ] Match location tags against building's `allowedLocationTags`
+- [ ] Handle "no suitable building" gracefully (outdoor location)
 
 ### Phase F: Travel System Update
 - [ ] Update `getDistance()` to handle building-based locations
@@ -322,6 +323,7 @@ These have direct (x, y) coordinates with `building: undefined`.
 
 ## Non-Goals (Defer)
 
+- Floor-level zoning (ground floor commercial, upper residential, etc.)
 - Building condition/maintenance
 - Building security level
 - Building ownership (who owns the building vs units)
