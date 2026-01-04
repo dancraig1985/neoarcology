@@ -3,7 +3,7 @@
  * Ties together tick engine, agents, and systems
  */
 
-import type { Agent, Location, Organization } from '../types';
+import type { Agent, Location, Organization, Building } from '../types';
 import type { LoadedConfig } from '../config/ConfigLoader';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
@@ -16,6 +16,7 @@ import { generateCity } from '../generation/CityGenerator';
 export interface SimulationState {
   time: TimeState;
   agents: Agent[];
+  buildings: Building[];
   locations: Location[];
   organizations: Organization[];
   grid: import('../generation/types').CityGrid | null;
@@ -58,13 +59,14 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
     }
   }
 
-  console.log(`\n[Simulation] Generated city with ${city.organizations.length} orgs, ${city.locations.length} locations, ${city.agents.length} agents`);
+  console.log(`\n[Simulation] Generated city with ${city.buildings.length} buildings, ${city.organizations.length} orgs, ${city.locations.length} locations, ${city.agents.length} agents`);
   console.log('[Simulation] Supply chain: Factory → Wholesale → Retail → Consumption');
   console.log('[Simulation] Starting simulation...\n');
 
   return {
     time,
     agents: city.agents,
+    buildings: city.buildings,
     locations: city.locations,
     organizations: city.organizations,
     grid: city.grid,
@@ -121,6 +123,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
       agent,
       updatedLocations,
       updatedOrgs,
+      state.buildings,
       config.economy,
       config.agents,
       config.locationTemplates,

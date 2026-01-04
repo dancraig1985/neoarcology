@@ -1,0 +1,9 @@
+{
+  "id": "low_rise",
+  "name": "Low-Rise Building",
+  "description": "A small apartment or mixed-use building",
+  "tags": ["residential", "low_rise"],
+  "floors": { "min": 2, "max": 5 },
+  "unitsPerFloor": { "min": 2, "max": 4 },
+  "allowedLocationTags": ["residential", "commercial"]
+}

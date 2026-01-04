@@ -2,7 +2,7 @@
  * EconomySystem - Handles agent economic decisions and weekly processing
  */
 
-import type { Agent, Location, Organization } from '../../types';
+import type { Agent, Location, Organization, Building } from '../../types';
 import type { EconomyConfig, AgentsConfig, LocationTemplate, TransportConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import {
@@ -12,6 +12,7 @@ import {
   resetWeeklyTracking,
   getHiringLocations,
   createLocation,
+  findBuildingForLocation,
 } from './LocationSystem';
 import { transferInventory, getGoodsCount, getAvailableCapacity, type GoodsSizes } from './InventorySystem';
 import { createOrganization, addLocationToOrg } from './OrgSystem';
@@ -57,6 +58,7 @@ export function processAgentEconomicDecision(
   agent: Agent,
   locations: Location[],
   orgs: Organization[],
+  buildings: Building[],
   economyConfig: EconomyConfig,
   agentsConfig: AgentsConfig,
   locationTemplates: Record<string, LocationTemplate>,
@@ -212,7 +214,7 @@ export function processAgentEconomicDecision(
       }
     }
 
-    const result = tryOpenBusiness(updatedAgent, locationTemplates, phase);
+    const result = tryOpenBusiness(updatedAgent, locationTemplates, buildings, updatedLocations, phase);
     if (result.newLocation && result.newOrg) {
       updatedAgent = result.agent;
       newLocation = result.newLocation;
@@ -489,6 +491,8 @@ function leadsAnyOrg(agent: Agent, orgs: Organization[]): boolean {
 function tryOpenBusiness(
   agent: Agent,
   locationTemplates: Record<string, LocationTemplate>,
+  buildings: Building[],
+  locations: Location[],
   phase: number
 ): { agent: Agent; newLocation?: Location; newOrg?: Organization } {
   // 20% chance to try opening a business each phase when eligible
@@ -510,6 +514,18 @@ function tryOpenBusiness(
     return { agent };
   }
 
+  // Find a suitable building for the shop
+  const buildingPlacement = findBuildingForLocation(
+    buildings,
+    template.tags ?? [],
+    locations
+  );
+
+  // If no building found, agent can't open shop (no outdoor retail)
+  if (!buildingPlacement) {
+    return { agent };
+  }
+
   // Create a micro-org for this business
   const orgId = getNextOrgId();
   const orgName = `${agent.name}'s Shop`;
@@ -527,7 +543,7 @@ function tryOpenBusiness(
     phase
   );
 
-  // Create the location owned by the org
+  // Create the location owned by the org (placed in building)
   const locationId = getNextLocationId();
   const locationName = getNextShopName();
 
@@ -537,7 +553,8 @@ function tryOpenBusiness(
     template,
     orgId, // Owned by org, not agent directly
     orgName,
-    phase
+    phase,
+    buildingPlacement
   );
 
   // Link location to org

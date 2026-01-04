@@ -66,6 +66,17 @@ export interface ZoneConfig {
   edgeBias: number;        // 0-1, how much this zone prefers city edges
   avoidZones: string[];    // Zone IDs this zone shouldn't be adjacent to
   description: string;
+  buildingTemplates: string[];  // Which building template IDs can spawn here
+  buildingsPerBlock: MinMaxRange; // How many buildings per grid cell
+}
+
+/**
+ * Building template from data/templates/buildings/
+ */
+export interface BuildingTemplate extends EntityTemplate {
+  floors: MinMaxRange;           // Min/max floors for this building type
+  unitsPerFloor: MinMaxRange;    // Min/max location units per floor
+  allowedLocationTags: string[]; // Which location tags can be placed here
 }
 
 /**
@@ -219,6 +230,7 @@ export interface LoadedConfig {
     orgs: OrgTemplate[];
     agents: AgentTemplate[];
     locations: LocationTemplate[];
+    buildings: BuildingTemplate[];
   };
   /** Convenience lookup: locationTemplates['retail_shop'] */
   locationTemplates: Record<string, LocationTemplate>;
@@ -226,6 +238,8 @@ export interface LoadedConfig {
   agentTemplates: Record<string, AgentTemplate>;
   /** Convenience lookup: orgTemplates['corporation'] */
   orgTemplates: Record<string, OrgTemplate>;
+  /** Convenience lookup: buildingTemplates['office_tower'] */
+  buildingTemplates: Record<string, BuildingTemplate>;
 }
 
 /**
@@ -265,6 +279,9 @@ export async function loadConfig(): Promise<LoadedConfig> {
   const locationTemplates = (await loadTemplates(
     '/data/templates/locations'
   )) as LocationTemplate[];
+  const buildingTemplates = (await loadTemplates(
+    '/data/templates/buildings'
+  )) as BuildingTemplate[];
 
   // Build lookup maps
   const locationTemplateMap: Record<string, LocationTemplate> = {};
@@ -282,8 +299,13 @@ export async function loadConfig(): Promise<LoadedConfig> {
     orgTemplateMap[template.id] = template;
   }
 
+  const buildingTemplateMap: Record<string, BuildingTemplate> = {};
+  for (const template of buildingTemplates) {
+    buildingTemplateMap[template.id] = template;
+  }
+
   console.log(
-    `[ConfigLoader] Loaded templates: ${orgTemplates.length} orgs, ${agentTemplates.length} agents, ${locationTemplates.length} locations`
+    `[ConfigLoader] Loaded templates: ${orgTemplates.length} orgs, ${agentTemplates.length} agents, ${locationTemplates.length} locations, ${buildingTemplates.length} buildings`
   );
 
   return {
@@ -296,10 +318,12 @@ export async function loadConfig(): Promise<LoadedConfig> {
       orgs: orgTemplates,
       agents: agentTemplates,
       locations: locationTemplates,
+      buildings: buildingTemplates,
     },
     locationTemplates: locationTemplateMap,
     agentTemplates: agentTemplateMap,
     orgTemplates: orgTemplateMap,
+    buildingTemplates: buildingTemplateMap,
   };
 }
 
@@ -320,6 +344,13 @@ async function loadTemplates(basePath: string): Promise<EntityTemplate[]> {
       'retail_shop.json',
       'restaurant.json',
       'public_space.json',
+    ],
+    '/data/templates/buildings': [
+      'arcology.json',
+      'office_tower.json',
+      'residential_tower.json',
+      'low_rise.json',
+      'warehouse.json',
     ],
   };
 

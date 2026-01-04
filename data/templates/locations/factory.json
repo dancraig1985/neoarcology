@@ -2,7 +2,7 @@
   "id": "factory",
   "name": "Factory",
   "description": "An industrial manufacturing facility",
-  "tags": ["wholesale", "production"],
+  "tags": ["wholesale", "production", "industrial"],
   "spawnConstraints": {
     "allowedZones": ["industrial"],
     "floorRange": [0, 5],

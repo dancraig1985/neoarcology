@@ -2,13 +2,79 @@
  * LocationSystem - Handles locations, inventory, and commerce
  */
 
-import type { Location, Agent } from '../../types';
+import type { Location, Agent, Building } from '../../types';
 import type { LocationTemplate, EconomyConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import { setEmployment, clearEmployment } from './AgentStateHelpers';
 
 /**
+ * Building placement info for runtime location creation
+ */
+export interface BuildingPlacement {
+  building: Building;
+  floor: number;
+  unit: number;
+}
+
+/**
+ * Check if a location's tags match a building's allowed tags
+ */
+function locationMatchesBuilding(locationTags: string[], building: Building): boolean {
+  return locationTags.some((tag) => building.allowedLocationTags.includes(tag));
+}
+
+/**
+ * Count how many units in a building are occupied by existing locations
+ */
+function getBuildingOccupancy(building: Building, locations: Location[]): number {
+  return locations.filter((loc) => loc.building === building.id).length;
+}
+
+/**
+ * Find a building that can accommodate a location with given tags
+ * Returns the building and an available unit, or null if none found
+ */
+export function findBuildingForLocation(
+  buildings: Building[],
+  locationTags: string[],
+  locations: Location[]
+): BuildingPlacement | null {
+  // Filter buildings that match the location tags
+  const candidates = buildings.filter((b) => locationMatchesBuilding(locationTags, b));
+
+  // Shuffle candidates for variety
+  const shuffled = [...candidates].sort(() => Math.random() - 0.5);
+
+  // Find a building with available space
+  for (const building of shuffled) {
+    const occupied = getBuildingOccupancy(building, locations);
+    const totalUnits = building.floors * building.unitsPerFloor;
+
+    if (occupied >= totalUnits) continue; // Building is full
+
+    // Find locations already in this building to know which units are taken
+    const buildingLocations = locations.filter((loc) => loc.building === building.id);
+    const occupiedUnits = new Set(
+      buildingLocations.map((loc) => `${loc.floor}:${loc.unit ?? 0}`)
+    );
+
+    // Find an available unit
+    for (let floor = 0; floor < building.floors; floor++) {
+      for (let unit = 0; unit < building.unitsPerFloor; unit++) {
+        const key = `${floor}:${unit}`;
+        if (!occupiedUnits.has(key)) {
+          return { building, floor, unit };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Create a new location (business) - owned by an organization
+ * If buildingPlacement is provided, location is placed in that building
  */
 export function createLocation(
   id: string,
@@ -16,17 +82,23 @@ export function createLocation(
   template: LocationTemplate,
   orgId: string,
   orgName: string,
-  phase: number
+  phase: number,
+  buildingPlacement?: BuildingPlacement
 ): Location {
   const locationConfig = template.balance;
   if (!locationConfig) {
     throw new Error(`Unknown location template: ${template.id}`);
   }
 
+  // Use building coords if placed in a building, else center of grid
+  const x = buildingPlacement?.building.x ?? 16;
+  const y = buildingPlacement?.building.y ?? 16;
+  const floor = buildingPlacement?.floor ?? 0;
+
   ActivityLog.info(
     phase,
     'business',
-    `${orgName} opened ${template.id} "${name}"`,
+    `${orgName} opened ${template.id} "${name}" at (${x}, ${y})${buildingPlacement ? ` floor ${floor}` : ''}`,
     orgId,
     orgName
   );
@@ -38,9 +110,11 @@ export function createLocation(
     tags: template.tags ?? [],
     created: phase,
     relationships: [],
-    x: 16, // Placeholder: center of grid (will be placed by CityGenerator)
-    y: 16,
-    floor: 0,
+    building: buildingPlacement?.building.id,
+    floor,
+    unit: buildingPlacement?.unit,
+    x,
+    y,
     size: 1,
     security: 10,
     owner: orgId,

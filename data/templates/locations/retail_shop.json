@@ -2,7 +2,7 @@
   "id": "retail_shop",
   "name": "Retail Shop",
   "description": "A small storefront selling goods to the public",
-  "tags": ["retail"],
+  "tags": ["retail", "commercial"],
   "spawnConstraints": {
     "allowedZones": ["commercial", "downtown", "residential"],
     "floorRange": [0, 3],

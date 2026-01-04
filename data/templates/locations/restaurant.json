@@ -2,7 +2,7 @@
   "id": "restaurant",
   "name": "Restaurant",
   "description": "An establishment serving food and drinks",
-  "tags": ["retail", "food"],
+  "tags": ["retail", "food", "commercial"],
   "spawnConstraints": {
     "allowedZones": ["commercial", "downtown", "residential"],
     "floorRange": [0, 5],

@@ -1,0 +1,9 @@
+{
+  "id": "warehouse",
+  "name": "Warehouse",
+  "description": "An industrial storage and distribution facility",
+  "tags": ["industrial"],
+  "floors": { "min": 1, "max": 3 },
+  "unitsPerFloor": { "min": 1, "max": 2 },
+  "allowedLocationTags": ["industrial", "wholesale"]
+}

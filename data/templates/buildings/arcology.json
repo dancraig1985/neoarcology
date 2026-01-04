@@ -1,0 +1,9 @@
+{
+  "id": "arcology",
+  "name": "Arcology Complex",
+  "description": "A massive self-contained megastructure with mixed-use space",
+  "tags": ["mixed_use", "mega_structure"],
+  "floors": { "min": 80, "max": 150 },
+  "unitsPerFloor": { "min": 10, "max": 20 },
+  "allowedLocationTags": ["residential", "commercial", "office", "public", "industrial"]
+}

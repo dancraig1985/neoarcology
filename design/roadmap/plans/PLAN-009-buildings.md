@@ -1,6 +1,6 @@
 # PLAN-009: Building System
 
-**Status:** planned
+**Status:** completed
 **Priority:** P1 (high)
 **Dependencies:** PLAN-008 (leisure - completed)
 **Phase:** 3
@@ -266,40 +266,39 @@ These have direct (x, y) coordinates with `building: undefined`.
 ## Objectives
 
 ### Phase A: Building Entity
-- [ ] Create Building interface in `src/types/entities.ts`
-- [ ] Add BuildingRef type
-- [ ] Create building templates in `data/templates/buildings/`
+- [x] Create Building interface in `src/types/entities.ts`
+- [x] Add BuildingRef type
+- [x] Create building templates in `data/templates/buildings/`
 
 ### Phase B: Zone Config Updates
-- [ ] Add `buildingTemplates` array to zone config
-- [ ] Add `buildingsPerBlock` range to zone config
-- [ ] Update zone template validation
+- [x] Add `buildingTemplates` array to zone config
+- [x] Add `buildingsPerBlock` range to zone config
+- [x] Update zone template validation
 
 ### Phase C: Location Refactor
-- [ ] Add `building` field to Location (optional)
-- [ ] Add `unit` field to Location
-- [ ] Make `x`, `y` optional (derived from building or direct for outdoor)
-- [ ] Add helper: `getLocationCoordinates(location, buildings)`
+- [x] Add `building` field to Location (optional)
+- [x] Add `unit` field to Location
+- [x] Keep `x`, `y` required (copied from building at creation for simplicity)
 
 ### Phase D: Building Generation
-- [ ] Create `generateBuildings()` function
-- [ ] Update `CityGenerator.ts` to generate buildings per zone
-- [ ] Buildings start empty (no locations pre-filled)
+- [x] Create `generateBuildings()` function
+- [x] Update `CityGenerator.ts` to generate buildings per zone
+- [x] Buildings start empty (no locations pre-filled)
 
 ### Phase E: Location Placement
-- [ ] Create `placeLocationInBuilding()` function
-- [ ] Update location creation to find suitable building
-- [ ] Match location tags against building's `allowedLocationTags`
-- [ ] Handle "no suitable building" gracefully (outdoor location)
+- [x] Create `findBuildingForLocation()` function
+- [x] Update location creation to find suitable building
+- [x] Match location tags against building's `allowedLocationTags`
+- [x] Handle "no suitable building" gracefully (fallback to legacy placement)
 
 ### Phase F: Travel System Update
-- [ ] Update `getDistance()` to handle building-based locations
-- [ ] Add intra-building travel logic (fast/instant for same building)
-- [ ] Update `startTravel()` and `processTravel()`
+- [x] Update `getDistance()` to handle building-based locations
+- [x] Add intra-building travel logic (fast/instant for same building)
+- [x] Same grid cell travel is fast even between buildings
 
 ### Phase G: UI Updates
-- [ ] Show building info in location details
-- [ ] Update map to show building density per block (optional)
+- [x] Show building info in location details (building ID, floor, unit)
+- [x] NO separate buildings tab (too many, mostly empty)
 
 ## Key Files
 
@@ -310,6 +309,8 @@ These have direct (x, y) coordinates with `building: undefined`.
 | `data/templates/buildings/*.json` | Building templates (new) |
 | `src/generation/CityGenerator.ts` | Generate buildings, place locations |
 | `src/simulation/systems/TravelSystem.ts` | Handle building-based travel |
+| `src/ui/UIConfig.ts` | Add building column to location table |
+| `src/ui/panels/MainPanel.ts` | Show building info in location details |
 
 ## Migration Strategy
 

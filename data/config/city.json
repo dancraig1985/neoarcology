@@ -9,7 +9,9 @@
       "centerBias": 1.0,
       "edgeBias": 0.0,
       "avoidZones": [],
-      "description": "Central business district with the tallest skyscrapers"
+      "description": "Central business district with the tallest skyscrapers",
+      "buildingTemplates": ["arcology", "office_tower", "residential_tower"],
+      "buildingsPerBlock": { "min": 1, "max": 2 }
     },
     "commercial": {
       "name": "Commercial",
@@ -20,7 +22,9 @@
       "centerBias": 0.6,
       "edgeBias": 0.2,
       "avoidZones": [],
-      "description": "Shops, offices, and mixed-use buildings"
+      "description": "Shops, offices, and mixed-use buildings",
+      "buildingTemplates": ["office_tower", "residential_tower", "low_rise"],
+      "buildingsPerBlock": { "min": 2, "max": 4 }
     },
     "industrial": {
       "name": "Industrial",
@@ -31,7 +35,9 @@
       "centerBias": 0.2,
       "edgeBias": 0.5,
       "avoidZones": ["residential"],
-      "description": "Factories, warehouses, and workshops"
+      "description": "Factories, warehouses, and workshops",
+      "buildingTemplates": ["warehouse"],
+      "buildingsPerBlock": { "min": 1, "max": 3 }
     },
     "residential": {
       "name": "Residential",
@@ -42,7 +48,9 @@
       "centerBias": 0.3,
       "edgeBias": 0.4,
       "avoidZones": ["industrial"],
-      "description": "Apartments and residential towers"
+      "description": "Apartments and residential towers",
+      "buildingTemplates": ["residential_tower", "low_rise"],
+      "buildingsPerBlock": { "min": 2, "max": 5 }
     },
     "slums": {
       "name": "Slums",
@@ -53,7 +61,9 @@
       "centerBias": 0.1,
       "edgeBias": 0.8,
       "avoidZones": ["downtown", "government"],
-      "description": "Cheap housing and informal markets"
+      "description": "Cheap housing and informal markets",
+      "buildingTemplates": ["low_rise"],
+      "buildingsPerBlock": { "min": 3, "max": 6 }
     },
     "government": {
       "name": "Government",
@@ -64,7 +74,9 @@
       "centerBias": 0.8,
       "edgeBias": 0.0,
       "avoidZones": ["slums", "industrial"],
-      "description": "City hall, services, and transit hubs"
+      "description": "City hall, services, and transit hubs",
+      "buildingTemplates": ["office_tower", "low_rise"],
+      "buildingsPerBlock": { "min": 1, "max": 2 }
     }
   }
 }

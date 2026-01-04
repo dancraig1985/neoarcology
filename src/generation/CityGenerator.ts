@@ -16,8 +16,9 @@ import {
   OrgTemplate,
   SpawnConstraints,
   MinMaxRange,
+  BuildingTemplate,
 } from '../config/ConfigLoader';
-import { Agent, Location, Organization, Wallet } from '../types';
+import { Agent, Location, Organization, Wallet, Building } from '../types';
 import { CityGrid, GRID_SIZE } from './types';
 import { generateZones } from './ZoneGenerator';
 
@@ -28,6 +29,7 @@ const CENTER = GRID_SIZE / 2;
  */
 export interface GeneratedCity {
   grid: CityGrid;
+  buildings: Building[];
   locations: Location[];
   organizations: Organization[];
   agents: Agent[];
@@ -39,6 +41,7 @@ export interface GeneratedCity {
 let locationIdCounter = 0;
 let orgIdCounter = 0;
 let agentIdCounter = 0;
+let buildingIdCounter = 0;
 
 function nextLocationId(): string {
   return `loc_${++locationIdCounter}`;
@@ -52,6 +55,10 @@ function nextAgentId(): string {
   return `agent_${++agentIdCounter}`;
 }
 
+function nextBuildingId(): string {
+  return `bld_${++buildingIdCounter}`;
+}
+
 /**
  * Reset ID counters (for testing)
  */
@@ -59,6 +66,7 @@ export function resetIdCounters(): void {
   locationIdCounter = 0;
   orgIdCounter = 0;
   agentIdCounter = 0;
+  buildingIdCounter = 0;
 }
 
 /**
@@ -251,6 +259,156 @@ function createWallet(credits: number): Wallet {
 }
 
 /**
+ * Track which units in each building are occupied
+ * Key: building ID, Value: Set of "floor:unit" strings
+ */
+type BuildingOccupancy = Map<string, Set<string>>;
+
+/**
+ * Check if a location's tags match a building's allowed tags
+ */
+function locationMatchesBuilding(locationTags: string[], building: Building): boolean {
+  // Location needs at least one tag that matches building's allowed tags
+  return locationTags.some((tag) => building.allowedLocationTags.includes(tag));
+}
+
+/**
+ * Find a building that can accommodate a location with given tags
+ * Returns the building and an available unit, or null if none found
+ */
+function findBuildingForLocation(
+  buildings: Building[],
+  locationTags: string[],
+  occupancy: BuildingOccupancy,
+  zoneFilter?: string,
+  grid?: CityGrid,
+  rand?: () => number
+): { building: Building; floor: number; unit: number } | null {
+  // Filter buildings that match the location tags
+  let candidates = buildings.filter((b) => locationMatchesBuilding(locationTags, b));
+
+  // If zone filter specified, only consider buildings in that zone
+  if (zoneFilter && grid) {
+    candidates = candidates.filter((b) => {
+      const col = grid.cells[b.x];
+      if (!col) return false;
+      const cell = col[b.y];
+      return cell?.zone === zoneFilter;
+    });
+  }
+
+  // Shuffle candidates if rand provided
+  if (rand) {
+    candidates = [...candidates].sort(() => rand() - 0.5);
+  }
+
+  // Find a building with available space
+  for (const building of candidates) {
+    const occupied = occupancy.get(building.id) ?? new Set();
+    const totalUnits = building.floors * building.unitsPerFloor;
+
+    if (occupied.size >= totalUnits) continue; // Building is full
+
+    // Find an available unit
+    for (let floor = 0; floor < building.floors; floor++) {
+      for (let unit = 0; unit < building.unitsPerFloor; unit++) {
+        const key = `${floor}:${unit}`;
+        if (!occupied.has(key)) {
+          // Mark as occupied
+          if (!occupancy.has(building.id)) {
+            occupancy.set(building.id, new Set());
+          }
+          occupancy.get(building.id)!.add(key);
+          return { building, floor, unit };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Create a building from template
+ */
+function createBuildingFromTemplate(
+  template: BuildingTemplate,
+  x: number,
+  y: number,
+  phase: number,
+  rand: () => number
+): Building {
+  const floors = randomFromRange(template.floors, rand);
+  const unitsPerFloor = randomFromRange(template.unitsPerFloor, rand);
+
+  return {
+    id: nextBuildingId(),
+    name: `${template.name} ${buildingIdCounter}`,
+    template: template.id,
+    tags: template.tags ?? [],
+    created: phase,
+    relationships: [],
+    x,
+    y,
+    floors,
+    unitsPerFloor,
+    allowedLocationTags: template.allowedLocationTags,
+  };
+}
+
+/**
+ * Generate buildings for all grid cells based on zone configuration
+ * Each zone specifies which building templates can spawn and how many per block
+ */
+function generateBuildings(
+  grid: CityGrid,
+  config: LoadedConfig,
+  rand: () => number
+): Building[] {
+  const buildings: Building[] = [];
+
+  // Iterate over each cell in the grid
+  for (let x = 0; x < GRID_SIZE; x++) {
+    const col = grid.cells[x];
+    if (!col) continue;
+
+    for (let y = 0; y < GRID_SIZE; y++) {
+      const cell = col[y];
+      if (!cell) continue;
+
+      // Get zone config for this cell
+      const zoneConfig = config.city.zones[cell.zone];
+      if (!zoneConfig) continue;
+
+      // Skip if no building templates defined
+      if (!zoneConfig.buildingTemplates || zoneConfig.buildingTemplates.length === 0) continue;
+
+      // Determine how many buildings for this block
+      const numBuildings = zoneConfig.buildingsPerBlock
+        ? randomFromRange(zoneConfig.buildingsPerBlock, rand)
+        : 1;
+
+      // Create buildings
+      for (let i = 0; i < numBuildings; i++) {
+        // Pick a random building template from allowed list
+        const templateId = pickRandom(zoneConfig.buildingTemplates, rand);
+        const template = config.buildingTemplates[templateId];
+
+        if (!template) {
+          console.warn(`[CityGenerator] Unknown building template: ${templateId}`);
+          continue;
+        }
+
+        const building = createBuildingFromTemplate(template, x, y, 0, rand);
+        buildings.push(building);
+      }
+    }
+  }
+
+  return buildings;
+}
+
+/**
  * Create a new agent from template
  */
 function createAgentFromTemplate(
@@ -318,7 +476,18 @@ function createOrgFromTemplate(
 }
 
 /**
+ * Building placement info for location creation
+ */
+interface BuildingPlacement {
+  building: Building;
+  floor: number;
+  unit: number;
+}
+
+/**
  * Create a location from template (owned by an org)
+ * If buildingPlacement is provided, location is placed in that building
+ * Otherwise, falls back to legacy x,y,floor coords
  */
 function createLocationFromTemplate(
   name: string,
@@ -327,9 +496,16 @@ function createLocationFromTemplate(
   y: number,
   floor: number,
   ownerId: string,
-  phase: number
+  phase: number,
+  buildingPlacement?: BuildingPlacement
 ): Location {
   const balance = template.balance;
+
+  // Use building coords if placed in a building
+  const finalX = buildingPlacement?.building.x ?? x;
+  const finalY = buildingPlacement?.building.y ?? y;
+  const finalFloor = buildingPlacement?.floor ?? floor;
+
   return {
     id: nextLocationId(),
     name,
@@ -337,9 +513,11 @@ function createLocationFromTemplate(
     tags: template.tags ?? [],
     created: phase,
     relationships: [],
-    x,
-    y,
-    floor,
+    building: buildingPlacement?.building.id,
+    floor: finalFloor,
+    unit: buildingPlacement?.unit,
+    x: finalX,
+    y: finalY,
     size: 1,
     security: 10,
     owner: ownerId,
@@ -363,6 +541,8 @@ function createLocationFromTemplate(
 
 /**
  * Create a public location (no owner)
+ * If buildingPlacement is provided, location is placed in that building
+ * Otherwise, falls back to legacy x,y,floor coords (outdoor locations)
  */
 function createPublicLocation(
   name: string,
@@ -370,8 +550,14 @@ function createPublicLocation(
   x: number,
   y: number,
   floor: number,
-  phase: number
+  phase: number,
+  buildingPlacement?: BuildingPlacement
 ): Location {
+  // Use building coords if placed in a building
+  const finalX = buildingPlacement?.building.x ?? x;
+  const finalY = buildingPlacement?.building.y ?? y;
+  const finalFloor = buildingPlacement?.floor ?? floor;
+
   return {
     id: nextLocationId(),
     name,
@@ -379,9 +565,11 @@ function createPublicLocation(
     tags: template.tags ?? [],
     created: phase,
     relationships: [],
-    x,
-    y,
-    floor,
+    building: buildingPlacement?.building.id,
+    floor: finalFloor,
+    unit: buildingPlacement?.unit,
+    x: finalX,
+    y: finalY,
     size: 1,
     security: 5,
     owner: '',
@@ -409,6 +597,13 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
 
   // Generate zone grid
   const grid = generateZones(config.city.zones, seed);
+
+  // Generate buildings for each grid cell
+  const buildings = generateBuildings(grid, config, rand);
+  console.log(`[CityGenerator] Generated ${buildings.length} buildings`);
+
+  // Track which building units are occupied
+  const buildingOccupancy: BuildingOccupancy = new Map();
 
   const locations: Location[] = [];
   const organizations: Organization[] = [];
@@ -503,19 +698,45 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
 
       // Create factory for corporation (from ownsLocations)
       if (corpTemplate.generation.ownsLocations?.includes('factory') && factoryTemplate) {
-        const placement = findValidPlacement(grid, factoryTemplate.spawnConstraints, rand);
-        if (placement) {
+        // Try to find a building for the factory
+        const buildingPlacement = findBuildingForLocation(
+          buildings,
+          factoryTemplate.tags ?? [],
+          buildingOccupancy,
+          undefined, // No zone filter - use spawn constraints
+          grid,
+          rand
+        );
+
+        if (buildingPlacement) {
           const factory = createLocationFromTemplate(
             nextFactoryName(),
             factoryTemplate,
-            placement.x,
-            placement.y,
-            placement.floor,
+            0, // x from building
+            0, // y from building
+            0, // floor from building
             corp.id,
-            0
+            0,
+            buildingPlacement
           );
           locations.push(factory);
           corp.locations.push(factory.id);
+        } else {
+          // Fallback to legacy placement if no suitable building
+          const placement = findValidPlacement(grid, factoryTemplate.spawnConstraints, rand);
+          if (placement) {
+            const factory = createLocationFromTemplate(
+              nextFactoryName(),
+              factoryTemplate,
+              placement.x,
+              placement.y,
+              placement.floor,
+              corp.id,
+              0
+            );
+            locations.push(factory);
+            corp.locations.push(factory.id);
+          }
         }
       }
 
@@ -561,20 +782,43 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         owner.employer = shopOrg.id;
       }
 
-      // Create the shop
-      const placement = findValidPlacement(grid, shopTemplate.spawnConstraints, rand);
-      if (placement) {
+      // Create the shop - try building placement first
+      const buildingPlacement = findBuildingForLocation(
+        buildings,
+        shopTemplate.tags ?? [],
+        buildingOccupancy,
+        undefined,
+        grid,
+        rand
+      );
+
+      if (buildingPlacement) {
         const shop = createLocationFromTemplate(
           nextShopName(),
           shopTemplate,
-          placement.x,
-          placement.y,
-          placement.floor,
+          0, 0, 0,
           shopOrg.id,
-          0
+          0,
+          buildingPlacement
         );
         locations.push(shop);
         shopOrg.locations.push(shop.id);
+      } else {
+        // Fallback to legacy placement
+        const placement = findValidPlacement(grid, shopTemplate.spawnConstraints, rand);
+        if (placement) {
+          const shop = createLocationFromTemplate(
+            nextShopName(),
+            shopTemplate,
+            placement.x,
+            placement.y,
+            placement.floor,
+            shopOrg.id,
+            0
+          );
+          locations.push(shop);
+          shopOrg.locations.push(shop.id);
+        }
       }
 
       organizations.push(shopOrg);
@@ -619,19 +863,43 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         owner.employer = restaurantOrg.id;
       }
 
-      const placement = findValidPlacement(grid, restaurantTemplate.spawnConstraints, rand);
-      if (placement) {
+      // Create the restaurant - try building placement first
+      const buildingPlacement = findBuildingForLocation(
+        buildings,
+        restaurantTemplate.tags ?? [],
+        buildingOccupancy,
+        undefined,
+        grid,
+        rand
+      );
+
+      if (buildingPlacement) {
         const restaurant = createLocationFromTemplate(
           nextRestaurantName(),
           restaurantTemplate,
-          placement.x,
-          placement.y,
-          placement.floor,
+          0, 0, 0,
           restaurantOrg.id,
-          0
+          0,
+          buildingPlacement
         );
         locations.push(restaurant);
         restaurantOrg.locations.push(restaurant.id);
+      } else {
+        // Fallback to legacy placement
+        const placement = findValidPlacement(grid, restaurantTemplate.spawnConstraints, rand);
+        if (placement) {
+          const restaurant = createLocationFromTemplate(
+            nextRestaurantName(),
+            restaurantTemplate,
+            placement.x,
+            placement.y,
+            placement.floor,
+            restaurantOrg.id,
+            0
+          );
+          locations.push(restaurant);
+          restaurantOrg.locations.push(restaurant.id);
+        }
       }
 
       organizations.push(restaurantOrg);
@@ -699,9 +967,9 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   }
 
   console.log(
-    `[CityGenerator] Generated city with ${locations.length} locations, ` +
+    `[CityGenerator] Generated city with ${buildings.length} buildings, ${locations.length} locations, ` +
     `${organizations.length} orgs, ${agents.length} agents`
   );
 
-  return { grid, locations, organizations, agents };
+  return { grid, buildings, locations, organizations, agents };
 }

@@ -10,6 +10,7 @@ export type EntityRef = string; // UUID
 export type AgentRef = EntityRef;
 export type OrgRef = EntityRef;
 export type LocationRef = EntityRef;
+export type BuildingRef = EntityRef;
 export type MissionRef = EntityRef;
 export type VehicleRef = EntityRef;
 
@@ -170,14 +171,41 @@ export interface Organization extends Entity {
 }
 
 /**
+ * Building - physical structures that contain locations
+ * A city block (grid cell) can have multiple buildings
+ * Buildings are infrastructure containers, not actors
+ */
+export interface Building extends Entity {
+  // Grid position (which city block this building is in)
+  x: number;        // Grid x coordinate (city block)
+  y: number;        // Grid y coordinate (city block)
+
+  // Vertical extent
+  floors: number;   // Total floors (0 to floors-1)
+
+  // Capacity per floor (how many location units can fit)
+  unitsPerFloor: number;
+
+  // Which location tags this building allows
+  allowedLocationTags: string[];
+}
+
+/**
  * Location - physical places in the city
  * Tags determine functionality (income, storage, fortified, etc.)
+ * Locations exist inside buildings (or outdoors with direct coords)
  */
 export interface Location extends Entity {
-  // Position on city grid
-  x: number;        // Grid x coordinate (0-31)
-  y: number;        // Grid y coordinate (0-31)
-  floor: number;    // Building floor (0 = ground, up to cell maxHeight)
+  // Building reference (for indoor locations)
+  building?: BuildingRef;  // Parent building (undefined = outdoor location)
+  floor: number;           // Floor within building (0 for outdoor/ground)
+  unit?: number;           // Unit on floor (0 to unitsPerFloor-1)
+
+  // Grid coordinates - always set
+  // For indoor locations: copied from building.x, building.y at creation
+  // For outdoor locations: set directly
+  x: number;        // Grid x coordinate
+  y: number;        // Grid y coordinate
 
   // Properties
   size: number; // 1-5 scale

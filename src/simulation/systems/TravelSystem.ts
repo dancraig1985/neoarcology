@@ -12,12 +12,32 @@ import { TransportConfig, TransportModeConfig } from '../../config/ConfigLoader'
 import { setTravel, setLocation } from './AgentStateHelpers';
 
 /**
- * Calculate Euclidean distance between two locations on the grid
- * Includes minor penalty for floor differences
+ * Calculate effective distance between two locations
+ * Takes building relationships into account:
+ * - Same building: very fast (floor difference only, scaled small)
+ * - Same grid cell (different buildings): minimal horizontal distance
+ * - Different grid cells: full Euclidean distance
  */
 export function getDistance(from: Location, to: Location): number {
+  // Same building = very fast travel (elevator/stairs only)
+  if (from.building && to.building && from.building === to.building) {
+    // Only floor difference matters, scaled to be very small
+    const floorDiff = Math.abs(from.floor - to.floor);
+    return floorDiff * 0.1; // Max ~10 floors = 1.0 "distance"
+  }
+
+  // Different buildings but same grid cell = minimal horizontal distance
   const dx = from.x - to.x;
   const dy = from.y - to.y;
+
+  // Same grid cell (adjacent buildings)
+  if (dx === 0 && dy === 0) {
+    // Small fixed distance for moving between buildings on same block
+    const floorDiff = Math.abs(from.floor - to.floor);
+    return 0.5 + floorDiff * 0.1;
+  }
+
+  // Different grid cells = full distance
   const horizontal = Math.sqrt(dx * dx + dy * dy);
 
   // Floor differences add minor travel time (elevators, stairs)

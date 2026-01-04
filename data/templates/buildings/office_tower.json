@@ -1,0 +1,9 @@
+{
+  "id": "office_tower",
+  "name": "Office Tower",
+  "description": "A commercial office building",
+  "tags": ["commercial", "high_rise"],
+  "floors": { "min": 15, "max": 40 },
+  "unitsPerFloor": { "min": 4, "max": 10 },
+  "allowedLocationTags": ["office", "commercial"]
+}

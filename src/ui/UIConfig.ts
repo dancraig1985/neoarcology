@@ -350,11 +350,33 @@ export const LOCATION_DETAILS: DetailSection[] = [
     title: 'Position',
     fields: [
       {
+        key: 'building',
+        label: 'Building',
+        render: (l) => {
+          const loc = l as Location;
+          if (loc.building) {
+            return loc.building;
+          }
+          return 'Outdoor';
+        },
+      },
+      {
         key: 'position',
         label: 'Coordinates',
         render: (l) => `(${(l as Location).x}, ${(l as Location).y})`,
       },
       { key: 'floor', label: 'Floor' },
+      {
+        key: 'unit',
+        label: 'Unit',
+        render: (l) => {
+          const loc = l as Location;
+          if (loc.unit !== undefined) {
+            return loc.unit.toString();
+          }
+          return '-';
+        },
+      },
     ],
   },
 ];

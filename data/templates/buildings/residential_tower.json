@@ -1,0 +1,9 @@
+{
+  "id": "residential_tower",
+  "name": "Residential Tower",
+  "description": "A tall apartment building with commercial space on lower floors",
+  "tags": ["residential", "high_rise"],
+  "floors": { "min": 20, "max": 50 },
+  "unitsPerFloor": { "min": 4, "max": 8 },
+  "allowedLocationTags": ["residential", "commercial"]
+}
