@@ -4,12 +4,26 @@ Agents are the people of NeoArcology. They have needs, make decisions, and can d
 
 ## Survival
 
+Agents have two needs that drive behavior: hunger and fatigue.
+
 ### Hunger
 Agents get hungrier over time. When hunger reaches a threshold, they need to eat.
 
-- **Hunger accumulates** continuously as time passes
+- **Hunger accumulates** continuously as time passes (~25% per day)
 - **Eating resets hunger** to zero and consumes one provision
-- **Starvation occurs** when hunger reaches maximum - the agent dies
+- **Starvation occurs** when hunger reaches 100% - the agent dies
+
+### Fatigue (Planned)
+Agents get tired over time. Unlike hunger, fatigue doesn't kill - it forces rest.
+
+- **Fatigue accumulates** over time (~100% per week)
+- **Resting resets fatigue** based on where the agent rests
+- **At 100% fatigue** the agent must rest wherever they are (worst outcome)
+
+Agents should **proactively seek rest** before hitting 100%:
+- At 70%+ fatigue: head home after current activity
+- At 90%+ fatigue: drop everything, go home immediately
+- At 100%: forced rest wherever you are
 
 ### Eating Priority
 When hungry, an agent will:
@@ -23,6 +37,27 @@ Death is permanent. A dead agent:
 - Loses all possessions (credits, inventory)
 - If they owned a business, it closes (see Organizations)
 - **Use `setDead()` from AgentStateHelpers** - it clears all state atomically
+
+## Housing (Planned)
+
+Agents have a residence - where they live and rest.
+
+### Residence
+- `residence` - Reference to the location (apartment) where the agent lives
+- Agents pay weekly rent to their landlord (the org that owns the apartment)
+- If rent can't be paid, the agent is evicted
+
+### Rest Quality
+Where an agent rests determines how well they recover:
+
+| Location | Fatigue Reset | Notes |
+|----------|---------------|-------|
+| Own residence | 0% | Full rest, proper bed |
+| Public shelter | 30% | Partial rest, uncomfortable |
+| Anywhere else | 60% | Poor rest, exposed |
+
+### Homelessness
+Homeless agents (no residence) must use public shelters or rest wherever they are. They'll seek housing when they can afford it (4 weeks rent buffer required).
 
 ## Economic Behavior
 

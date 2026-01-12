@@ -1,6 +1,26 @@
 # Locations
 
-Locations are physical places in NeoArcology - shops, factories, homes, hideouts. They're where things happen.
+Locations are physical places in NeoArcology - shops, factories, apartments, shelters. They're where things happen.
+
+## Buildings and Locations
+
+Locations exist inside **buildings**. A building is a physical structure (tower, warehouse, low-rise) that contains multiple locations on different floors and units.
+
+```
+Building (residential_tower)
+├── Floor 1, Unit 1: Retail Shop
+├── Floor 1, Unit 2: Restaurant
+├── Floor 2, Unit 1: Apartment
+├── Floor 2, Unit 2: Apartment
+└── ...
+```
+
+Each location has:
+- `building` - Reference to parent building
+- `floor` - Which floor (0 = ground)
+- `unit` - Which unit on that floor
+
+**Travel optimization**: Locations in the same building are faster to reach than locations across the city.
 
 ## Types of Locations
 
@@ -18,15 +38,30 @@ Tagged with `retail`. These sell to consumers:
 - Restaurants
 - Markets
 
-A location can have multiple tags. A general store might be both retail (sells to public) and have a back room for wholesale.
+### Residential Locations
+Tagged with `residential`. These house agents:
+- Apartments (commercial - owned by orgs, rent collected)
+- Shelters (public - free, lower quality rest)
+
+A location can have multiple tags. A general store might be both retail (sells to public) and have a back room for wholesale. An apartment building's ground floor might have commercial retail space.
 
 ## Ownership
 
 ### Commercial Locations
-Shops, factories, and other businesses are owned by **organizations**. This keeps business and personal finances separate.
+Shops, factories, and rental apartments are owned by **organizations**. This keeps business and personal finances separate.
 
-### Personal Locations
-Homes, hideouts, and private property can be owned directly by **agents**. No organization needed for a place that doesn't generate revenue.
+Revenue flows to the org wallet:
+- **Shops**: Customer purchases
+- **Factories**: Wholesale sales
+- **Apartments**: Tenant rent
+
+All follow the same pattern: revenue → org wallet → operating costs → owner dividend.
+
+### Public Locations
+Shelters and public spaces have no owner. They're city infrastructure available to everyone.
+
+### Personal Locations (Future)
+Agent-owned homes and hideouts may exist in the future. For now, agents rent from landlord orgs.
 
 ## Employment
 
@@ -63,6 +98,15 @@ Organizations buy from wholesale locations:
 
 ### No Stock, No Sale
 A location with empty inventory can't sell. Customers will go elsewhere (or starve trying).
+
+### Residential (Rent)
+Agents rent apartments from landlord orgs:
+1. Agent becomes a resident of the apartment
+2. Agent pays weekly rent
+3. Rent goes to the apartment's owning org
+4. Agent can rest at their residence
+
+If an agent can't pay rent, they're evicted (lose residence, must find new housing or use public shelters).
 
 ## Operating Costs
 

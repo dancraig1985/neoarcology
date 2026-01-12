@@ -16,7 +16,18 @@ This also means your business can outlive you, or fail while you survive.
 Every organization has:
 - **One leader** - The owner who makes decisions and receives dividends
 - **A wallet** - Business funds, separate from the leader's personal money
-- **Locations** - The properties (shops, factories) owned by this org
+- **Locations** - The properties (shops, factories, apartments) owned by this org
+
+## Templates vs Business Type
+
+**Important**: The org template (`small_business`, `corporation`, etc.) only affects initial setup - starting capital, leader assignment, etc. **What an org actually does is determined by the locations it owns.**
+
+This means:
+- A `small_business` can own a shop, an apartment, or a factory
+- A `corporation` could buy apartments and become a landlord
+- A `small_business` could expand from one shop to owning multiple locations of different types
+
+The system is flexible. Don't think of orgs as having a fixed "business type" - they're just financial containers that own locations.
 
 ## The Business Lifecycle
 
@@ -57,7 +68,13 @@ If the org can't afford the dividend, the owner gets nothing that week. If this 
 ## Personal vs Commercial Property
 
 Not everything needs an organization:
-- **Commercial locations** (shops, factories) → Owned by orgs
-- **Personal locations** (homes, hideouts) → Can be owned directly by agents
+- **Commercial locations** (shops, factories, rental apartments) → Owned by orgs
+- **Personal locations** (agent-owned homes, hideouts) → Can be owned directly by agents
+- **Public locations** (shelters, parks) → No owner, available to all
 
-The distinction is about revenue and expenses. A business has income and costs that need accounting. A home is just a place you own.
+The distinction is about revenue and expenses:
+- **Commercial**: Generates revenue (sales, rent) and has operating costs - needs org accounting
+- **Personal**: No revenue, agent pays costs directly - no org needed
+- **Public**: Free to use, maintained by the city (abstracted away)
+
+**Note**: Most apartments are commercial - a landlord org owns them and collects rent. An agent's "home" is just a reference to where they live, not ownership. Agent-owned homes may exist in the future but are deferred.

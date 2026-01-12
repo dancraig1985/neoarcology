@@ -5,24 +5,25 @@ Money flows in a circle through NeoArcology. Understanding this flow is key to u
 ## The Money Circle
 
 ```
-    FACTORY ──────► SHOPS ──────► AGENTS
-       ▲              │              │
-       │              │              │
-       │         (wholesale)    (retail)
-       │              │              │
-       │              ▼              ▼
-       └──── WAGES ◄────────────────┘
+    FACTORY ──────► SHOPS ──────► AGENTS ◄────── APARTMENTS
+       ▲              │              │               │
+       │              │              │               │
+       │         (wholesale)    (retail)         (rent)
+       │              │              │               │
+       │              ▼              ▼               ▼
+       └──── WAGES ◄─────────────────────────────────┘
 ```
 
 1. **Factories sell wholesale** to shops
 2. **Shops sell retail** to agents (consumers)
-3. **Businesses pay wages** to their employees
-4. **Employees spend wages** at shops
-5. **Cycle repeats**
+3. **Apartments collect rent** from tenants
+4. **All businesses pay wages** to their employees
+5. **Employees spend wages** at shops and on rent
+6. **Cycle repeats**
 
-If any link breaks, people starve.
+If any link breaks, people starve (or become homeless).
 
-## Two Types of Transactions
+## Transaction Types
 
 ### Retail (Consumer)
 When an agent buys food at a shop:
@@ -38,10 +39,18 @@ When a shop restocks from a factory:
 
 Wholesale prices are lower than retail - this is how shops make profit.
 
+### Rent (Tenant-to-Landlord)
+When a tenant pays rent for an apartment:
+- Tenant pays weekly rent
+- Money goes to the landlord's organization
+- Tenant retains residence
+
+**Key insight**: Rent is just another form of revenue. It works identically to retail sales from an accounting perspective - money flows from an individual's wallet to an org's wallet in exchange for a service.
+
 ## Where Money Goes
 
 ### Revenue
-All sales revenue goes to the **organization's wallet**, not directly to any person. This is true for both retail and wholesale.
+All revenue goes to the **organization's wallet**, not directly to any person. This is true for retail sales, wholesale sales, and rent collection.
 
 ### Expenses
 Organizations pay from their wallet:
@@ -55,6 +64,38 @@ Agents only receive money through:
 - **Dividends** - If they own an org
 
 There's no other way to get money in the current simulation.
+
+## The Universal Business Pattern
+
+All businesses in NeoArcology follow the same pattern:
+
+```
+Customer/Tenant                 Business Org
+    |                               |
+    | pays (purchase/rent)          |
+    +------------------------->  org.wallet (revenue)
+                                    |
+                                    v
+                              Operating costs (weekly)
+                                    |
+                                    v
+                              Employee salaries (weekly)
+                                    |
+                                    v
+                              Owner dividend -> leader.wallet
+```
+
+This pattern applies universally:
+
+| Business Type | Revenue Source | Same Pattern? |
+|---------------|----------------|---------------|
+| Retail Shop | Customer purchases | ✓ |
+| Factory | Wholesale to shops | ✓ |
+| Apartment | Tenant rent | ✓ |
+| (Future) Hotel | Guest fees | ✓ |
+| (Future) Service | Service charges | ✓ |
+
+**The location template determines what kind of business it is**, not the org template. A `small_business` org can own a shop, an apartment, or a factory - the org just manages the finances. The business type emerges from the locations owned.
 
 ## Hiring
 
