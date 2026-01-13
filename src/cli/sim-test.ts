@@ -15,7 +15,7 @@
 import { parseArgs } from 'util';
 import { writeFileSync } from 'fs';
 import { loadConfigSync } from './ConfigLoaderNode';
-import { createSimulationWithCity, tick } from '../simulation/Simulation';
+import { createSimulationWithCity, tick, type SimulationState } from '../simulation/Simulation';
 import {
   createMetrics,
   recordInitialState,
@@ -176,7 +176,7 @@ async function main() {
 /**
  * Detect events by comparing current state to previous state
  */
-function detectEvents(state: typeof import('../simulation/Simulation').SimulationState, metrics: SimulationMetrics) {
+function detectEvents(state: SimulationState, metrics: SimulationMetrics) {
   // Detect deaths
   const currentDeadAgents = new Set(state.agents.filter(a => a.status === 'dead').map(a => a.id));
   for (const agentId of currentDeadAgents) {

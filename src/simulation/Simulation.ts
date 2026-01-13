@@ -13,6 +13,7 @@ import { processFactoryProduction } from './systems/OrgSystem';
 import { cleanupDeadEmployees } from './systems/LocationSystem';
 import { checkImmigration } from './systems/ImmigrationSystem';
 import { generateCity } from '../generation/CityGenerator';
+import { createMetrics, takeSnapshot, startNewWeek, type SimulationMetrics, type MetricsSnapshot } from './Metrics';
 
 export interface SimulationState {
   time: TimeState;
@@ -23,6 +24,9 @@ export interface SimulationState {
   grid: import('../generation/types').CityGrid | null;
   isRunning: boolean;
   ticksPerSecond: number;
+  // Metrics for Reports panel
+  metrics: SimulationMetrics;
+  currentSnapshot: MetricsSnapshot | null;
 }
 
 /**
@@ -64,7 +68,13 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
   console.log('[Simulation] Supply chain: Factory → Wholesale → Retail → Consumption');
   console.log('[Simulation] Starting simulation...\n');
 
-  return {
+  // Initialize metrics tracking
+  const metrics = createMetrics(seed);
+  metrics.startingPopulation = city.agents.length;
+  metrics.startingBusinesses = city.organizations.length;
+  startNewWeek(metrics, 1);
+
+  const initialState: SimulationState = {
     time,
     agents: city.agents,
     buildings: city.buildings,
@@ -73,7 +83,14 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
     grid: city.grid,
     isRunning: false,
     ticksPerSecond: 10,
+    metrics,
+    currentSnapshot: null,
   };
+
+  // Take initial snapshot
+  initialState.currentSnapshot = takeSnapshot(initialState, 0);
+
+  return initialState;
 }
 
 /**
@@ -175,15 +192,24 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     if (immigrants.length > 0) {
       updatedAgents = [...updatedAgents, ...immigrants];
     }
+
+    // Start new week for metrics tracking
+    startNewWeek(state.metrics, newTime.week);
   }
 
-  return {
+  // Build updated state
+  const updatedState: SimulationState = {
     ...state,
     time: newTime,
     agents: updatedAgents,
     locations: updatedLocations,
     organizations: updatedOrgs,
   };
+
+  // Update current snapshot for Reports panel
+  updatedState.currentSnapshot = takeSnapshot(updatedState, newTime.currentPhase);
+
+  return updatedState;
 }
 
 // Note: restockSystemShops removed - supply chain now uses real factories

@@ -2,7 +2,7 @@
  * ReportGenerator - Format simulation metrics into readable reports
  */
 
-import type { SimulationMetrics, MetricsSnapshot } from '../simulation/Metrics';
+import type { SimulationMetrics } from '../simulation/Metrics';
 
 /**
  * Assessment levels for different metrics

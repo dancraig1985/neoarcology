@@ -12,6 +12,7 @@ import { NavPanel, type EntityType } from './panels/NavPanel';
 import { MainPanel } from './panels/MainPanel';
 import { LogPanel } from './panels/LogPanel';
 import { MapPanel } from './panels/MapPanel';
+import { ReportsPanel } from './panels/ReportsPanel';
 import type { LoadedConfig } from '../config/ConfigLoader';
 
 export interface UIControllerCallbacks {
@@ -31,6 +32,7 @@ export class UIController {
   private mainPanel: MainPanel;
   private logPanel: LogPanel;
   private mapPanel: MapPanel;
+  private reportsPanel: ReportsPanel;
 
   // State
   private _currentEntityType: EntityType = 'agents';
@@ -89,6 +91,11 @@ export class UIController {
     this.mapPanel = new MapPanel(mainWidth, middleHeight);
     this.mapPanel.visible = false;
     this.root.addChild(this.mapPanel);
+
+    // Reports panel (same position as main, hidden by default)
+    this.reportsPanel = new ReportsPanel(mainWidth, middleHeight);
+    this.reportsPanel.visible = false;
+    this.root.addChild(this.reportsPanel);
 
     // Log panel (above controls)
     this.logPanel = new LogPanel(width, SPACING.logHeight, {
@@ -158,17 +165,25 @@ export class UIController {
     if (this._currentEntityType === 'map' || !this.mapInitialized) {
       this.mapPanel.setLocations(state.locations);
     }
+
+    // Update reports panel with current metrics
+    this.reportsPanel.update(state.currentSnapshot, state.metrics.transactions);
   }
 
   private onEntityTypeSelect(type: EntityType): void {
     this._currentEntityType = type;
 
+    // Hide all main content panels first
+    this.mainPanel.visible = false;
+    this.mapPanel.visible = false;
+    this.reportsPanel.visible = false;
+
     if (type === 'map') {
-      this.mainPanel.visible = false;
       this.mapPanel.visible = true;
+    } else if (type === 'reports') {
+      this.reportsPanel.visible = true;
     } else {
       this.mainPanel.visible = true;
-      this.mapPanel.visible = false;
       this.mainPanel.setEntityType(type);
     }
   }
@@ -230,5 +245,10 @@ export class UIController {
     this.mapPanel.resize(mainWidth, middleHeight);
     this.mapPanel.x = SPACING.navWidth;
     this.mapPanel.y = middleTop;
+
+    // Reports panel (same position as main)
+    this.reportsPanel.resize(mainWidth, middleHeight);
+    this.reportsPanel.x = SPACING.navWidth;
+    this.reportsPanel.y = middleTop;
   }
 }
