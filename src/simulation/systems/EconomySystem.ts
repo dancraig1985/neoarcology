@@ -287,9 +287,10 @@ function tryBuyProvisions(
   }
 
   // Check if agent is already at a retail location with provisions
-  const currentShop = agent.currentLocation
+  let currentShop = agent.currentLocation
     ? retailLocations.find((loc) => loc.id === agent.currentLocation)
     : null;
+  let updatedAgent = agent;
 
   if (!currentShop) {
     // Not at a shop - need to travel to nearest one
@@ -309,15 +310,26 @@ function tryBuyProvisions(
           agent.id,
           agent.name
         );
+        updatedAgent = travelingAgent;
+
+        // If travel was instant (agent is now at shop), continue to purchase
+        if (!isTraveling(updatedAgent) && updatedAgent.currentLocation === nearestShop.id) {
+          currentShop = nearestShop;
+        } else {
+          // Still traveling - return and buy next phase
+          return { agent: updatedAgent, locations, orgs };
+        }
       }
-      return { agent: travelingAgent, locations, orgs };
     }
 
-    return { agent, locations, orgs };
+    // Couldn't find a shop to travel to
+    if (!currentShop) {
+      return { agent: updatedAgent, locations, orgs };
+    }
   }
 
   // Agent is at a shop with provisions - try to buy
-  const result = purchaseFromLocation(currentShop, agent, 'provisions', 1, economyConfig, phase);
+  const result = purchaseFromLocation(currentShop, updatedAgent, 'provisions', 1, economyConfig, phase);
 
   if (result.success) {
     // Update the location in the array
@@ -330,7 +342,7 @@ function tryBuyProvisions(
     const ownerOrg = orgs.find((org) => org.locations.includes(currentShop.id));
 
     if (ownerOrg) {
-      console.log(`[DEBUG RETAIL] ${agent.name} bought from ${currentShop.name}, ${ownerOrg.name} receives ${retailPrice} credits (was: ${ownerOrg.wallet.credits}, now: ${ownerOrg.wallet.credits + retailPrice})`);
+      console.log(`[DEBUG RETAIL] ${updatedAgent.name} bought from ${currentShop.name}, ${ownerOrg.name} receives ${retailPrice} credits (was: ${ownerOrg.wallet.credits}, now: ${ownerOrg.wallet.credits + retailPrice})`);
     } else {
       console.log(`[DEBUG RETAIL] WARNING: No owner org found for shop ${currentShop.id}! Shop locations in orgs:`, orgs.map(o => ({ name: o.name, locations: o.locations })));
     }
@@ -351,7 +363,7 @@ function tryBuyProvisions(
     return { agent: result.buyer, locations: updatedLocations, orgs: updatedOrgs };
   }
 
-  return { agent, locations, orgs };
+  return { agent: updatedAgent, locations, orgs };
 }
 
 /**
@@ -839,7 +851,7 @@ export function processWeeklyEconomy(
     const leaderForCheck = updatedAgents.find((a) => a.id === org.leader);
     const leaderDead = !leaderForCheck || leaderForCheck.status === 'dead';
     const isBankrupt = org.wallet.credits < 0;
-    const isInsolvent = org.wallet.credits < 50; // Can't afford to restock or operate
+    const isInsolvent = false; // Disabled: let businesses survive on thin margins
 
     let dissolutionReason = '';
     if (leaderDead) {

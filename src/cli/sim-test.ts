@@ -122,11 +122,6 @@ async function main() {
   log(`Starting simulation: ${state.agents.length} agents, ${state.organizations.length} orgs`);
   log(`Running for ${totalTicks} ticks (${Math.floor(totalTicks / phasesPerWeek)} weeks)...\n`);
 
-  // Suppress logs during simulation
-  if (!values.quiet) {
-    console.log = () => {};
-  }
-
   // Run simulation
   for (let t = 1; t <= totalTicks; t++) {
     const prevWeek = state.time.week;
@@ -226,8 +221,8 @@ function countTransactionsFromLog(metrics: SimulationMetrics) {
     if (entry.category === 'commerce' && entry.message.includes('purchased')) {
       recordRetailSale(metrics);
     }
-    // Detect wholesale sales (category: commerce, message: restocked)
-    if (entry.category === 'commerce' && entry.message.includes('restocked')) {
+    // Detect wholesale sales (category: wholesale, message: bought X provisions)
+    if (entry.category === 'wholesale' && entry.message.includes('bought')) {
       recordWholesaleSale(metrics);
     }
     // Detect wage payments (category: payroll, message: paid X credits by)
