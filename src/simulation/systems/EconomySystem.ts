@@ -18,6 +18,7 @@ import { transferInventory, getGoodsCount, getAvailableCapacity, type GoodsSizes
 import { createOrganization, addLocationToOrg } from './OrgSystem';
 import { findNearestLocation, isTraveling, startTravel, redirectTravel } from './TravelSystem';
 import { setLocation, clearEmployment, onOrgDissolvedWithLocations } from './AgentStateHelpers';
+import { needsRest, processRest } from './AgentSystem';
 
 // Location name generator
 const SHOP_NAMES = [
@@ -56,6 +57,7 @@ function getNextOrgId(): string {
  */
 export function processAgentEconomicDecision(
   agent: Agent,
+  allAgents: Agent[],
   locations: Location[],
   orgs: Organization[],
   buildings: Building[],
@@ -94,6 +96,34 @@ export function processAgentEconomicDecision(
     if (isTraveling(updatedAgent)) {
       return { agent: updatedAgent, locations: updatedLocations, orgs: updatedOrgs };
     }
+  }
+
+  // REST PRIORITY: Check if agent needs rest (forced or urgent)
+  const restNeed = needsRest(updatedAgent, agentsConfig);
+
+  // FORCED REST: At 100% fatigue, rest immediately wherever agent is
+  if (restNeed === 'forced' && !isTraveling(updatedAgent)) {
+    const currentLoc = updatedLocations.find((l) => l.id === updatedAgent.currentLocation);
+    updatedAgent = processRest(updatedAgent, currentLoc, phase, agentsConfig);
+    return { agent: updatedAgent, locations: updatedLocations, orgs: updatedOrgs };
+  }
+
+  // URGENT REST: At 90%+ fatigue, go home immediately (if has residence)
+  // BUT: Employed agents should still go to work - they rest after their shift
+  // Only forced rest (100%) truly interrupts work
+  const isEmployedNeedingToWork = updatedAgent.employedAt && updatedAgent.currentLocation !== updatedAgent.employedAt;
+  if (restNeed === 'urgent' && !isTraveling(updatedAgent) && !isEmployedNeedingToWork) {
+    const restResult = handleUrgentRest(
+      updatedAgent,
+      updatedLocations,
+      agentsConfig,
+      transportConfig,
+      phase
+    );
+    if (restResult.handled) {
+      return { agent: restResult.agent, locations: updatedLocations, orgs: updatedOrgs };
+    }
+    updatedAgent = restResult.agent;
   }
 
   // HOMELESS CHECK: If agent has no location and isn't traveling, go to nearest public space
@@ -193,6 +223,17 @@ export function processAgentEconomicDecision(
     updatedLocations = result.locations;
   }
 
+  // 2b. Housing search: Homeless agents with enough credits look for apartments
+  if (
+    !updatedAgent.residence &&
+    updatedAgent.status !== 'dead' &&
+    !isTraveling(updatedAgent)
+  ) {
+    const housingResult = tryFindHousing(updatedAgent, updatedLocations, agentsConfig, phase);
+    updatedAgent = housingResult.agent;
+    updatedLocations = housingResult.locations;
+  }
+
   // 3. Consider opening a business if wealthy enough
   // Employed agents can quit to start a business (but not if already a business owner)
   let newOrg: Organization | undefined;
@@ -214,7 +255,7 @@ export function processAgentEconomicDecision(
       }
     }
 
-    const result = tryOpenBusiness(updatedAgent, locationTemplates, buildings, updatedLocations, phase);
+    const result = tryOpenBusiness(updatedAgent, locationTemplates, buildings, updatedLocations, allAgents, agentsConfig, phase);
     if (result.newLocation && result.newOrg) {
       updatedAgent = result.agent;
       newLocation = result.newLocation;
@@ -222,7 +263,27 @@ export function processAgentEconomicDecision(
     }
   }
 
-  // 4. Idle agents at non-public locations go to public spaces to hang out
+  // 4. REST-SEEKING: At 70%+ fatigue, head home to rest (after current activity)
+  // This comes before leisure so tired agents go home instead of hanging out
+  if (
+    restNeed === 'seeking' &&
+    !isTraveling(updatedAgent) &&
+    updatedAgent.status === 'available'
+  ) {
+    const restResult = handleRestSeeking(
+      updatedAgent,
+      updatedLocations,
+      agentsConfig,
+      transportConfig,
+      phase
+    );
+    if (restResult.handled) {
+      return { agent: restResult.agent, locations: updatedLocations, orgs: updatedOrgs };
+    }
+    updatedAgent = restResult.agent;
+  }
+
+  // 5. Idle agents at non-public locations go to public spaces to hang out
   // This prevents agents from loitering at shops after buying food
   if (
     updatedAgent.status === 'available' &&
@@ -442,6 +503,208 @@ function handleEmergencyHunger(
 }
 
 /**
+ * Handle urgent rest - agent at 90%+ fatigue, needs to go home immediately
+ * Returns handled: true if agent is now traveling home or resting
+ */
+function handleUrgentRest(
+  agent: Agent,
+  locations: Location[],
+  agentsConfig: AgentsConfig,
+  transportConfig: TransportConfig,
+  phase: number
+): { agent: Agent; handled: boolean } {
+  // If agent has a residence, go there
+  if (agent.residence) {
+    const home = locations.find((l) => l.id === agent.residence);
+    if (home) {
+      // Already at home? Rest immediately
+      if (agent.currentLocation === agent.residence) {
+        const restedAgent = processRest(agent, home, phase, agentsConfig);
+        return { agent: restedAgent, handled: true };
+      }
+
+      // Travel home
+      const travelingAgent = startTravel(agent, home, locations, transportConfig);
+      if (travelingAgent !== agent) {
+        ActivityLog.info(
+          phase,
+          'rest',
+          `urgently heading home to rest (fatigue: ${agent.needs.fatigue.toFixed(1)}%)`,
+          agent.id,
+          agent.name
+        );
+        return { agent: travelingAgent, handled: true };
+      }
+    }
+  }
+
+  // No residence - find a shelter (public + residential)
+  const shelter = findNearestLocation(
+    agent,
+    locations,
+    (loc) => loc.tags.includes('public') && loc.tags.includes('residential')
+  );
+
+  if (shelter) {
+    // Already at shelter? Rest there
+    if (agent.currentLocation === shelter.id) {
+      const restedAgent = processRest(agent, shelter, phase, agentsConfig);
+      return { agent: restedAgent, handled: true };
+    }
+
+    // Travel to shelter
+    const travelingAgent = startTravel(agent, shelter, locations, transportConfig);
+    if (travelingAgent !== agent) {
+      ActivityLog.info(
+        phase,
+        'rest',
+        `urgently heading to ${shelter.name} (homeless, fatigue: ${agent.needs.fatigue.toFixed(1)}%)`,
+        agent.id,
+        agent.name
+      );
+      return { agent: travelingAgent, handled: true };
+    }
+  }
+
+  // No home or shelter available - will be forced to rest in place when hitting 100%
+  return { agent, handled: false };
+}
+
+/**
+ * Handle rest-seeking - agent at 70%+ fatigue, should head home after current activity
+ * Returns handled: true if agent started traveling home
+ */
+function handleRestSeeking(
+  agent: Agent,
+  locations: Location[],
+  agentsConfig: AgentsConfig,
+  transportConfig: TransportConfig,
+  phase: number
+): { agent: Agent; handled: boolean } {
+  // If agent has a residence, travel there
+  if (agent.residence) {
+    const home = locations.find((l) => l.id === agent.residence);
+    if (home) {
+      // Already at home? Rest
+      if (agent.currentLocation === agent.residence) {
+        const restedAgent = processRest(agent, home, phase, agentsConfig);
+        return { agent: restedAgent, handled: true };
+      }
+
+      // Travel home
+      const travelingAgent = startTravel(agent, home, locations, transportConfig);
+      if (travelingAgent !== agent) {
+        ActivityLog.info(
+          phase,
+          'rest',
+          `heading home to rest (fatigue: ${agent.needs.fatigue.toFixed(1)}%)`,
+          agent.id,
+          agent.name
+        );
+        return { agent: travelingAgent, handled: true };
+      }
+    }
+  }
+
+  // No residence - find a shelter (but don't be as urgent about it)
+  const shelter = findNearestLocation(
+    agent,
+    locations,
+    (loc) => loc.tags.includes('public') && loc.tags.includes('residential')
+  );
+
+  if (shelter) {
+    // Already at shelter? Rest there
+    if (agent.currentLocation === shelter.id) {
+      const restedAgent = processRest(agent, shelter, phase, agentsConfig);
+      return { agent: restedAgent, handled: true };
+    }
+
+    // Travel to shelter
+    const travelingAgent = startTravel(agent, shelter, locations, transportConfig);
+    if (travelingAgent !== agent) {
+      ActivityLog.info(
+        phase,
+        'rest',
+        `heading to ${shelter.name} to rest (homeless, fatigue: ${agent.needs.fatigue.toFixed(1)}%)`,
+        agent.id,
+        agent.name
+      );
+      return { agent: travelingAgent, handled: true };
+    }
+  }
+
+  // No home or shelter - continue normal activities until forced rest
+  return { agent, handled: false };
+}
+
+/**
+ * Try to find housing for a homeless agent
+ * Looks for available apartments where agent can afford rent buffer
+ */
+function tryFindHousing(
+  agent: Agent,
+  locations: Location[],
+  agentsConfig: AgentsConfig,
+  phase: number
+): { agent: Agent; locations: Location[] } {
+  // Calculate rent buffer requirement (4 weeks of rent typically)
+  const bufferWeeks = agentsConfig.housing.bufferWeeks;
+
+  // Find available apartments (residential locations with space and that agent can afford)
+  const availableApartments = locations.filter((loc) => {
+    // Must be residential
+    if (!loc.tags.includes('residential')) return false;
+    // Must not be public (shelters are public + residential)
+    if (loc.tags.includes('public')) return false;
+    // Must have space
+    const residents = loc.residents ?? [];
+    const maxResidents = loc.maxResidents ?? 1;
+    if (residents.length >= maxResidents) return false;
+    // Must be affordable (agent needs buffer for rent)
+    const rentCost = loc.rentCost ?? 0;
+    const bufferRequired = rentCost * bufferWeeks;
+    if (agent.wallet.credits < bufferRequired) return false;
+    return true;
+  });
+
+  if (availableApartments.length === 0) {
+    return { agent, locations };
+  }
+
+  // Pick a random available apartment
+  const apartment = availableApartments[Math.floor(Math.random() * availableApartments.length)];
+  if (!apartment) {
+    return { agent, locations };
+  }
+
+  // Move in
+  const updatedAgent: Agent = {
+    ...agent,
+    residence: apartment.id,
+  };
+
+  const updatedApartment: Location = {
+    ...apartment,
+    residents: [...(apartment.residents ?? []), agent.id],
+  };
+
+  const updatedLocations = locations.map((loc) =>
+    loc.id === apartment.id ? updatedApartment : loc
+  );
+
+  ActivityLog.info(
+    phase,
+    'housing',
+    `moved into ${apartment.name} (rent: ${apartment.rentCost}/week)`,
+    agent.id,
+    agent.name
+  );
+
+  return { agent: updatedAgent, locations: updatedLocations };
+}
+
+/**
  * Try to get a job at a hiring location (factory or shop)
  */
 function tryGetJob(
@@ -500,11 +763,77 @@ function leadsAnyOrg(agent: Agent, orgs: Organization[]): boolean {
 /**
  * Try to open a new business (creates a micro-org to own it)
  */
+/**
+ * Calculate demand signals for entrepreneurship decisions
+ * Returns the best business type to open based on market needs
+ */
+function chooseBestBusiness(
+  agents: Agent[],
+  _locations: Location[],
+  locationTemplates: Record<string, LocationTemplate>,
+  agentsConfig: AgentsConfig
+): string {
+  // Calculate food demand: agents who are hungry and have no provisions
+  const foodDemand = agents.filter((a) =>
+    a.status !== 'dead' &&
+    a.needs.hunger > 50 &&
+    (a.inventory['provisions'] ?? 0) === 0
+  ).length;
+
+  // Calculate housing demand: agents who are homeless but can afford housing
+  const bufferWeeks = agentsConfig.housing.bufferWeeks;
+  const avgRent = 20; // Typical apartment rent
+  const housingBuffer = avgRent * bufferWeeks;
+  const housingDemand = agents.filter((a) =>
+    a.status !== 'dead' &&
+    !a.residence &&
+    a.wallet.credits >= housingBuffer
+  ).length;
+
+  // Priority weights: food is more important (starvation kills)
+  const foodPriority = 2;
+  const housingPriority = 1;
+
+  // Calculate weighted scores
+  const foodScore = foodDemand * foodPriority;
+  const housingScore = housingDemand * housingPriority;
+
+  // Choose based on highest score, with a fallback to retail_shop
+  if (housingScore > foodScore && locationTemplates['apartment']) {
+    return 'apartment';
+  }
+  return 'retail_shop';
+}
+
+// Name pool for apartments
+const APARTMENT_NAMES = [
+  "Sky View",
+  "Urban Nest",
+  "Metro Living",
+  "City Heights",
+  "Neon Suite",
+  "Cyber Loft",
+  "Downtown Studio",
+  "Steel Tower Unit",
+  "Night City Flat",
+  "Grid Apartments",
+];
+
+let apartmentNameIndex = 0;
+
+function getNextApartmentName(): string {
+  const name = APARTMENT_NAMES[apartmentNameIndex % APARTMENT_NAMES.length];
+  apartmentNameIndex++;
+  return name ?? "Apartment";
+}
+
 function tryOpenBusiness(
   agent: Agent,
   locationTemplates: Record<string, LocationTemplate>,
   buildings: Building[],
   locations: Location[],
+  agents: Agent[],
+  agentsConfig: AgentsConfig,
   phase: number
 ): { agent: Agent; newLocation?: Location; newOrg?: Organization } {
   // 20% chance to try opening a business each phase when eligible
@@ -512,8 +841,9 @@ function tryOpenBusiness(
     return { agent };
   }
 
-  // Choose retail_shop (cheaper) for now
-  const template = locationTemplates['retail_shop'];
+  // Choose business type based on market demand
+  const businessType = chooseBestBusiness(agents, locations, locationTemplates, agentsConfig);
+  const template = locationTemplates[businessType];
   if (!template) {
     return { agent };
   }
@@ -540,7 +870,8 @@ function tryOpenBusiness(
 
   // Create a micro-org for this business
   const orgId = getNextOrgId();
-  const orgName = `${agent.name}'s Shop`;
+  const isApartment = businessType === 'apartment';
+  const orgName = isApartment ? `${agent.name}'s Rental` : `${agent.name}'s Shop`;
 
   // Org gets 70% of credits REMAINING after opening cost (not 70% of total)
   const creditsAfterOpeningCost = agent.wallet.credits - openingCost;
@@ -557,7 +888,7 @@ function tryOpenBusiness(
 
   // Create the location owned by the org (placed in building)
   const locationId = getNextLocationId();
-  const locationName = getNextShopName();
+  const locationName = isApartment ? getNextApartmentName() : getNextShopName();
 
   const newLocation = createLocation(
     locationId,
@@ -802,6 +1133,14 @@ export function processWeeklyEconomy(
         );
       }
 
+      // Process rent collection for residential locations
+      if (updatedLocation.rentCost && updatedLocation.rentCost > 0) {
+        const rentResult = processRentCollection(org, updatedLocation, updatedAgents, phase);
+        org = rentResult.org;
+        updatedLocation = rentResult.location;
+        updatedAgents = rentResult.agents;
+      }
+
       // Reset weekly tracking
       updatedLocation = resetWeeklyTracking(updatedLocation);
 
@@ -948,6 +1287,85 @@ function processOrgPayroll(
   }
 
   return { org: updatedOrg, employees: paidEmployees, unpaidEmployees };
+}
+
+/**
+ * Process rent collection for a residential location
+ * Tenants pay rent to org wallet, those who can't pay are evicted
+ */
+function processRentCollection(
+  org: Organization,
+  location: Location,
+  agents: Agent[],
+  phase: number
+): { org: Organization; location: Location; agents: Agent[] } {
+  const rentCost = location.rentCost ?? 0;
+  if (rentCost <= 0) {
+    return { org, location, agents };
+  }
+
+  let updatedOrg = org;
+  let updatedLocation = location;
+  let updatedAgents = [...agents];
+  const residents = location.residents ?? [];
+
+  for (const residentId of residents) {
+    const residentIdx = updatedAgents.findIndex((a) => a.id === residentId);
+    if (residentIdx === -1) continue;
+
+    const resident = updatedAgents[residentIdx];
+    if (!resident || resident.status === 'dead') continue;
+
+    if (resident.wallet.credits >= rentCost) {
+      // Pay rent
+      updatedAgents[residentIdx] = {
+        ...resident,
+        wallet: {
+          ...resident.wallet,
+          credits: resident.wallet.credits - rentCost,
+        },
+      };
+
+      updatedOrg = {
+        ...updatedOrg,
+        wallet: {
+          ...updatedOrg.wallet,
+          credits: updatedOrg.wallet.credits + rentCost,
+        },
+      };
+
+      ActivityLog.info(
+        phase,
+        'rent',
+        `paid ${rentCost} credits rent to ${org.name}`,
+        resident.id,
+        resident.name
+      );
+    } else {
+      // Can't pay - evict
+      ActivityLog.warning(
+        phase,
+        'eviction',
+        `evicted from ${location.name} (can't afford ${rentCost} rent, has ${resident.wallet.credits})`,
+        resident.id,
+        resident.name
+      );
+
+      // Clear agent's residence
+      updatedAgents[residentIdx] = {
+        ...resident,
+        residence: undefined,
+      };
+
+      // Remove from location's residents list
+      updatedLocation = {
+        ...updatedLocation,
+        residents: (updatedLocation.residents ?? []).filter((id) => id !== residentId),
+      };
+    }
+  }
+
+  return { org: updatedOrg, location: updatedLocation, agents: updatedAgents };
 }
 
 /**

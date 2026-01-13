@@ -1,0 +1,22 @@
+{
+  "id": "apartment",
+  "name": "Apartment",
+  "description": "A residential unit for rent",
+  "tags": ["residential"],
+  "spawnConstraints": {
+    "allowedZones": ["residential", "commercial", "downtown"],
+    "floorRange": [1, 50]
+  },
+  "balance": {
+    "openingCost": 100,
+    "operatingCost": 0,
+    "maxResidents": 1,
+    "rentCost": 20
+  },
+  "generation": {
+    "count": { "min": 120, "max": 150 },
+    "spawnAtStart": true,
+    "ownerOrgTemplate": "small_business",
+    "ownerCredits": { "min": 100, "max": 200 }
+  }
+}

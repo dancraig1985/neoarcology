@@ -122,6 +122,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
 
     const result = processAgentEconomicDecision(
       agent,
+      updatedAgents,
       updatedLocations,
       updatedOrgs,
       state.buildings,

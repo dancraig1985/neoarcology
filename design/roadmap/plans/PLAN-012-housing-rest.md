@@ -109,18 +109,21 @@ Apartments placed in buildings with `"residential"` in allowedLocationTags:
     "floorRange": [1, 50]
   },
   "balance": {
-    "operatingCost": 5,
+    "operatingCost": 0,
+    "openingCost": 100,
     "maxResidents": 1,
-    "rentCost": 50
+    "rentCost": 20
   },
   "generation": {
-    "count": { "min": 5, "max": 10 },
+    "count": { "min": 120, "max": 150 },
     "spawnAtStart": true,
     "ownerOrgTemplate": "small_business",
     "ownerCredits": { "min": 100, "max": 200 }
   }
 }
 ```
+
+**Note:** Generate ~120-150 apartments for ~200 agents = ~60-75% initial housing. This creates immediate demand for more housing.
 
 ### Shelter (new)
 
@@ -141,7 +144,7 @@ Shelters are **public locations** - no owning org, no rent. They exist as a safe
     "rentCost": 0
   },
   "generation": {
-    "count": { "min": 1, "max": 2 },
+    "count": { "min": 2, "max": 3 },
     "spawnAtStart": true
   }
 }
@@ -162,11 +165,8 @@ Apartments follow the **same ownership pattern as shops**:
 ```
 Tenant Agent                    Landlord Org
     |                               |
-    | pays rent                     |
+    | pays rent (20/week)           |
     +------------------------->  org.wallet (revenue)
-                                    |
-                                    v
-                              Operating costs
                                     |
                                     v
                               Owner dividend -> leader.wallet
@@ -177,10 +177,9 @@ Tenant Agent                    Landlord Org
 ### Rent Flow
 
 Weekly rent processing (alongside payroll):
-1. Agent pays `rentCost` from wallet → Location owner's org wallet
+1. Agent pays `rentCost` (20) from wallet → Location owner's org wallet
 2. If agent can't afford rent → evicted (residence cleared)
-3. Org pays `operatingCost` from wallet
-4. Leader receives dividend (same as shop owners)
+3. Leader receives dividend (same as shop owners)
 
 **Rent is just another form of revenue** - it works identically to retail sales from an accounting perspective.
 
@@ -188,18 +187,86 @@ Weekly rent processing (alongside payroll):
 
 Homeless agents with sufficient credits seek housing:
 1. Find available apartment (`residents.length < maxResidents`)
-2. Check affordability (`credits > rentCost * 4` weeks buffer)
+2. Check affordability (`credits >= rentCost * 4` = 80 credits buffer)
 3. Move in (add to `residents`, set agent's `residence`)
+
+### Immigration and Housing
+
+**Immigrants always arrive homeless.** They must find housing through the normal housing search process. This creates ongoing demand for apartments and incentivizes entrepreneurs to build more.
 
 ### Initial Generation
 
 At city generation:
-1. Generate apartments in residential buildings
+1. Generate ~120-150 apartments (fewer than ~200 agents)
 2. For each apartment, create an owning org (using `small_business` template)
-3. Assign each agent to a random available apartment
-4. All agents start housed (can become homeless later)
+3. Assign agents to apartments **until apartments run out**
+4. Remaining ~50-80 agents start homeless (creates initial demand)
+5. Create shelter locations (public, no org) as safety net
 
-**Note**: Using `small_business` template for initial apartment owners keeps things simple. The org template is just for initial setup - what matters is the org owns the apartment location.
+## Demand-Based Entrepreneurship
+
+Entrepreneurs choose what business to open based on market demand.
+
+### Demand Signals
+
+```typescript
+interface DemandSignal {
+  type: string;              // 'food', 'housing', future: 'medical', etc.
+  demand: number;            // count of agents with unmet need
+  businessTemplate: string;  // what location template to open
+  priority: number;          // weight (fatal needs > comfort needs)
+}
+
+function calculateDemands(agents: Agent[], locations: Location[]): DemandSignal[] {
+  return [
+    {
+      type: 'food',
+      demand: agents.filter(a =>
+        a.status !== 'dead' &&
+        a.needs.hunger > 50 &&
+        (a.inventory.provisions ?? 0) === 0
+      ).length,
+      businessTemplate: 'retail_shop',
+      priority: 2,  // Fatal - starvation kills
+    },
+    {
+      type: 'housing',
+      demand: agents.filter(a =>
+        a.status !== 'dead' &&
+        !a.residence &&
+        a.wallet.credits >= 80
+      ).length,
+      businessTemplate: 'apartment',
+      priority: 1,  // Non-fatal - just inconvenient
+    },
+    // Future: medical, entertainment, etc.
+  ];
+}
+```
+
+### Entrepreneur Decision
+
+```typescript
+function chooseBusiness(demands: DemandSignal[]): string {
+  // Score = demand × priority
+  // Food: 10 hungry agents × 2 = 20
+  // Housing: 15 homeless agents × 1 = 15
+  // → Open food shop (higher score)
+
+  const scored = demands
+    .map(d => ({ ...d, score: d.demand * d.priority }))
+    .sort((a, b) => b.score - a.score);
+
+  return scored[0]?.businessTemplate ?? 'retail_shop';
+}
+```
+
+### Balance
+
+- Food priority (2) > Housing priority (1)
+- Equal demand → entrepreneurs open shops (starvation is fatal)
+- Low food demand → entrepreneurs become landlords
+- System self-balances based on actual needs
 
 ## Objectives
 
@@ -230,20 +297,36 @@ At city generation:
 ### Phase E: Housing Economy
 - [ ] Process rent in weekly tick (tenant wallet → org wallet)
 - [ ] Eviction if can't pay rent (clear residence, remove from residents)
-- [ ] Homeless agents seek available housing
+- [ ] Homeless agents seek available housing (80+ credits buffer)
 - [ ] Log housing events (rent paid, evicted, moved in)
 
-### Phase F: Initial Generation
-- [ ] Generate apartments during city creation (with owning orgs)
-- [ ] Assign each apartment to a `small_business` org (same as shops)
-- [ ] Assign all agents to apartments at start (set residence + residents)
-- [ ] Create shelter locations (public, no org)
+### Phase F: Demand-Based Entrepreneurship
+- [ ] Create DemandSignal interface
+- [ ] Implement calculateDemands() function
+- [ ] Update tryOpenBusiness() to use demand signals
+- [ ] Add apartment as valid business type for entrepreneurs
 
-### Phase G: UI Updates
+### Phase G: Initial Generation
+- [ ] Generate apartments during city creation (with owning orgs)
+- [ ] Generate fewer apartments than agents (~70% coverage)
+- [ ] Assign agents to apartments until full, rest start homeless
+- [ ] Create shelter locations (public, no org)
+- [ ] Immigrants arrive homeless (handled by ImmigrationSystem)
+
+### Phase H: UI Updates
 - [ ] Add fatigue to agent table (column)
 - [ ] Add fatigue to agent detail view
 - [ ] Add residence to agent detail view
 - [ ] Show residents in location detail
+
+### Phase I: Validation
+- [ ] Run headless tests to verify:
+  - [ ] Agents seek rest appropriately
+  - [ ] Homeless agents find housing
+  - [ ] Rent is paid and collected
+  - [ ] Entrepreneurs open apartments when housing demand is high
+  - [ ] Food businesses still get created (not all apartments)
+  - [ ] Immigrants eventually get housed
 
 ## Key Files
 
@@ -251,12 +334,12 @@ At city generation:
 |------|--------|
 | `src/types/entities.ts` | Add fatigue, residence, residents, maxResidents, rentCost |
 | `src/simulation/systems/AgentSystem.ts` | Fatigue accumulation, rest processing |
-| `src/simulation/systems/EconomySystem.ts` | Rest-seeking behavior, rent payments (reuse existing weekly economy flow) |
-| `src/generation/CityGenerator.ts` | Generate apartments with owning orgs (same pattern as shops) |
+| `src/simulation/systems/EconomySystem.ts` | Rest-seeking behavior, rent payments, demand-based entrepreneurship |
+| `src/generation/CityGenerator.ts` | Generate apartments with owning orgs, partial housing assignment |
 | `src/ui/UIConfig.ts` | Add fatigue column, residence/residents fields |
 | `data/config/agents.json` | Add fatigue config |
-| `data/templates/locations/apartment.json` | New template (with ownerOrgTemplate like shops) |
-| `data/templates/locations/shelter.json` | New template (public, no org) |
+| `data/templates/locations/apartment.json` | New template |
+| `data/templates/locations/shelter.json` | New template |
 
 ## Config Parameters
 
@@ -273,7 +356,21 @@ At city generation:
     "shelterRestReset": 30,
     "forcedRestReset": 60
   },
+  "housing": {
+    "bufferWeeks": 4,
+    "rentCost": 20
+  },
   "inventoryCapacity": 10
+}
+```
+
+**In `data/config/economy.json`:**
+```json
+{
+  "demands": {
+    "food": { "priority": 2 },
+    "housing": { "priority": 1 }
+  }
 }
 ```
 
@@ -286,7 +383,6 @@ At city generation:
 - Squatting in abandoned buildings
 - Property management companies (multi-property orgs)
 - Agent buying/owning apartments (rent only for MVP)
-- Agents starting their own rental businesses (defer to later)
 
 ## Notes
 
@@ -297,6 +393,8 @@ At city generation:
 - Buildings already exist (PLAN-009), apartments just fill them
 - Shelter provides a free fallback but with worse rest quality
 - 70% threshold gives agents time to travel home before hitting 100%
+- Immigrants arrive homeless, creating ongoing housing demand
+- Entrepreneurs respond to demand - if housing is scarce, they become landlords
 
 ### Architecture Consistency
 
@@ -305,15 +403,17 @@ At city generation:
 | Aspect | Retail Shop | Apartment |
 |--------|-------------|-----------|
 | Owned by | Org (any type) | Org (any type) |
-| Revenue source | Customer purchases | Tenant rent |
+| Revenue source | Customer purchases | Tenant rent (20/week) |
 | Revenue goes to | org.wallet | org.wallet |
-| Operating costs | Weekly from org.wallet | Weekly from org.wallet |
+| Operating costs | 0 | 0 |
 | Owner profit | Weekly dividend | Weekly dividend |
 | Template determines | It's a "retail" business | It's a "residential" business |
+| Entrepreneur trigger | High food demand | High housing demand |
 
 **The org template (small_business, corporation, etc.) is just for initial setup** - it determines starting capital, leader assignment, etc. What the org actually *does* is determined by the locations it owns.
 
 This means:
 - A corporation could buy apartments and become a landlord
 - A small_business could expand from one shop to owning apartments
+- Entrepreneurs choose business type based on market demand
 - The system is extensible without hardcoding business types

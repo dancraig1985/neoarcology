@@ -439,6 +439,7 @@ function createAgentFromTemplate(
     },
     needs: {
       hunger: defaults.hunger ? randomFromRange(defaults.hunger, rand) : randomInt(10, 30, rand),
+      fatigue: 0, // Agents start fully rested
     },
     inventory: {
       provisions: defaults.provisions ? randomFromRange(defaults.provisions, rand) : randomInt(2, 8, rand),
@@ -939,13 +940,176 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   // The simulation's hiring process will fill them as agents seek jobs.
 
   // ==================
-  // 6. ASSIGN INITIAL AGENT LOCATIONS
+  // 6. CREATE APARTMENTS (with small business orgs)
+  // ==================
+  const apartmentTemplate = config.locationTemplates['apartment'];
+  const apartmentOrgTemplateId = apartmentTemplate?.generation?.ownerOrgTemplate ?? 'small_business';
+  const apartmentOrgTemplate = config.orgTemplates[apartmentOrgTemplateId];
+  const apartmentNames = [
+    'Sky View', 'Urban Nest', 'Metro Living', 'City Heights', 'Neon Suite',
+    'Cyber Loft', 'Downtown Studio', 'Steel Tower Unit', 'Night City Flat', 'Grid Apartments',
+  ];
+  let apartmentIndex = 0;
+  function nextApartmentName(): string {
+    return apartmentNames[apartmentIndex++ % apartmentNames.length] ?? 'Apartment';
+  }
+
+  if (apartmentTemplate?.generation?.spawnAtStart && apartmentTemplate.generation.count && apartmentOrgTemplate) {
+    const numApartments = randomFromRange(apartmentTemplate.generation.count, rand);
+
+    for (let i = 0; i < numApartments; i++) {
+      // Find an available agent to be the landlord
+      const ownerIdx = agents.findIndex((a) => a.status === 'available');
+      if (ownerIdx === -1) break;
+
+      const owner = agents[ownerIdx];
+      if (!owner) continue;
+
+      // Credits from template
+      const orgCredits = apartmentTemplate.generation.ownerCredits
+        ? randomFromRange(apartmentTemplate.generation.ownerCredits, rand)
+        : apartmentOrgTemplate.defaults?.credits
+          ? randomFromRange(apartmentOrgTemplate.defaults.credits, rand)
+          : randomInt(100, 200, rand);
+
+      const apartmentOrg = createOrgFromTemplate(
+        `${owner.name}'s Rental`,
+        apartmentOrgTemplate,
+        owner.id,
+        orgCredits,
+        0
+      );
+
+      // Set owner as employed if template specifies
+      if (apartmentOrgTemplate.generation?.leaderBecomesEmployed) {
+        owner.status = 'employed';
+        owner.employer = apartmentOrg.id;
+      }
+
+      // Create the apartment - try building placement first
+      const buildingPlacement = findBuildingForLocation(
+        buildings,
+        apartmentTemplate.tags ?? [],
+        buildingOccupancy,
+        undefined,
+        grid,
+        rand
+      );
+
+      if (buildingPlacement) {
+        const apartment = createLocationFromTemplate(
+          nextApartmentName(),
+          apartmentTemplate,
+          0, 0, 0,
+          apartmentOrg.id,
+          0,
+          buildingPlacement
+        );
+        // Initialize residential fields
+        apartment.maxResidents = apartmentTemplate.balance.maxResidents ?? 1;
+        apartment.rentCost = apartmentTemplate.balance.rentCost ?? 20;
+        apartment.residents = [];
+        locations.push(apartment);
+        apartmentOrg.locations.push(apartment.id);
+      } else {
+        // Fallback to legacy placement
+        const placement = findValidPlacement(grid, apartmentTemplate.spawnConstraints, rand);
+        if (placement) {
+          const apartment = createLocationFromTemplate(
+            nextApartmentName(),
+            apartmentTemplate,
+            placement.x,
+            placement.y,
+            placement.floor,
+            apartmentOrg.id,
+            0
+          );
+          apartment.maxResidents = apartmentTemplate.balance.maxResidents ?? 1;
+          apartment.rentCost = apartmentTemplate.balance.rentCost ?? 20;
+          apartment.residents = [];
+          locations.push(apartment);
+          apartmentOrg.locations.push(apartment.id);
+        }
+      }
+
+      organizations.push(apartmentOrg);
+    }
+  }
+
+  // ==================
+  // 7. CREATE SHELTERS (public, no org)
+  // ==================
+  const shelterTemplate = config.locationTemplates['shelter'];
+  const shelterNames = ['Downtown Shelter', 'Community Refuge', 'Emergency Housing', 'City Shelter', 'Hope Center'];
+  let shelterIndex = 0;
+  function nextShelterName(): string {
+    return shelterNames[shelterIndex++ % shelterNames.length] ?? 'Shelter';
+  }
+
+  if (shelterTemplate?.generation?.spawnAtStart && shelterTemplate.generation.count) {
+    const numShelters = randomFromRange(shelterTemplate.generation.count, rand);
+
+    for (let i = 0; i < numShelters; i++) {
+      // Shelters are public - try building placement first
+      const buildingPlacement = findBuildingForLocation(
+        buildings,
+        shelterTemplate.tags ?? [],
+        buildingOccupancy,
+        undefined,
+        grid,
+        rand
+      );
+
+      if (buildingPlacement) {
+        const shelter = createPublicLocation(
+          nextShelterName(),
+          shelterTemplate,
+          buildingPlacement.building.x,
+          buildingPlacement.building.y,
+          buildingPlacement.floor,
+          0,
+          buildingPlacement
+        );
+        shelter.maxResidents = shelterTemplate.balance.maxResidents ?? 20;
+        shelter.rentCost = 0;
+        shelter.residents = [];
+        locations.push(shelter);
+      } else {
+        // Fallback to legacy placement
+        const placement = findValidPlacement(grid, shelterTemplate.spawnConstraints, rand);
+        if (placement) {
+          const shelter = createPublicLocation(
+            nextShelterName(),
+            shelterTemplate,
+            placement.x,
+            placement.y,
+            placement.floor,
+            0
+          );
+          shelter.maxResidents = shelterTemplate.balance.maxResidents ?? 20;
+          shelter.rentCost = 0;
+          shelter.residents = [];
+          locations.push(shelter);
+        }
+      }
+    }
+  }
+
+  // ==================
+  // 8. ASSIGN INITIAL AGENT LOCATIONS AND HOUSING
   // ==================
   // Business owners → their business location
-  // Unemployed → a random public space
+  // Other agents → a random public space
+  // Some agents get assigned to apartments as residents
 
   const publicSpaces = locations.filter((l) => l.tags.includes('public'));
+  const apartments = locations.filter((l) =>
+    l.tags.includes('residential') &&
+    !l.tags.includes('public') &&
+    l.maxResidents !== undefined
+  );
 
+  // First pass: assign locations to agents
   for (const agent of agents) {
     if (agent.employer) {
       // Agent is employed (owner) - find the org's first location
@@ -965,6 +1129,48 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
       }
     }
   }
+
+  // Second pass: assign housing to some agents (not landlords)
+  // Shuffle available apartments for random distribution
+  const availableApartments = apartments.filter((apt) => {
+    // Don't assign landlords to their own apartments
+    const ownerOrg = organizations.find((o) => o.locations.includes(apt.id));
+    return ownerOrg !== undefined;
+  });
+
+  for (const agent of agents) {
+    // Skip if agent already has residence or is a landlord
+    if (agent.residence) continue;
+
+    // Check if agent is a landlord (owns apartments)
+    const ledOrg = organizations.find((o) => o.leader === agent.id);
+    const ownsApartment = ledOrg && ledOrg.locations.some((locId) => {
+      const loc = locations.find((l) => l.id === locId);
+      return loc?.tags.includes('residential') && !loc?.tags.includes('public');
+    });
+    if (ownsApartment) continue;
+
+    // Find an available apartment
+    const apt = availableApartments.find((a) => {
+      const residents = a.residents ?? [];
+      const maxResidents = a.maxResidents ?? 1;
+      return residents.length < maxResidents;
+    });
+
+    if (apt) {
+      // Move in
+      agent.residence = apt.id;
+      apt.residents = apt.residents ?? [];
+      apt.residents.push(agent.id);
+    }
+    // Agents without apartments start homeless (will seek housing in simulation)
+  }
+
+  // Log housing stats
+  const housedAgents = agents.filter((a) => a.residence).length;
+  const totalAgents = agents.length;
+  console.log(`[CityGenerator] Housing: ${housedAgents}/${totalAgents} agents housed (${Math.round(housedAgents/totalAgents*100)}%)`);
+  console.log(`[CityGenerator] Generated ${apartments.length} apartments, ${locations.filter(l => l.template === 'shelter').length} shelters`);
 
   console.log(
     `[CityGenerator] Generated city with ${buildings.length} buildings, ${locations.length} locations, ` +

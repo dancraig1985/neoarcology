@@ -70,6 +70,13 @@ export const AGENT_COLUMNS: ColumnDef<Agent>[] = [
     render: (a) => `${Math.round(a.needs.hunger)}%`,
   },
   {
+    key: 'needs.fatigue',
+    label: 'Fatigue',
+    width: 70,
+    align: 'right',
+    render: (a) => `${Math.round(a.needs.fatigue ?? 0)}%`,
+  },
+  {
     key: 'inventory.provisions',
     label: 'Food',
     width: 60,
@@ -238,6 +245,7 @@ export const AGENT_DETAILS: DetailSection[] = [
     title: 'Needs & Resources',
     fields: [
       { key: 'needs.hunger', label: 'Hunger', render: (a) => `${Math.round((a as Agent).needs.hunger)}%` },
+      { key: 'needs.fatigue', label: 'Fatigue', render: (a) => `${Math.round((a as Agent).needs.fatigue ?? 0)}%` },
       { key: 'wallet.credits', label: 'Credits' },
       {
         key: 'inventory',
@@ -249,6 +257,16 @@ export const AGENT_DETAILS: DetailSection[] = [
             .map(([k, v]) => `${k}: ${v}`);
           return items.length > 0 ? items.join(', ') : 'Empty';
         },
+      },
+    ],
+  },
+  {
+    title: 'Housing',
+    fields: [
+      {
+        key: 'residence',
+        label: 'Residence',
+        render: (a) => (a as Agent).residence ?? 'Homeless',
       },
     ],
   },
@@ -327,6 +345,30 @@ export const LOCATION_DETAILS: DetailSection[] = [
       { key: 'operatingCost', label: 'Operating Cost' },
       { key: 'weeklyRevenue', label: 'Weekly Revenue' },
       { key: 'weeklyCosts', label: 'Weekly Costs' },
+    ],
+  },
+  {
+    title: 'Residential',
+    fields: [
+      {
+        key: 'residents',
+        label: 'Residents',
+        render: (l) => {
+          const loc = l as Location;
+          const residents = loc.residents ?? [];
+          const max = loc.maxResidents ?? 0;
+          if (max === 0) return '-';
+          return `${residents.length} / ${max}`;
+        },
+      },
+      {
+        key: 'rentCost',
+        label: 'Rent/week',
+        render: (l) => {
+          const loc = l as Location;
+          return loc.rentCost !== undefined ? loc.rentCost.toString() : '-';
+        },
+      },
     ],
   },
   {

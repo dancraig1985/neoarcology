@@ -88,13 +88,14 @@ function createImmigrant(
     },
     needs: {
       hunger: Math.floor(Math.random() * 21), // 0-20 (arrive hungry but not starving)
+      fatigue: Math.floor(Math.random() * 31) + 20, // 20-50 (arrive somewhat tired from journey)
     },
     inventory: {
       provisions,
     },
     inventoryCapacity: defaults.inventoryCapacity ?? 20,
     salary: 0,
-    wallet: { credits },
+    wallet: { credits, accounts: [], stashes: [] },
     currentLocation: spawnLocation,
     morale: Math.floor(Math.random() * 41) + 30, // 30-70 (cautiously optimistic)
     personalGoals: [],

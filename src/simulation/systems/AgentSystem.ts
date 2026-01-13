@@ -46,6 +46,10 @@ export function processAgentPhase(
   // Accumulate hunger
   const newHunger = updatedAgent.needs.hunger + agentsConfig.hunger.perPhase;
 
+  // Accumulate fatigue (capped at 100)
+  const currentFatigue = updatedAgent.needs.fatigue ?? 0;
+  const newFatigue = Math.min(100, currentFatigue + agentsConfig.fatigue.perPhase);
+
   // Check if agent needs to eat (hunger >= threshold)
   const isHungry = newHunger >= agentsConfig.hunger.threshold;
 
@@ -54,6 +58,7 @@ export function processAgentPhase(
     needs: {
       ...updatedAgent.needs,
       hunger: newHunger,
+      fatigue: newFatigue,
     },
   };
 
@@ -164,4 +169,97 @@ export function countLivingAgents(agents: Agent[]): number {
  */
 export function countDeadAgents(agents: Agent[]): number {
   return agents.filter((a) => a.status === 'dead').length;
+}
+
+/**
+ * Determine the type of rest based on agent's location
+ * Returns: 'home' | 'shelter' | 'forced'
+ */
+export function getRestType(agent: Agent, location: Location | undefined): 'home' | 'shelter' | 'forced' {
+  // No location = forced rest
+  if (!location) {
+    return 'forced';
+  }
+
+  // Resting at home (own residence)
+  if (agent.residence === location.id) {
+    return 'home';
+  }
+
+  // Resting at shelter (public + residential tags)
+  const isPublic = location.tags.includes('public');
+  const isResidential = location.tags.includes('residential');
+  if (isPublic && isResidential) {
+    return 'shelter';
+  }
+
+  // Anywhere else = forced rest
+  return 'forced';
+}
+
+/**
+ * Process rest for an agent
+ * Resets fatigue based on location type:
+ * - Home (own residence): 0%
+ * - Shelter (public + residential): 30%
+ * - Forced (anywhere else): 60%
+ */
+export function processRest(
+  agent: Agent,
+  location: Location | undefined,
+  phase: number,
+  agentsConfig: AgentsConfig
+): Agent {
+  // Skip dead agents
+  if (agent.status === 'dead') {
+    return agent;
+  }
+
+  const restType = getRestType(agent, location);
+  let newFatigue: number;
+  let logMessage: string;
+
+  switch (restType) {
+    case 'home':
+      newFatigue = agentsConfig.fatigue.homeRestReset;
+      logMessage = `rested at home (fatigue: ${agent.needs.fatigue.toFixed(1)}% → ${newFatigue}%)`;
+      break;
+    case 'shelter':
+      newFatigue = agentsConfig.fatigue.shelterRestReset;
+      logMessage = `rested at shelter (fatigue: ${agent.needs.fatigue.toFixed(1)}% → ${newFatigue}%)`;
+      break;
+    case 'forced':
+      newFatigue = agentsConfig.fatigue.forcedRestReset;
+      logMessage = `forced to rest in public (fatigue: ${agent.needs.fatigue.toFixed(1)}% → ${newFatigue}%)`;
+      break;
+  }
+
+  ActivityLog.info(phase, 'rest', logMessage, agent.id, agent.name);
+
+  return {
+    ...agent,
+    needs: {
+      ...agent.needs,
+      fatigue: newFatigue,
+    },
+    status: 'available', // Rest completes, agent is available again
+  };
+}
+
+/**
+ * Check if agent needs rest based on fatigue thresholds
+ */
+export function needsRest(agent: Agent, agentsConfig: AgentsConfig): 'none' | 'seeking' | 'urgent' | 'forced' {
+  const fatigue = agent.needs.fatigue ?? 0;
+
+  if (fatigue >= agentsConfig.fatigue.forceRestThreshold) {
+    return 'forced';
+  }
+  if (fatigue >= agentsConfig.fatigue.urgentRestThreshold) {
+    return 'urgent';
+  }
+  if (fatigue >= agentsConfig.fatigue.seekRestThreshold) {
+    return 'seeking';
+  }
+  return 'none';
 }

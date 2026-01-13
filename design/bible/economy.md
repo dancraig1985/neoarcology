@@ -149,6 +149,34 @@ If factories stop producing, shops can't restock. If shops have no stock, agents
 ### Too Much Competition
 If too many shops open, customers are spread thin. Each shop gets less revenue. Shops become unprofitable and close. But if they all close at once, there's nowhere to buy food.
 
+## Entrepreneurship
+
+When agents accumulate enough savings (300+ credits), they may quit their job and start a business.
+
+### Demand-Based Business Selection
+Entrepreneurs choose what business to start based on current market demand:
+
+1. **Calculate food demand**: Agents eating per week vs shop capacity
+2. **Calculate housing demand**: Homeless agents vs available apartments
+3. **Apply priority weights**: Food demand weighted 2x (survival critical)
+4. **Choose highest demand**: Open a grocery store OR apartment building
+
+This ensures entrepreneurs naturally fill gaps in the economy rather than oversaturating one market.
+
+### Business Types
+| Business | Location Template | Revenue Source |
+|----------|-------------------|----------------|
+| Grocery Store | `grocery_store` | Retail food sales |
+| Apartment | `apartment` | Tenant rent |
+
+### The Entrepreneur Loop
+1. Agent accumulates 300+ credits
+2. Agent quits current job
+3. Agent evaluates food vs housing demand
+4. Agent creates `small_business` org
+5. Agent opens appropriate location
+6. Agent receives weekly dividends as owner
+
 ## The Balancing Act
 
 A healthy economy requires:

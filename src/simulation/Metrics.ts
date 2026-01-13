@@ -4,7 +4,6 @@
  */
 
 import type { SimulationState } from './Simulation';
-import type { Agent, Organization, Location } from '../types';
 
 /**
  * Snapshot of simulation state at a point in time

@@ -5,5 +5,17 @@
     "max": 100,
     "provisionsPerMeal": 1
   },
+  "fatigue": {
+    "perPhase": 3.57,
+    "seekRestThreshold": 70,
+    "urgentRestThreshold": 90,
+    "forceRestThreshold": 100,
+    "homeRestReset": 0,
+    "shelterRestReset": 30,
+    "forcedRestReset": 60
+  },
+  "housing": {
+    "bufferWeeks": 4
+  },
   "inventoryCapacity": 10
 }

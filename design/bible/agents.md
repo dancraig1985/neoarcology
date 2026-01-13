@@ -13,17 +13,19 @@ Agents get hungrier over time. When hunger reaches a threshold, they need to eat
 - **Eating resets hunger** to zero and consumes one provision
 - **Starvation occurs** when hunger reaches 100% - the agent dies
 
-### Fatigue (Planned)
+### Fatigue
 Agents get tired over time. Unlike hunger, fatigue doesn't kill - it forces rest.
 
-- **Fatigue accumulates** over time (~100% per week)
-- **Resting resets fatigue** based on where the agent rests
+- **Fatigue accumulates** continuously (~3.57% per phase, 100% per week)
+- **Resting resets fatigue** based on where the agent rests (see Rest Quality below)
 - **At 100% fatigue** the agent must rest wherever they are (worst outcome)
 
-Agents should **proactively seek rest** before hitting 100%:
-- At 70%+ fatigue: head home after current activity
-- At 90%+ fatigue: drop everything, go home immediately
+Agents **proactively seek rest** before hitting 100%:
+- At 70%+ fatigue: seek rest after current activity
+- At 90%+ fatigue: urgent rest (go home immediately)
 - At 100%: forced rest wherever you are
+
+**Important**: Employed agents commuting to work are NOT interrupted by urgent rest. They complete their commute and work before resting. Only forced rest (100%) stops them.
 
 ### Eating Priority
 When hungry, an agent will:
@@ -38,14 +40,14 @@ Death is permanent. A dead agent:
 - If they owned a business, it closes (see Organizations)
 - **Use `setDead()` from AgentStateHelpers** - it clears all state atomically
 
-## Housing (Planned)
+## Housing
 
 Agents have a residence - where they live and rest.
 
 ### Residence
 - `residence` - Reference to the location (apartment) where the agent lives
-- Agents pay weekly rent to their landlord (the org that owns the apartment)
-- If rent can't be paid, the agent is evicted
+- Agents pay weekly rent (20 credits) to their landlord (the org that owns the apartment)
+- If rent can't be paid, the agent is evicted and becomes homeless
 
 ### Rest Quality
 Where an agent rests determines how well they recover:
@@ -57,7 +59,17 @@ Where an agent rests determines how well they recover:
 | Anywhere else | 60% | Poor rest, exposed |
 
 ### Homelessness
-Homeless agents (no residence) must use public shelters or rest wherever they are. They'll seek housing when they can afford it (4 weeks rent buffer required).
+Homeless agents (no residence) must use public shelters or rest wherever they are. They actively seek housing when they can afford it.
+
+**Housing search**: Homeless agents with enough savings (80+ credits = 4 weeks rent buffer) will look for available apartments. If found, they move in and start paying rent.
+
+### Immigrants Arrive Homeless
+New immigrants arrive without housing. They must find an apartment through the normal housing search process, competing with other homeless agents for available units.
+
+### Configuration
+Rent and housing thresholds are defined in location templates:
+- `apartment.json`: `rentCost: 20`, `maxResidents: 1`
+- `shelter.json`: `rentCost: 0`, `maxResidents: 20`
 
 ## Economic Behavior
 

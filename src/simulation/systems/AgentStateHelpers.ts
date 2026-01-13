@@ -147,6 +147,8 @@ export function setDead(agent: Agent, phase: number): Agent {
     travelingTo: undefined,
     travelMethod: undefined,
     travelPhasesRemaining: undefined,
+    // Clear residence
+    residence: undefined,
   };
 }
 
@@ -224,6 +226,7 @@ export function onOrgDissolvedWithLocations(
     const travelingFromDeleted = locationIds.includes(agent.travelingFrom ?? '');
     const employedAtDeleted = locationIds.includes(agent.employedAt ?? '');
     const employedByOrg = agent.employer === orgId;
+    const residenceDeleted = locationIds.includes(agent.residence ?? '');
 
     // Clear location if at deleted location
     if (atDeletedLocation) {
@@ -238,6 +241,11 @@ export function onOrgDissolvedWithLocations(
     // Clear employment if employed at deleted location OR by dissolved org
     if (employedAtDeleted || employedByOrg) {
       updated = clearEmployment(updated);
+    }
+
+    // Clear residence if lived at deleted location
+    if (residenceDeleted) {
+      updated = { ...updated, residence: undefined };
     }
 
     return updated;
@@ -316,6 +324,10 @@ export function validateAgentState(
 
   if (agent.employer && !orgs.find((o) => o.id === agent.employer)) {
     issues.push(`Agent ${agent.name} employed by non-existent org ${agent.employer}`);
+  }
+
+  if (agent.residence && !locations.find((l) => l.id === agent.residence)) {
+    issues.push(`Agent ${agent.name} has residence at non-existent location ${agent.residence}`);
   }
 
   return issues;

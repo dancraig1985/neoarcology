@@ -56,7 +56,7 @@ export interface AgentStats {
  */
 export interface AgentNeeds {
   hunger: number; // 0-100, 100 = death by starvation
-  // Future: energy, health, etc.
+  fatigue: number; // 0-100, forces rest at 100 (not fatal)
 }
 
 /**
@@ -99,6 +99,9 @@ export interface Agent extends Entity {
   travelingTo?: LocationRef; // Destination
   travelMethod?: TravelMethod; // How they're traveling
   travelPhasesRemaining?: number; // Phases until arrival
+
+  // Housing
+  residence?: LocationRef; // Where agent lives (apartment they rent)
 
   // Current activity
   currentAction?: Action;
@@ -219,6 +222,11 @@ export interface Location extends Entity {
   // Employment
   employees: AgentRef[];
   employeeSlots: number;
+
+  // Housing (for residential locations)
+  residents?: AgentRef[]; // Who lives here
+  maxResidents?: number; // Capacity (1 for apartment, more for shelter)
+  rentCost?: number; // Weekly rent (0 for shelters)
 
   // Economics
   baseIncome: number;

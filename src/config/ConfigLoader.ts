@@ -62,6 +62,18 @@ export interface AgentsConfig {
     max: number;
     provisionsPerMeal: number;
   };
+  fatigue: {
+    perPhase: number;
+    seekRestThreshold: number;
+    urgentRestThreshold: number;
+    forceRestThreshold: number;
+    homeRestReset: number;
+    shelterRestReset: number;
+    forcedRestReset: number;
+  };
+  housing: {
+    bufferWeeks: number;
+  };
   inventoryCapacity: number;
 }
 
@@ -357,6 +369,8 @@ async function loadTemplates(basePath: string): Promise<EntityTemplate[]> {
       'retail_shop.json',
       'restaurant.json',
       'public_space.json',
+      'apartment.json',
+      'shelter.json',
     ],
     '/data/templates/buildings': [
       'arcology.json',

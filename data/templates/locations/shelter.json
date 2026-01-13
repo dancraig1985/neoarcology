@@ -1,0 +1,20 @@
+{
+  "id": "shelter",
+  "name": "Public Shelter",
+  "description": "A public refuge for those without homes",
+  "tags": ["public", "residential"],
+  "spawnConstraints": {
+    "allowedZones": ["residential", "industrial", "downtown"],
+    "floorRange": [0, 2],
+    "preferGroundFloor": true
+  },
+  "balance": {
+    "operatingCost": 0,
+    "maxResidents": 20,
+    "rentCost": 0
+  },
+  "generation": {
+    "count": { "min": 2, "max": 3 },
+    "spawnAtStart": true
+  }
+}
