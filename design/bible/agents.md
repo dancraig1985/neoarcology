@@ -125,3 +125,39 @@ When an agent starts a business:
 
 ### Owner Dividend
 Org leaders receive a weekly dividend (30 credits) drawn from the org wallet. This is their income for running the business. Unlike salary, dividends are paid regardless of whether the org is profitable - though an insolvent org will dissolve.
+
+## Immigration
+
+Population is sustained through immigration. When population drops below target, new agents arrive in the city.
+
+### How It Works
+Each week, the simulation checks the living population:
+1. If below `target`, spawn up to `spawnRate` immigrants
+2. If below `minimum`, spawn more aggressively (2x rate)
+3. Immigrants arrive at random public locations
+
+### Immigrant Properties
+Immigrants arrive with:
+- **Credits**: 80-200 (configurable, enough to survive while job-seeking)
+- **Provisions**: 3-6 (small food buffer)
+- **Hunger**: 0-20% (arrive hungry but not starving)
+- **Status**: `available` (immediately seek work)
+- **Tags**: `civilian`, `immigrant`
+
+### Configuration
+Set in `data/config/simulation.json`:
+```json
+{
+  "population": {
+    "target": 200,
+    "minimum": 50,
+    "spawnCheckInterval": 28,
+    "spawnRate": 5,
+    "immigrantCredits": { "min": 80, "max": 200 },
+    "immigrantProvisions": { "min": 3, "max": 6 }
+  }
+}
+```
+
+### Economic Impact
+Immigration brings new money into the economy (immigrant credits), offsetting deaths which remove money. This keeps the total money supply stable over time.

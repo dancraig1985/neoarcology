@@ -112,38 +112,41 @@ Within zones, heights vary based on noise - some blocks taller, some shorter, cr
 
 When a city is generated, it comes pre-populated with agents, organizations, and locations to bootstrap the economy.
 
-### Agents (12-15)
+### Agents (180-220)
 
 Citizens are created with randomized attributes:
 - **Credits**: 50-200 (personal savings)
-- **Provisions**: 2-8 (food stockpile)
+- **Provisions**: 5-12 (food stockpile)
 - **Hunger**: 10-30% (starting hunger level)
 - **Stats**: Randomized 20-60 for each of the 6 stats
 - **Morale**: 20-80%
 
-### Corporations (2-3)
+### Corporations (8-12)
 
 Large businesses that own factories:
-- **Leader**: First few agents become corporate leaders
+- **Leader**: First agents become corporate leaders
 - **Starting Capital**: 2,000-5,000 credits
 - **Assets**: 1 factory each, placed in industrial zones
+- **Employee Slots**: 4 per factory
 - Leader is marked as employed by their corporation
 
-### Retail Shops (3-4)
+### Retail Shops (12-18)
 
 Small businesses owned by micro-orgs:
 - **Owner**: Next available agents become shop owners
 - **Starting Capital**: 300-600 credits
 - **Placement**: Commercial, downtown, or residential zones
-- **Starting Inventory**: From template (usually ~20 provisions)
+- **Starting Inventory**: ~20 provisions
+- **Employee Slots**: 2 per shop
 
-### Restaurants (2-3)
+### Restaurants (8-12)
 
 Food service businesses, also micro-orgs:
 - **Owner**: Next available agents
 - **Starting Capital**: 200-400 credits
 - **Placement**: Commercial or downtown zones
-- **Starting Inventory**: From template
+- **Starting Inventory**: ~15 provisions
+- **Employee Slots**: 2 per restaurant
 
 ### Empty Employee Slots
 
@@ -154,12 +157,27 @@ This means:
 - By turn 2-3, agents get hired and production begins
 - The economy bootstraps itself organically
 
+### Job Capacity
+
+Total employee slots at generation:
+- Factories: ~10 × 4 = ~40 jobs
+- Retail shops: ~15 × 2 = ~30 jobs
+- Restaurants: ~10 × 2 = ~20 jobs
+- **Total: ~90 jobs** for ~200 agents
+
+This means roughly 45% employment initially. The remaining agents either:
+- Find work as jobs open up
+- Become entrepreneurs (start their own businesses)
+- Starve (if they can't secure income)
+
+Immigration sustains the population at ~200 agents over time.
+
 ### The Result
 
 A typical starting city has:
-- ~12-15 agents (some owners, most unemployed and job-seeking)
-- ~7-10 organizations (2-3 corps + micro-orgs for shops/restaurants)
-- ~7-10 locations (factories, shops, restaurants)
+- ~180-220 agents (some owners, some employed, some job-seeking)
+- ~30-40 organizations (corps + micro-orgs for shops/restaurants)
+- ~30-40 locations (factories, shops, restaurants)
 - All employee slots empty, waiting to be filled
 
 The economy doesn't function on turn 1 - it needs a few phases for workers to find jobs. This is intentional: the simulation bootstraps itself rather than starting in an artificial "perfect" state.

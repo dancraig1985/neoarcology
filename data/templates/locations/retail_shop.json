@@ -10,13 +10,13 @@
   },
   "balance": {
     "openingCost": 200,
-    "operatingCost": 10,
-    "employeeSlots": 1,
+    "operatingCost": 0,
+    "employeeSlots": 2,
     "startingInventory": 20,
     "inventoryCapacity": 50
   },
   "generation": {
-    "count": { "min": 3, "max": 4 },
+    "count": { "min": 12, "max": 18 },
     "spawnAtStart": true,
     "ownerOrgTemplate": "small_business",
     "ownerCredits": { "min": 300, "max": 600 }

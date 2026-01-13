@@ -4,6 +4,18 @@
  */
 
 /**
+ * Population/immigration configuration
+ */
+export interface PopulationConfig {
+  target: number;              // Desired population
+  minimum: number;             // Emergency spawning threshold
+  spawnCheckInterval: number;  // Phases between checks (28 = weekly)
+  spawnRate: number;           // Max new agents per check
+  immigrantCredits: { min: number; max: number };
+  immigrantProvisions: { min: number; max: number };
+}
+
+/**
  * Simulation configuration from data/config/simulation.json
  * Core simulation parameters (time only)
  */
@@ -14,6 +26,7 @@ export interface SimulationConfig {
     phasesPerMonth: number;
     phasesPerYear: number;
   };
+  population?: PopulationConfig;
 }
 
 /**

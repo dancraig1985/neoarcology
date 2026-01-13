@@ -89,6 +89,7 @@ The `design/bible/` folder contains detailed documentation for each simulation s
 - Location system: `src/simulation/systems/LocationSystem.ts` (commerce, hiring)
 - Inventory system: `src/simulation/systems/InventorySystem.ts` (goods, capacity)
 - Travel system: `src/simulation/systems/TravelSystem.ts` (distance, travel time)
+- Immigration system: `src/simulation/systems/ImmigrationSystem.ts` (population sustainability)
 - City generation: `src/generation/` (zones, locations, procedural city)
 - Activity log: `src/simulation/ActivityLog.ts`
 - Config loader: `src/config/ConfigLoader.ts`
@@ -143,10 +144,30 @@ Some display fields are computed, not stored:
 - `Organization.leaderName` - Computed from `agents.find(a => a.id === org.leader).name`
 - Don't store derived data; compute in UI layer (MainPanel)
 
+## Headless Testing
+
+Run simulations without UI to validate economy balance:
+
+```bash
+npm run sim:test                        # Run 1000 ticks with random seed
+npm run sim:test -- --ticks 5000        # Run for 5000 ticks
+npm run sim:test -- --seed 42           # Use specific seed for reproducibility
+npm run sim:test -- --verbose           # Show weekly event details
+npm run sim:test -- --json              # Output JSON format
+npm run sim:test -- --quiet             # Suppress simulation logs
+npm run sim:test -- --output report.txt # Write to file
+```
+
+**Key metrics to watch:**
+- Survival rate (>90% is healthy)
+- Population stability (should hover near target of 200)
+- Credits trend (stable or growing = healthy)
+- Immigrants count (indicates population sustainability)
+
 ## Configuration (Data-Driven)
 
-- Simulation params: `data/config/simulation.json`
-- Balance config: `data/config/balance.json` (hunger, prices, salaries, goods)
+- Simulation params: `data/config/simulation.json` (time units, population/immigration)
+- Economy config: `data/config/economy.json` (goods, prices, salaries)
 - Zone config: `data/config/zones.json` (zone types, colors, sizes for city generation)
 - Transport config: `data/config/transport.json` (travel modes, distance thresholds)
 
@@ -240,7 +261,6 @@ travelingTo !== undefined ⟹ (travelingFrom AND travelPhasesRemaining)
 ### Economy Pitfalls
 - **Revenue to wrong wallet**: Revenue must go to ORG wallet, not agent/leader wallet
 - **Forgetting owner dividends**: Owners need weekly dividend payment to survive
-- **Unbalanced economics**: Ensure revenue > (operating costs + salaries + owner dividend)
+- **Money destruction**: Operating costs destroy money; currently set to 0 to preserve money supply
 - **Not handling owner death**: Org must dissolve when leader dies
-- **Zombie businesses**: Orgs with <50 credits should dissolve (insolvent)
-- **Too many competing businesses**: Entrepreneur threshold too low = shops dilute customer base
+- **Too many competing businesses**: More businesses = thinner revenue spread per business

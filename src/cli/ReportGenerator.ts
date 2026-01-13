@@ -238,6 +238,7 @@ export function generateTextReport(metrics: SimulationMetrics, totalTicks: numbe
   lines.push(`  Wages paid: ${formatNumber(transactions.wagesPaid)} total`);
   lines.push(`  Dividends paid: ${formatNumber(transactions.dividendsPaid)} total`);
   lines.push(`  Hires: ${transactions.hires}, Fires: ${transactions.fires}`);
+  lines.push(`  Immigrants: ${transactions.immigrants}`);
   lines.push('');
 
   // Weekly Trend (last 10 weeks)

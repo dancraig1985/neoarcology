@@ -158,3 +158,20 @@ A healthy economy requires:
 - **Enough spending** - Consumers buying goods
 
 All four must stay in balance, or the system collapses.
+
+## Money Conservation
+
+For a stable long-term economy, money must be conserved:
+
+### Money Sources
+- **Initial credits**: Agents and orgs start with credits
+- **Immigration**: New agents bring credits into the system
+
+### Money Sinks (Avoided)
+- **Operating costs**: Currently set to **0** in all location templates
+  - If enabled, operating costs would drain money from the system
+  - This causes deflation and eventual economic collapse
+- **Death**: When agents die, their credits are lost (not redistributed)
+
+### The Balance
+Immigration adds money to offset deaths. With operating costs at zero, the economy can sustain itself indefinitely. If operating costs were re-enabled, a corresponding money creation mechanism would be needed (e.g., government stimulus, central bank).

@@ -4,5 +4,13 @@
     "phasesPerWeek": 28,
     "phasesPerMonth": 112,
     "phasesPerYear": 1344
+  },
+  "population": {
+    "target": 200,
+    "minimum": 50,
+    "spawnCheckInterval": 28,
+    "spawnRate": 5,
+    "immigrantCredits": { "min": 80, "max": 200 },
+    "immigrantProvisions": { "min": 3, "max": 6 }
   }
 }

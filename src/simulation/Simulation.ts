@@ -11,6 +11,7 @@ import { processAgentPhase, countLivingAgents, countDeadAgents } from './systems
 import { processAgentEconomicDecision, processWeeklyEconomy, fixHomelessAgents } from './systems/EconomySystem';
 import { processFactoryProduction } from './systems/OrgSystem';
 import { cleanupDeadEmployees } from './systems/LocationSystem';
+import { checkImmigration } from './systems/ImmigrationSystem';
 import { generateCity } from '../generation/CityGenerator';
 
 export interface SimulationState {
@@ -161,6 +162,18 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     // 4b. Fix any homeless agents created by org dissolution
     // (e.g., employees at deleted locations)
     updatedAgents = fixHomelessAgents(updatedAgents, updatedLocations, newTime.currentPhase);
+
+    // 4c. Check for immigration (spawn new agents if population is low)
+    const immigrants = checkImmigration(
+      updatedAgents,
+      updatedLocations,
+      config.simulation.population,
+      config.agentTemplates['civilian'],
+      newTime.currentPhase
+    );
+    if (immigrants.length > 0) {
+      updatedAgents = [...updatedAgents, ...immigrants];
+    }
   }
 
   return {

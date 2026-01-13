@@ -8,12 +8,12 @@
     "floorRange": [0, 5],
     "preferGroundFloor": true,
     "minDistanceFromCenter": 8,
-    "maxPerCity": 5
+    "maxPerCity": 20
   },
   "balance": {
     "openingCost": 1000,
-    "operatingCost": 20,
-    "employeeSlots": 2,
+    "operatingCost": 0,
+    "employeeSlots": 4,
     "startingInventory": 100,
     "inventoryCapacity": 500,
     "production": [

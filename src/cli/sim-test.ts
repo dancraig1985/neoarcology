@@ -31,6 +31,7 @@ import {
   recordDividendPayment,
   recordHire,
   recordFire,
+  recordImmigrant,
   type SimulationMetrics,
 } from '../simulation/Metrics';
 import {
@@ -246,6 +247,10 @@ function countTransactionsFromLog(metrics: SimulationMetrics) {
     // Detect fires/quits (category: employment, message: left job at)
     if (entry.category === 'employment' && entry.message.includes('left job')) {
       recordFire(metrics);
+    }
+    // Detect immigration (category: immigration, message: arrived in the city)
+    if (entry.category === 'immigration' && entry.message.includes('arrived')) {
+      recordImmigrant(metrics);
     }
   }
 }

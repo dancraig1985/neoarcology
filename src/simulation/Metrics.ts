@@ -59,6 +59,7 @@ export interface TransactionCounts {
   businessesClosed: number;
   hires: number;
   fires: number;
+  immigrants: number;
 }
 
 /**
@@ -113,6 +114,7 @@ export function createMetrics(seed?: number): SimulationMetrics {
       businessesClosed: 0,
       hires: 0,
       fires: 0,
+      immigrants: 0,
     },
     snapshots: [],
     weeklyEvents: [],
@@ -276,6 +278,10 @@ export function recordWagePayment(metrics: SimulationMetrics, amount: number): v
 
 export function recordDividendPayment(metrics: SimulationMetrics, amount: number): void {
   metrics.transactions.dividendsPaid += amount;
+}
+
+export function recordImmigrant(metrics: SimulationMetrics): void {
+  metrics.transactions.immigrants++;
 }
 
 /**
