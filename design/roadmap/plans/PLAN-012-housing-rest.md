@@ -1,8 +1,8 @@
-# PLAN-010: Housing & Rest
+# PLAN-012: Housing & Rest
 
 **Status:** planned
 **Priority:** P1 (high)
-**Dependencies:** PLAN-009 (buildings - completed)
+**Dependencies:** PLAN-009 (buildings - completed), PLAN-010 (headless testing), PLAN-011 (population sustainability)
 **Phase:** 3
 
 ## Goal
