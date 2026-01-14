@@ -89,6 +89,7 @@ function createImmigrant(
     needs: {
       hunger: Math.floor(Math.random() * 21), // 0-20 (arrive hungry but not starving)
       fatigue: Math.floor(Math.random() * 31) + 20, // 20-50 (arrive somewhat tired from journey)
+      leisure: Math.floor(Math.random() * 31), // 0-30 (arrive wanting some fun)
     },
     inventory: {
       provisions,

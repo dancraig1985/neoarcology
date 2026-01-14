@@ -71,6 +71,13 @@ export interface AgentsConfig {
     shelterRestReset: number;
     forcedRestReset: number;
   };
+  leisure: {
+    perPhase: number;
+    threshold: number;
+    max: number;
+    pubSatisfaction: number;
+    parkSatisfactionPerPhase: number;
+  };
   housing: {
     bufferWeeks: number;
   };
@@ -236,6 +243,7 @@ export interface LocationTemplate extends EntityTemplate {
     employeeSlots?: number;
     startingInventory?: number;
     inventoryCapacity?: number;
+    inventoryGood?: string;     // What good to stock (default: 'provisions')
     rentCost?: number;          // For residential locations
     maxResidents?: number;      // For residential locations
     production?: ProductionConfig[]; // Optional: what goods this location produces

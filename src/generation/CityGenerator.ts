@@ -440,6 +440,7 @@ function createAgentFromTemplate(
     needs: {
       hunger: defaults.hunger ? randomFromRange(defaults.hunger, rand) : randomInt(10, 30, rand),
       fatigue: 0, // Agents start fully rested
+      leisure: randomInt(0, 20, rand), // Start with low leisure need
     },
     inventory: {
       provisions: defaults.provisions ? randomFromRange(defaults.provisions, rand) : randomInt(2, 8, rand),
@@ -534,7 +535,7 @@ function createLocationFromTemplate(
     vehicleCapacity: 0,
     vehicles: [],
     inventory: {
-      provisions: balance.startingInventory ?? 0,
+      [balance.inventoryGood ?? 'provisions']: balance.startingInventory ?? 0,
     },
     inventoryCapacity: balance.inventoryCapacity ?? 0,
   };
@@ -627,6 +628,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   ];
   const factoryNames = ['Apex Manufacturing', 'Grid Works', 'Synth Industries', 'Vertex Production', 'Helix Factory'];
   const restaurantNames = ['Neon Bites', 'Synth Eats', 'Grid Kitchen', 'Pulse Diner', 'Arc Cafe'];
+  const pubNames = ['The Rusty Circuit', 'Neon Tap', 'Binary Bar', 'Voltage Lounge', 'The Grid', 'Chrome & Hops', 'Synth Spirits', 'The Dive'];
   const publicSpaceNames: Record<string, string[]> = {
     downtown: ['Central Plaza', 'Metro Hub', 'Tower Square', 'Skyline Park'],
     commercial: ['Market Square', 'Commerce Court', 'Trade Plaza', 'Shopping Promenade'],
@@ -638,6 +640,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   let shopIndex = 0;
   let factoryIndex = 0;
   let restaurantIndex = 0;
+  let pubIndex = 0;
   const publicSpaceIndex: Record<string, number> = {};
 
   function nextShopName(): string {
@@ -648,6 +651,9 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   }
   function nextRestaurantName(): string {
     return restaurantNames[restaurantIndex++ % restaurantNames.length] ?? 'Restaurant';
+  }
+  function nextPubName(): string {
+    return pubNames[pubIndex++ % pubNames.length] ?? 'Pub';
   }
   function nextPublicSpaceName(zone: string): string {
     const names = publicSpaceNames[zone] ?? ['Public Space'];
@@ -908,7 +914,88 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   }
 
   // ==================
-  // 5. CREATE PUBLIC SPACES (per zone)
+  // 5. CREATE PUBS (with small business orgs)
+  // ==================
+  const pubTemplate = config.locationTemplates['pub'];
+  const pubOrgTemplateId = pubTemplate?.generation?.ownerOrgTemplate ?? 'small_business';
+  const pubOrgTemplate = config.orgTemplates[pubOrgTemplateId];
+
+  if (pubTemplate?.generation?.spawnAtStart && pubTemplate.generation.count && pubOrgTemplate) {
+    const numPubs = randomFromRange(pubTemplate.generation.count, rand);
+
+    for (let i = 0; i < numPubs; i++) {
+      const ownerIdx = agents.findIndex((a) => a.status === 'available');
+      if (ownerIdx === -1) break;
+
+      const owner = agents[ownerIdx];
+      if (!owner) continue;
+
+      // Credits: location template override > org template default > fallback
+      const orgCredits = pubTemplate.generation.ownerCredits
+        ? randomFromRange(pubTemplate.generation.ownerCredits, rand)
+        : pubOrgTemplate.defaults?.credits
+          ? randomFromRange(pubOrgTemplate.defaults.credits, rand)
+          : randomInt(350, 600, rand);
+
+      const pubOrg = createOrgFromTemplate(
+        `${owner.name}'s Pub`,
+        pubOrgTemplate,
+        owner.id,
+        orgCredits,
+        0
+      );
+
+      // Set owner as employed if template specifies
+      if (pubOrgTemplate.generation?.leaderBecomesEmployed) {
+        owner.status = 'employed';
+        owner.employer = pubOrg.id;
+      }
+
+      // Create the pub - try building placement first
+      const buildingPlacement = findBuildingForLocation(
+        buildings,
+        pubTemplate.tags ?? [],
+        buildingOccupancy,
+        undefined,
+        grid,
+        rand
+      );
+
+      if (buildingPlacement) {
+        const pub = createLocationFromTemplate(
+          nextPubName(),
+          pubTemplate,
+          0, 0, 0,
+          pubOrg.id,
+          0,
+          buildingPlacement
+        );
+        locations.push(pub);
+        pubOrg.locations.push(pub.id);
+      } else {
+        // Fallback to legacy placement
+        const placement = findValidPlacement(grid, pubTemplate.spawnConstraints, rand);
+        if (placement) {
+          const pub = createLocationFromTemplate(
+            nextPubName(),
+            pubTemplate,
+            placement.x,
+            placement.y,
+            placement.floor,
+            pubOrg.id,
+            0
+          );
+          locations.push(pub);
+          pubOrg.locations.push(pub.id);
+        }
+      }
+
+      organizations.push(pubOrg);
+    }
+  }
+
+  // ==================
+  // 6. CREATE PUBLIC SPACES (per zone)
   // ==================
   const publicSpaceTemplate = config.locationTemplates['public_space'];
 

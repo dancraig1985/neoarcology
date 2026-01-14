@@ -1,0 +1,25 @@
+{
+  "id": "pub",
+  "name": "Pub",
+  "description": "A neighborhood bar serving drinks and providing a place to unwind",
+  "tags": ["leisure", "retail", "commercial"],
+  "spawnConstraints": {
+    "allowedZones": ["commercial", "downtown", "residential"],
+    "floorRange": [0, 2],
+    "preferGroundFloor": true
+  },
+  "balance": {
+    "openingCost": 250,
+    "operatingCost": 0,
+    "employeeSlots": 1,
+    "startingInventory": 30,
+    "inventoryCapacity": 60,
+    "inventoryGood": "alcohol"
+  },
+  "generation": {
+    "count": { "min": 6, "max": 10 },
+    "spawnAtStart": true,
+    "ownerOrgTemplate": "small_business",
+    "ownerCredits": { "min": 350, "max": 600 }
+  }
+}

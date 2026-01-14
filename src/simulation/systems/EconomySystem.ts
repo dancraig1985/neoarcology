@@ -235,6 +235,30 @@ export function processAgentEconomicDecision(
     updatedLocations = housingResult.locations;
   }
 
+  // 2c. Leisure-seeking: Agents with high leisure need seek entertainment
+  const leisureNeed = updatedAgent.needs.leisure ?? 0;
+  const leisureThreshold = agentsConfig.leisure.threshold;
+  const needsLeisure = leisureNeed >= leisureThreshold;
+
+  if (
+    needsLeisure &&
+    updatedAgent.status !== 'dead' &&
+    !isTraveling(updatedAgent)
+  ) {
+    const leisureResult = trySeekLeisure(
+      updatedAgent,
+      updatedLocations,
+      updatedOrgs,
+      economyConfig,
+      agentsConfig,
+      transportConfig,
+      phase
+    );
+    updatedAgent = leisureResult.agent;
+    updatedLocations = leisureResult.locations;
+    updatedOrgs = leisureResult.orgs;
+  }
+
   // 3. Consider opening a business if wealthy enough
   // Employed agents can quit to start a business (but not if already a business owner)
   let newOrg: Organization | undefined;
@@ -713,6 +737,163 @@ function tryFindHousing(
 }
 
 /**
+ * Try to satisfy leisure need by going to a pub (if can afford) or park (free)
+ * Credits-based decision: wealthy agents go to pubs, broke agents go to parks
+ */
+function trySeekLeisure(
+  agent: Agent,
+  locations: Location[],
+  orgs: Organization[],
+  economyConfig: EconomyConfig,
+  agentsConfig: AgentsConfig,
+  transportConfig: TransportConfig,
+  phase: number
+): { agent: Agent; locations: Location[]; orgs: Organization[] } {
+  const alcoholPrice = economyConfig.goods['alcohol']?.retailPrice ?? 15;
+  const canAffordPub = agent.wallet.credits >= alcoholPrice;
+
+  if (canAffordPub) {
+    // Try to go to a pub and buy a drink
+    return tryVisitPub(agent, locations, orgs, economyConfig, agentsConfig, transportConfig, phase);
+  } else {
+    // Go to a park (free leisure, handled by existing idle behavior)
+    // Just let them naturally flow to parks via the idle check
+    return { agent, locations, orgs };
+  }
+}
+
+/**
+ * Agent goes to pub, buys alcohol, satisfies leisure need
+ */
+function tryVisitPub(
+  agent: Agent,
+  locations: Location[],
+  orgs: Organization[],
+  economyConfig: EconomyConfig,
+  agentsConfig: AgentsConfig,
+  transportConfig: TransportConfig,
+  phase: number
+): { agent: Agent; locations: Location[]; orgs: Organization[] } {
+  // Check if already at a pub
+  const currentLoc = locations.find((l) => l.id === agent.currentLocation);
+  const isAtPub = currentLoc?.tags.includes('leisure') && currentLoc?.tags.includes('retail');
+
+  if (isAtPub && currentLoc) {
+    // At a pub - buy a drink
+    return buyDrinkAtPub(agent, currentLoc, locations, orgs, economyConfig, agentsConfig, phase);
+  }
+
+  // Find nearest pub with alcohol
+  const pubsWithStock = locations.filter(
+    (loc) => loc.tags.includes('leisure') &&
+             loc.tags.includes('retail') &&
+             (loc.inventory['alcohol'] ?? 0) > 0
+  );
+
+  if (pubsWithStock.length === 0) {
+    return { agent, locations, orgs };
+  }
+
+  // Find nearest pub
+  const nearestPub = findNearestLocation(agent, locations, (loc) =>
+    loc.tags.includes('leisure') &&
+    loc.tags.includes('retail') &&
+    (loc.inventory['alcohol'] ?? 0) > 0
+  );
+
+  if (!nearestPub) {
+    return { agent, locations, orgs };
+  }
+
+  // Start traveling to pub
+  const travelingAgent = startTravel(agent, nearestPub, locations, transportConfig);
+  if (travelingAgent !== agent) {
+    ActivityLog.info(
+      phase,
+      'leisure',
+      `heading to ${nearestPub.name} for a drink`,
+      agent.id,
+      agent.name
+    );
+    return { agent: travelingAgent, locations, orgs };
+  }
+
+  return { agent, locations, orgs };
+}
+
+/**
+ * Agent buys a drink at the pub they're at
+ */
+function buyDrinkAtPub(
+  agent: Agent,
+  pub: Location,
+  locations: Location[],
+  orgs: Organization[],
+  economyConfig: EconomyConfig,
+  agentsConfig: AgentsConfig,
+  phase: number
+): { agent: Agent; locations: Location[]; orgs: Organization[] } {
+  const alcoholStock = pub.inventory['alcohol'] ?? 0;
+  const alcoholPrice = economyConfig.goods['alcohol']?.retailPrice ?? 15;
+
+  if (alcoholStock <= 0 || agent.wallet.credits < alcoholPrice) {
+    return { agent, locations, orgs };
+  }
+
+  // Buy one drink
+  const updatedPub: Location = {
+    ...pub,
+    inventory: {
+      ...pub.inventory,
+      alcohol: alcoholStock - 1,
+    },
+    weeklyRevenue: pub.weeklyRevenue + alcoholPrice,
+  };
+
+  // Find pub owner org and credit them
+  const ownerOrg = orgs.find((org) => org.locations.includes(pub.id));
+  let updatedOrgs = orgs;
+  if (ownerOrg) {
+    const updatedOwnerOrg: Organization = {
+      ...ownerOrg,
+      wallet: {
+        ...ownerOrg.wallet,
+        credits: ownerOrg.wallet.credits + alcoholPrice,
+      },
+    };
+    updatedOrgs = orgs.map((org) => (org.id === ownerOrg.id ? updatedOwnerOrg : org));
+  }
+
+  // Reduce agent leisure need and deduct credits
+  const leisureSatisfaction = agentsConfig.leisure.pubSatisfaction;
+  const newLeisure = Math.max(0, (agent.needs.leisure ?? 0) - leisureSatisfaction);
+
+  const updatedAgent: Agent = {
+    ...agent,
+    needs: {
+      ...agent.needs,
+      leisure: newLeisure,
+    },
+    wallet: {
+      ...agent.wallet,
+      credits: agent.wallet.credits - alcoholPrice,
+    },
+  };
+
+  const updatedLocations = locations.map((loc) => (loc.id === pub.id ? updatedPub : loc));
+
+  ActivityLog.info(
+    phase,
+    'leisure',
+    `had a drink at ${pub.name} (leisure: ${agent.needs.leisure?.toFixed(0) ?? 0} -> ${newLeisure.toFixed(0)}, -${alcoholPrice} credits)`,
+    agent.id,
+    agent.name
+  );
+
+  return { agent: updatedAgent, locations: updatedLocations, orgs: updatedOrgs };
+}
+
+/**
  * Try to get a job at a hiring location (factory or shop)
  */
 function tryGetJob(
@@ -939,21 +1120,26 @@ function tryRestockFromWholesale(
   phase: number
 ): { locations: Location[]; orgs: Organization[] } {
   const goodsSizes: GoodsSizes = { goods: economyConfig.goods, defaultGoodsSize: economyConfig.defaultGoodsSize };
-  const currentStock = getGoodsCount(shop, 'provisions');
+
+  // Determine what good this shop sells based on its tags
+  // Pubs (leisure tag) sell alcohol, other retail sells provisions
+  const goodType = shop.tags.includes('leisure') ? 'alcohol' : 'provisions';
+
+  const currentStock = getGoodsCount(shop, goodType);
   const restockThreshold = 15; // Restock when below this
   const shopCapacity = getAvailableCapacity(shop, goodsSizes);
-  const wholesalePrice = economyConfig.goods['provisions']?.wholesalePrice ?? 5;
+  const wholesalePrice = economyConfig.goods[goodType]?.wholesalePrice ?? 5;
 
   // Only restock if inventory is low
   if (currentStock >= restockThreshold) {
     return { locations, orgs };
   }
 
-  // Find a wholesale location with provisions (has 'wholesale' tag)
+  // Find a wholesale location with the needed goods (has 'wholesale' tag)
   // Exclude our own locations (can't buy from yourself)
   const wholesaleLocations = locations.filter(
     (loc) => loc.tags.includes('wholesale') &&
-             getGoodsCount(loc, 'provisions') > 0 &&
+             getGoodsCount(loc, goodType) > 0 &&
              !buyerOrg.locations.includes(loc.id)
   );
 
@@ -977,9 +1163,9 @@ function tryRestockFromWholesale(
 
   // Calculate how much to buy (limited by wholesaler stock, shop capacity, and buyer org credits)
   // shopCapacity is now space-based, so calculate max items that fit
-  const provisionSize = economyConfig.goods['provisions']?.size ?? economyConfig.defaultGoodsSize;
-  const maxItemsThatFit = Math.floor(shopCapacity / provisionSize);
-  const wholesalerStock = getGoodsCount(wholesaler, 'provisions');
+  const goodSize = economyConfig.goods[goodType]?.size ?? economyConfig.defaultGoodsSize;
+  const maxItemsThatFit = Math.floor(shopCapacity / goodSize);
+  const wholesalerStock = getGoodsCount(wholesaler, goodType);
   const desiredAmount = Math.min(30, maxItemsThatFit); // Try to buy up to 30
   const affordableAmount = Math.floor(buyerOrg.wallet.credits / wholesalePrice);
   const amountToBuy = Math.min(desiredAmount, wholesalerStock, affordableAmount);
@@ -994,7 +1180,7 @@ function tryRestockFromWholesale(
   const { from: updatedWholesaler, to: updatedShop, transferred } = transferInventory(
     wholesaler,
     shop,
-    'provisions',
+    goodType,
     amountToBuy,
     goodsSizes
   );
@@ -1023,7 +1209,7 @@ function tryRestockFromWholesale(
   ActivityLog.info(
     phase,
     'wholesale',
-    `${buyerOrg.name} bought ${transferred} provisions from ${wholesaler.name} for ${totalCost} credits`,
+    `${buyerOrg.name} bought ${transferred} ${goodType} from ${wholesaler.name} for ${totalCost} credits`,
     buyerOrg.id,
     buyerOrg.name
   );

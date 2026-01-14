@@ -1,6 +1,7 @@
 {
   "goods": {
     "provisions": { "size": 0.1, "retailPrice": 10, "wholesalePrice": 5 },
+    "alcohol": { "size": 0.2, "retailPrice": 15, "wholesalePrice": 8 },
     "small_arms": { "size": 1, "retailPrice": 100, "wholesalePrice": 70 },
     "heavy_weapons": { "size": 2, "retailPrice": 500, "wholesalePrice": 350 },
     "narcotics": { "size": 0.1, "retailPrice": 50, "wholesalePrice": 30 },

@@ -21,6 +21,11 @@
         "good": "provisions",
         "amountPerEmployee": 2,
         "phasesPerCycle": 1
+      },
+      {
+        "good": "alcohol",
+        "amountPerEmployee": 1,
+        "phasesPerCycle": 2
       }
     ]
   },

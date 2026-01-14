@@ -50,6 +50,24 @@ export function processAgentPhase(
   const currentFatigue = updatedAgent.needs.fatigue ?? 0;
   const newFatigue = Math.min(100, currentFatigue + agentsConfig.fatigue.perPhase);
 
+  // Accumulate leisure need (capped at 100)
+  // BUT if at a public space (park), leisure slowly decreases instead (free entertainment)
+  const currentLeisure = updatedAgent.needs.leisure ?? 0;
+  const currentLoc = locations.find((l) => l.id === updatedAgent.currentLocation);
+  const isAtPark = currentLoc?.tags.includes('public') && !currentLoc?.tags.includes('shelter');
+
+  let newLeisure: number;
+  if (isAtPark) {
+    // At park - slowly reduce leisure (free but slow entertainment)
+    newLeisure = Math.max(0, currentLeisure - agentsConfig.leisure.parkSatisfactionPerPhase);
+  } else {
+    // Normal accumulation
+    newLeisure = Math.min(
+      agentsConfig.leisure.max,
+      currentLeisure + agentsConfig.leisure.perPhase
+    );
+  }
+
   // Check if agent needs to eat (hunger >= threshold)
   const isHungry = newHunger >= agentsConfig.hunger.threshold;
 
@@ -59,6 +77,7 @@ export function processAgentPhase(
       ...updatedAgent.needs,
       hunger: newHunger,
       fatigue: newFatigue,
+      leisure: newLeisure,
     },
   };
 

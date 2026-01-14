@@ -14,6 +14,13 @@
     "shelterRestReset": 30,
     "forcedRestReset": 60
   },
+  "leisure": {
+    "perPhase": 0.5,
+    "threshold": 50,
+    "max": 100,
+    "pubSatisfaction": 40,
+    "parkSatisfactionPerPhase": 2
+  },
   "housing": {
     "bufferWeeks": 4
   },

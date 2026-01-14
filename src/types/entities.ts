@@ -57,6 +57,7 @@ export interface AgentStats {
 export interface AgentNeeds {
   hunger: number; // 0-100, 100 = death by starvation
   fatigue: number; // 0-100, forces rest at 100 (not fatal)
+  leisure: number; // 0-100, high = wants entertainment (not fatal)
 }
 
 /**
