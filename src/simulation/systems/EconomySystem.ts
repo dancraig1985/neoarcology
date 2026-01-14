@@ -34,7 +34,21 @@ const SHOP_NAMES = [
   "Downtown Depot",
 ];
 
+const PUB_NAMES = [
+  "The Rusty Circuit",
+  "Neon Tap",
+  "Binary Bar",
+  "Voltage Lounge",
+  "The Grid",
+  "Chrome & Hops",
+  "Synth Spirits",
+  "The Dive",
+  "Circuit Breaker",
+  "The Glitch",
+];
+
 let shopNameIndex = 0;
+let pubNameIndex = 0;
 let locationIdCounter = 1;
 let orgIdCounter = 100; // Start at 100 to avoid conflicts with initial orgs
 
@@ -42,6 +56,12 @@ function getNextShopName(): string {
   const name = SHOP_NAMES[shopNameIndex % SHOP_NAMES.length];
   shopNameIndex++;
   return name ?? "Shop";
+}
+
+function getNextPubName(): string {
+  const name = PUB_NAMES[pubNameIndex % PUB_NAMES.length];
+  pubNameIndex++;
+  return name ?? "Pub";
 }
 
 function getNextLocationId(): string {
@@ -979,18 +999,44 @@ function chooseBestBusiness(
     a.wallet.credits >= housingBuffer
   ).length;
 
-  // Priority weights: food is more important (starvation kills)
-  const foodPriority = 2;
-  const housingPriority = 1;
+  // Calculate leisure demand: agents with high leisure need who can afford drinks
+  const alcoholPrice = 15; // Price of a drink at a pub
+  const leisureDemand = agents.filter((a) =>
+    a.status !== 'dead' &&
+    (a.needs.leisure ?? 0) > agentsConfig.leisure.threshold &&
+    a.wallet.credits >= alcoholPrice
+  ).length;
 
-  // Calculate weighted scores
-  const foodScore = foodDemand * foodPriority;
-  const housingScore = housingDemand * housingPriority;
+  // Build list of viable business types with their demand scores
+  // Minimum demand threshold of 3 to be considered viable
+  const minDemand = 3;
+  const candidates: { type: string; score: number }[] = [];
 
-  // Choose based on highest score, with a fallback to retail_shop
-  if (housingScore > foodScore && locationTemplates['apartment']) {
-    return 'apartment';
+  // Food retail is always viable (fallback)
+  candidates.push({ type: 'retail_shop', score: Math.max(foodDemand, 1) });
+
+  // Housing is viable if enough homeless agents with money
+  if (housingDemand >= minDemand && locationTemplates['apartment']) {
+    candidates.push({ type: 'apartment', score: housingDemand });
   }
+
+  // Pubs are viable if enough agents want leisure
+  if (leisureDemand >= minDemand && locationTemplates['pub']) {
+    candidates.push({ type: 'pub', score: leisureDemand });
+  }
+
+  // Weighted random selection from viable candidates
+  // This allows pubs to sometimes be opened even when food demand is higher
+  const totalScore = candidates.reduce((sum, c) => sum + c.score, 0);
+  let roll = Math.random() * totalScore;
+
+  for (const candidate of candidates) {
+    roll -= candidate.score;
+    if (roll <= 0) {
+      return candidate.type;
+    }
+  }
+
   return 'retail_shop';
 }
 
@@ -1060,7 +1106,8 @@ function tryOpenBusiness(
   // Create a micro-org for this business
   const orgId = getNextOrgId();
   const isApartment = businessType === 'apartment';
-  const orgName = isApartment ? `${agent.name}'s Rental` : `${agent.name}'s Shop`;
+  const isPub = businessType === 'pub';
+  const orgName = isApartment ? `${agent.name}'s Rental` : isPub ? `${agent.name}'s Bar` : `${agent.name}'s Shop`;
 
   // Org gets 70% of credits REMAINING after opening cost (not 70% of total)
   const creditsAfterOpeningCost = agent.wallet.credits - openingCost;
@@ -1077,7 +1124,7 @@ function tryOpenBusiness(
 
   // Create the location owned by the org (placed in building)
   const locationId = getNextLocationId();
-  const locationName = isApartment ? getNextApartmentName() : getNextShopName();
+  const locationName = isApartment ? getNextApartmentName() : isPub ? getNextPubName() : getNextShopName();
 
   const newLocation = createLocation(
     locationId,
