@@ -6,6 +6,7 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { UIComponent } from './UIComponent';
 import { COLORS, SPACING, FONTS } from '../UITheme';
+import { ActivityLogSection } from './ActivityLogSection';
 
 export interface DetailField {
   key: string;
@@ -28,12 +29,17 @@ export class DetailView extends UIComponent {
   private titleText: Text;
   private fieldRows: FieldRow[] = [];
   private contentContainer: Container;
+  private contentMask: Graphics;
   private scrollOffset = 0;
   private contentHeight = 0;
+  private activityLogSection: ActivityLogSection;
+  private showActivityLog: boolean;
+  private readonly LOG_HEIGHT = 180;
 
-  constructor(width: number, height: number, sections: DetailSection[]) {
+  constructor(width: number, height: number, sections: DetailSection[], showActivityLog = true) {
     super(width, height);
     this.sections = sections;
+    this.showActivityLog = showActivityLog;
 
     // Title
     const titleStyle = new TextStyle({
@@ -52,6 +58,17 @@ export class DetailView extends UIComponent {
     this.contentContainer.y = SPACING.md + FONTS.heading + SPACING.md;
     this.addChild(this.contentContainer);
 
+    // Create mask to clip content above activity log
+    this.contentMask = new Graphics();
+    this.addChild(this.contentMask);
+    this.contentContainer.mask = this.contentMask;
+
+    // Activity log section at the bottom
+    this.activityLogSection = new ActivityLogSection(width - SPACING.md * 2, this.LOG_HEIGHT);
+    this.activityLogSection.x = SPACING.md;
+    this.activityLogSection.visible = showActivityLog;
+    this.addChild(this.activityLogSection);
+
     // Scroll interaction
     this.eventMode = 'static';
     this.on('wheel', this.onWheel, this);
@@ -61,10 +78,21 @@ export class DetailView extends UIComponent {
 
   /**
    * Update the detail view with entity data
+   * @param title - Display title
+   * @param data - Entity data object
+   * @param entityId - Optional entity ID for activity log filtering
    */
-  setData(title: string, data: unknown): void {
+  setData(title: string, data: unknown, entityId?: string): void {
     this.titleText.text = title;
     this.rebuildFields(data);
+
+    // Update activity log section
+    if (this.showActivityLog && entityId) {
+      this.activityLogSection.setEntityId(entityId);
+      this.activityLogSection.visible = true;
+    } else {
+      this.activityLogSection.visible = false;
+    }
   }
 
   /**
@@ -74,6 +102,8 @@ export class DetailView extends UIComponent {
     this.titleText.text = 'Select an entity';
     this.contentContainer.removeChildren();
     this.fieldRows = [];
+    this.activityLogSection.clear();
+    this.activityLogSection.visible = false;
   }
 
   private rebuildFields(data: unknown): void {
@@ -175,7 +205,9 @@ export class DetailView extends UIComponent {
   }
 
   private onWheel(event: WheelEvent): void {
-    const viewHeight = this._height - SPACING.md - FONTS.heading - SPACING.md;
+    const topOffset = SPACING.md + FONTS.heading + SPACING.md;
+    const logSpace = this.showActivityLog ? this.LOG_HEIGHT + SPACING.md : 0;
+    const viewHeight = this._height - topOffset - logSpace;
     const maxScroll = Math.max(0, this.contentHeight - viewHeight);
 
     this.scrollOffset += event.deltaY * 0.5;
@@ -191,5 +223,20 @@ export class DetailView extends UIComponent {
   protected layout(): void {
     this.fillBackground(COLORS.panel);
     this.drawBorder(this.background, COLORS.border);
+
+    const topOffset = SPACING.md + FONTS.heading + SPACING.md;
+    const logSpace = this.showActivityLog ? this.LOG_HEIGHT + SPACING.md : 0;
+    const contentAreaHeight = this._height - topOffset - logSpace;
+
+    // Update mask to clip content area
+    this.contentMask.clear();
+    this.contentMask.rect(0, topOffset, this._width, contentAreaHeight);
+    this.contentMask.fill({ color: 0xffffff });
+
+    // Position activity log at bottom
+    if (this.showActivityLog) {
+      this.activityLogSection.y = this._height - this.LOG_HEIGHT - SPACING.md;
+      this.activityLogSection.resize(this._width - SPACING.md * 2, this.LOG_HEIGHT);
+    }
   }
 }

@@ -19,14 +19,16 @@ import {
 import type { EntityType } from './NavPanel';
 import type { SimulationState } from '../../simulation/Simulation';
 import type { Agent, Organization, Location } from '../../types';
+import { ActivityLog } from '../../simulation/ActivityLog';
+import { computeAgentActivity } from '../../simulation/helpers/ActivityHelper';
 
-const DETAIL_WIDTH = 280;
+const DETAIL_WIDTH = 360;
 
 // Enriched org type with computed fields for display
 type OrgWithLeaderName = Organization & { leaderName: string };
 
 // Enriched agent type with computed fields for display
-type AgentWithNames = Agent & { employerName: string; locationName: string };
+type AgentWithNames = Agent & { employerName: string; locationName: string; activity: string };
 
 export class MainPanel extends Panel {
   private currentEntityType: EntityType = 'agents';
@@ -186,7 +188,8 @@ export class MainPanel extends Panel {
 
     switch (this.currentEntityType) {
       case 'agents':
-        // Enrich agents with employer and location names, then sort
+        // Enrich agents with employer, location names, and activity
+        const currentPhase = this.currentState.time.currentPhase;
         const enrichedAgents: AgentWithNames[] = this.currentState.agents.map((agent) => {
           const employer = this.currentState!.organizations.find((o) => o.id === agent.employer);
           // For location, check both currentLocation and travelingTo
@@ -198,10 +201,20 @@ export class MainPanel extends Panel {
             const loc = this.currentState!.locations.find((l) => l.id === agent.currentLocation);
             locationName = loc?.name ?? '-';
           }
+          // Compute current activity
+          const recentLogs = ActivityLog.getEntriesForEntity(agent.id).filter(
+            (e) => e.phase === currentPhase
+          );
+          const { detail: activity } = computeAgentActivity(
+            agent,
+            this.currentState!.locations,
+            recentLogs
+          );
           return {
             ...agent,
             employerName: employer?.name ?? '-',
             locationName,
+            activity,
           };
         });
         // Sort: living first, then dead
@@ -233,7 +246,7 @@ export class MainPanel extends Panel {
       case 'agents': {
         const agent = this.currentState.agents.find((a) => a.id === this.selectedEntityId);
         if (agent) {
-          // Enrich with computed names for detail view
+          // Enrich with computed names and activity for detail view
           const employer = this.currentState.organizations.find((o) => o.id === agent.employer);
           let locationName = '-';
           if (agent.travelingTo) {
@@ -244,13 +257,24 @@ export class MainPanel extends Panel {
             locationName = loc?.name ?? '-';
           }
           const workplaceLoc = this.currentState.locations.find((l) => l.id === agent.employedAt);
+          // Compute current activity
+          const detailPhase = this.currentState.time.currentPhase;
+          const recentLogs = ActivityLog.getEntriesForEntity(agent.id).filter(
+            (e) => e.phase === detailPhase
+          );
+          const { detail: activity } = computeAgentActivity(
+            agent,
+            this.currentState.locations,
+            recentLogs
+          );
           const enrichedAgent = {
             ...agent,
             employerName: employer?.name ?? '-',
             locationName,
             workplaceName: workplaceLoc?.name ?? '-',
+            activity,
           };
-          this.agentDetail.setData(agent.name, enrichedAgent);
+          this.agentDetail.setData(agent.name, enrichedAgent, agent.id);
         }
         break;
       }
@@ -260,14 +284,14 @@ export class MainPanel extends Panel {
           // Enrich with computed leaderName
           const leader = this.currentState.agents.find((a) => a.id === org.leader);
           const enrichedOrg = { ...org, leaderName: leader?.name ?? '-' };
-          this.orgDetail.setData(org.name, enrichedOrg);
+          this.orgDetail.setData(org.name, enrichedOrg, org.id);
         }
         break;
       }
       case 'locations': {
         const loc = this.currentState.locations.find((l) => l.id === this.selectedEntityId);
         if (loc) {
-          this.locationDetail.setData(loc.name, loc);
+          this.locationDetail.setData(loc.name, loc, loc.id);
         }
         break;
       }

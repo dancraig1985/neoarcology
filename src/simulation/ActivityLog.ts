@@ -20,7 +20,7 @@ export interface LogEntry {
  */
 class ActivityLogImpl {
   private entries: LogEntry[] = [];
-  private maxEntries = 1000; // Keep last N entries
+  private maxEntries = 100000; // Keep last N entries (high for sim testing)
 
   /**
    * Log an event

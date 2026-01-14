@@ -1,0 +1,28 @@
+{
+  "generated": "2026-01-14T18:54:29.238Z",
+  "templates": {
+    "orgs": [
+      "corporation.json",
+      "small_business.json"
+    ],
+    "agents": [
+      "civilian.json"
+    ],
+    "locations": [
+      "apartment.json",
+      "factory.json",
+      "pub.json",
+      "public_space.json",
+      "restaurant.json",
+      "retail_shop.json",
+      "shelter.json"
+    ],
+    "buildings": [
+      "arcology.json",
+      "low_rise.json",
+      "office_tower.json",
+      "residential_tower.json",
+      "warehouse.json"
+    ]
+  }
+}

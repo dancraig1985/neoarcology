@@ -800,7 +800,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
       );
 
       if (buildingPlacement) {
-        const shop = createLocationFromTemplate(
+        let shop = createLocationFromTemplate(
           nextShopName(),
           shopTemplate,
           0, 0, 0,
@@ -808,13 +808,21 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           0,
           buildingPlacement
         );
+        // Add owner as employee if template specifies (for workforce tracking, not salary)
+        if (shopOrgTemplate.generation?.leaderBecomesEmployed && owner) {
+          shop = { ...shop, employees: [owner.id] };
+          owner.employedAt = shop.id;
+          owner.employer = shopOrg.id;
+          owner.status = 'employed';
+          // Note: owner.salary stays 0 - owners live off dividends, not payroll
+        }
         locations.push(shop);
         shopOrg.locations.push(shop.id);
       } else {
         // Fallback to legacy placement
         const placement = findValidPlacement(grid, shopTemplate.spawnConstraints, rand);
         if (placement) {
-          const shop = createLocationFromTemplate(
+          let shop = createLocationFromTemplate(
             nextShopName(),
             shopTemplate,
             placement.x,
@@ -823,6 +831,14 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
             shopOrg.id,
             0
           );
+          // Add owner as employee if template specifies (for workforce tracking, not salary)
+          if (shopOrgTemplate.generation?.leaderBecomesEmployed && owner) {
+            shop = { ...shop, employees: [owner.id] };
+            owner.employedAt = shop.id;
+            owner.employer = shopOrg.id;
+            owner.status = 'employed';
+            // Note: owner.salary stays 0 - owners live off dividends, not payroll
+          }
           locations.push(shop);
           shopOrg.locations.push(shop.id);
         }
@@ -881,7 +897,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
       );
 
       if (buildingPlacement) {
-        const restaurant = createLocationFromTemplate(
+        let restaurant = createLocationFromTemplate(
           nextRestaurantName(),
           restaurantTemplate,
           0, 0, 0,
@@ -889,13 +905,21 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           0,
           buildingPlacement
         );
+        // Add owner as employee if template specifies (for workforce tracking, not salary)
+        if (restaurantOrgTemplate.generation?.leaderBecomesEmployed && owner) {
+          restaurant = { ...restaurant, employees: [owner.id] };
+          owner.employedAt = restaurant.id;
+          owner.employer = restaurantOrg.id;
+          owner.status = 'employed';
+          // Note: owner.salary stays 0 - owners live off dividends, not payroll
+        }
         locations.push(restaurant);
         restaurantOrg.locations.push(restaurant.id);
       } else {
         // Fallback to legacy placement
         const placement = findValidPlacement(grid, restaurantTemplate.spawnConstraints, rand);
         if (placement) {
-          const restaurant = createLocationFromTemplate(
+          let restaurant = createLocationFromTemplate(
             nextRestaurantName(),
             restaurantTemplate,
             placement.x,
@@ -904,6 +928,14 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
             restaurantOrg.id,
             0
           );
+          // Add owner as employee if template specifies (for workforce tracking, not salary)
+          if (restaurantOrgTemplate.generation?.leaderBecomesEmployed && owner) {
+            restaurant = { ...restaurant, employees: [owner.id] };
+            owner.employedAt = restaurant.id;
+            owner.employer = restaurantOrg.id;
+            owner.status = 'employed';
+            // Note: owner.salary stays 0 - owners live off dividends, not payroll
+          }
           locations.push(restaurant);
           restaurantOrg.locations.push(restaurant.id);
         }
@@ -962,7 +994,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
       );
 
       if (buildingPlacement) {
-        const pub = createLocationFromTemplate(
+        let pub = createLocationFromTemplate(
           nextPubName(),
           pubTemplate,
           0, 0, 0,
@@ -970,13 +1002,21 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           0,
           buildingPlacement
         );
+        // Add owner as employee if template specifies (for workforce tracking, not salary)
+        if (pubOrgTemplate.generation?.leaderBecomesEmployed && owner) {
+          pub = { ...pub, employees: [owner.id] };
+          owner.employedAt = pub.id;
+          owner.employer = pubOrg.id;
+          owner.status = 'employed';
+          // Note: owner.salary stays 0 - owners live off dividends, not payroll
+        }
         locations.push(pub);
         pubOrg.locations.push(pub.id);
       } else {
         // Fallback to legacy placement
         const placement = findValidPlacement(grid, pubTemplate.spawnConstraints, rand);
         if (placement) {
-          const pub = createLocationFromTemplate(
+          let pub = createLocationFromTemplate(
             nextPubName(),
             pubTemplate,
             placement.x,
@@ -985,6 +1025,14 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
             pubOrg.id,
             0
           );
+          // Add owner as employee if template specifies (for workforce tracking, not salary)
+          if (pubOrgTemplate.generation?.leaderBecomesEmployed && owner) {
+            pub = { ...pub, employees: [owner.id] };
+            owner.employedAt = pub.id;
+            owner.employer = pubOrg.id;
+            owner.status = 'employed';
+            // Note: owner.salary stays 0 - owners live off dividends, not payroll
+          }
           locations.push(pub);
           pubOrg.locations.push(pub.id);
         }

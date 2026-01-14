@@ -7,7 +7,7 @@
     "credits": { "min": 2000, "max": 5000 }
   },
   "generation": {
-    "count": { "min": 8, "max": 12 },
+    "count": { "min": 5, "max": 6 },
     "spawnAtStart": true,
     "ownsLocations": ["factory"],
     "leaderBecomesEmployed": true

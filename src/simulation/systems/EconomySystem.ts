@@ -445,8 +445,6 @@ function tryBuyProvisions(
 
     // Transfer revenue to the org that owns the shop
     const totalRevenue = retailPrice * quantityToBuy;
-    const ownerOrg = orgs.find((org) => org.locations.includes(currentShop.id));
-
 
     const updatedOrgs = orgs.map((org) => {
       if (org.locations.includes(currentShop.id)) {
@@ -1008,9 +1006,20 @@ function chooseBestBusiness(
     candidates.push({ type: 'apartment', score: housingDemand });
   }
 
-  // Pubs are viable if enough agents want leisure
+  // Pubs are viable if there's leisure demand
+  // (With dividend-first payment and high starting capital, owners can survive the ramp-up)
   if (leisureDemand >= minDemand && locationTemplates['pub']) {
     candidates.push({ type: 'pub', score: leisureDemand });
+  }
+
+  // Factories are viable if there's wholesale supply shortage
+  // Check if any retail locations exist that might need wholesale goods
+  const retailLocations = _locations.filter((loc) => loc.tags.includes('retail'));
+  const wholesaleLocations = _locations.filter((loc) => loc.tags.includes('wholesale'));
+  const wholesaleShortage = retailLocations.length > 0 && wholesaleLocations.length < 2;
+  if (wholesaleShortage && locationTemplates['factory']) {
+    // High priority if there's a wholesale shortage
+    candidates.push({ type: 'factory', score: retailLocations.length * 2 });
   }
 
   // Weighted random selection from viable candidates
@@ -1095,11 +1104,18 @@ function tryOpenBusiness(
   const orgId = getNextOrgId();
   const isApartment = businessType === 'apartment';
   const isPub = businessType === 'pub';
-  const orgName = isApartment ? `${agent.name}'s Rental` : isPub ? `${agent.name}'s Bar` : `${agent.name}'s Shop`;
+  const isFactory = businessType === 'factory';
+  const orgName = isFactory
+    ? `${agent.name.split(' ')[1]} Industries` // Use last name for factory
+    : isApartment
+      ? `${agent.name}'s Rental`
+      : isPub
+        ? `${agent.name}'s Bar`
+        : `${agent.name}'s Shop`;
 
   // Org gets 70% of credits REMAINING after opening cost (not 70% of total)
-  // But ensure minimum capital of 350 for viability (covers ~5 weeks of expenses)
-  const minBusinessCapital = 350;
+  // Minimum capital must cover: employee wages (~180/week for 2 workers) + owner dividend (75) + buffer
+  const minBusinessCapital = isFactory ? 600 : 400;
   const creditsAfterOpeningCost = agent.wallet.credits - openingCost;
   const calculatedCapital = Math.floor(creditsAfterOpeningCost * 0.7);
   const businessCapital = Math.max(calculatedCapital, minBusinessCapital);
@@ -1120,7 +1136,13 @@ function tryOpenBusiness(
 
   // Create the location owned by the org (placed in building)
   const locationId = getNextLocationId();
-  const locationName = isApartment ? getNextApartmentName() : isPub ? getNextPubName() : getNextShopName();
+  const locationName = isFactory
+    ? `${agent.name.split(' ')[1]} Factory`
+    : isApartment
+      ? getNextApartmentName()
+      : isPub
+        ? getNextPubName()
+        : getNextShopName();
 
   const newLocation = createLocation(
     locationId,
@@ -1275,9 +1297,10 @@ function tryRestockFromWholesale(
 
 /**
  * Process weekly economy for all organizations
+ * - Owner dividend paid FIRST (owner survival priority)
  * - Org pays employee salaries from org wallet
  * - Org pays operating costs from org wallet
- * - Dissolve orgs that go bankrupt
+ * - Dissolve orgs that go bankrupt or lose their owner
  */
 export function processWeeklyEconomy(
   agents: Agent[],
@@ -1298,6 +1321,37 @@ export function processWeeklyEconomy(
     const orgId = org.id; // Capture for type narrowing in filter
     // Find all locations owned by this org
     const orgLocations = updatedLocations.filter((loc) => loc.owner === orgId);
+
+    // Pay owner dividend FIRST (owner survival is priority - they need to eat!)
+    // This happens before employee salaries so owner always gets paid if org has funds
+    const ownerDividend = 75; // Owner takes 75 credits/week to cover food (50) + rent (20) + buffer
+    const leaderIdx = updatedAgents.findIndex((a) => a.id === org.leader);
+    if (leaderIdx !== -1 && org.wallet.credits >= ownerDividend) {
+      const leader = updatedAgents[leaderIdx];
+      if (leader && leader.status !== 'dead') {
+        org = {
+          ...org,
+          wallet: {
+            ...org.wallet,
+            credits: org.wallet.credits - ownerDividend,
+          },
+        };
+        updatedAgents[leaderIdx] = {
+          ...leader,
+          wallet: {
+            ...leader.wallet,
+            credits: leader.wallet.credits + ownerDividend,
+          },
+        };
+        ActivityLog.info(
+          phase,
+          'dividend',
+          `received ${ownerDividend} credits from ${org.name}`,
+          leader.id,
+          leader.name
+        );
+      }
+    }
 
     for (const location of orgLocations) {
       // Find employees at this location
@@ -1377,38 +1431,6 @@ export function processWeeklyEconomy(
       const locIndex = updatedLocations.findIndex((l) => l.id === location.id);
       if (locIndex !== -1) {
         updatedLocations[locIndex] = updatedLocation;
-      }
-    }
-
-    // Pay owner dividend/salary (owner extracts profits from the business)
-    const ownerSalary = 30; // Owner takes 30 credits/week as salary
-    const currentOrg = org; // Capture for type narrowing
-    if (!currentOrg) continue;
-    const leaderIdx = updatedAgents.findIndex((a) => a.id === currentOrg.leader);
-    if (leaderIdx !== -1 && currentOrg.wallet.credits >= ownerSalary) {
-      const leader = updatedAgents[leaderIdx];
-      if (leader && leader.status !== 'dead') {
-        org = {
-          ...currentOrg,
-          wallet: {
-            ...currentOrg.wallet,
-            credits: currentOrg.wallet.credits - ownerSalary,
-          },
-        };
-        updatedAgents[leaderIdx] = {
-          ...leader,
-          wallet: {
-            ...leader.wallet,
-            credits: leader.wallet.credits + ownerSalary,
-          },
-        };
-        ActivityLog.info(
-          phase,
-          'dividend',
-          `received ${ownerSalary} credits from ${currentOrg.name}`,
-          leader.id,
-          leader.name
-        );
       }
     }
 

@@ -48,7 +48,7 @@ export const AGENT_COLUMNS: ColumnDef<Agent>[] = [
   {
     key: 'name',
     label: 'Name',
-    width: 140,
+    width: 160,
   },
   {
     key: 'status',
@@ -86,12 +86,17 @@ export const AGENT_COLUMNS: ColumnDef<Agent>[] = [
   {
     key: 'employerName',
     label: 'Employer',
-    width: 110,
+    width: 130,
   },
   {
     key: 'locationName',
     label: 'Location',
-    width: 120,
+    width: 150,
+  },
+  {
+    key: 'activity',
+    label: 'Activity',
+    width: 200,
   },
 ];
 
@@ -196,6 +201,7 @@ export const AGENT_DETAILS: DetailSection[] = [
       { key: 'id', label: 'ID' },
       { key: 'name', label: 'Name' },
       { key: 'status', label: 'Status' },
+      { key: 'activity', label: 'Activity' },
       { key: 'created', label: 'Born (phase)' },
     ],
   },
@@ -246,6 +252,7 @@ export const AGENT_DETAILS: DetailSection[] = [
     fields: [
       { key: 'needs.hunger', label: 'Hunger', render: (a) => `${Math.round((a as Agent).needs.hunger)}%` },
       { key: 'needs.fatigue', label: 'Fatigue', render: (a) => `${Math.round((a as Agent).needs.fatigue ?? 0)}%` },
+      { key: 'needs.leisure', label: 'Leisure', render: (a) => `${Math.round((a as Agent).needs.leisure ?? 0)}%` },
       { key: 'wallet.credits', label: 'Credits' },
       {
         key: 'inventory',

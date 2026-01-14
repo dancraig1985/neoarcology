@@ -3,7 +3,7 @@
  * Displays entities in rows with configurable columns
  */
 
-import { Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Container, FederatedPointerEvent, Graphics, Text, TextStyle } from 'pixi.js';
 import { UIComponent } from './UIComponent';
 import { COLORS, SPACING, FONTS } from '../UITheme';
 import { type ColumnDef, renderCell } from '../UIConfig';
@@ -15,6 +15,11 @@ export interface TableOptions<T> {
   headerHeight?: number;
 }
 
+interface SortState {
+  columnKey: string;
+  direction: 'asc' | 'desc';
+}
+
 interface TableRow {
   container: Container;
   background: Graphics;
@@ -23,27 +28,41 @@ interface TableRow {
 
 export class Table<T extends { id: string }> extends UIComponent {
   private columns: ColumnDef<T>[];
+  private columnWidths: number[]; // Dynamic widths (for resizing)
   private data: T[] = [];
+  private originalData: T[] = []; // Keep unsorted copy
   private rows: TableRow[] = [];
   private selectedId?: string;
   private onRowClick?: (item: T) => void;
   private rowHeight: number;
   private headerHeight: number;
+  private sortState?: SortState;
 
   private headerContainer: Container;
   private headerBg: Graphics;
   private headerTexts: Text[] = [];
   private columnDividers: Graphics;
+  private resizeHandles: Graphics[] = [];
   private bodyContainer: Container;
   private bodyMask: Graphics;
   private scrollOffset = 0;
 
+  // Resize state
+  private resizing: { columnIndex: number; startX: number; startWidth: number } | null = null;
+  private boundOnResizeMove: (e: PointerEvent) => void;
+  private boundOnResizeEnd: () => void;
+
   constructor(width: number, height: number, options: TableOptions<T>) {
     super(width, height);
     this.columns = options.columns;
+    this.columnWidths = options.columns.map((c) => c.width); // Initialize from config
     this.onRowClick = options.onRowClick;
     this.rowHeight = options.rowHeight ?? SPACING.rowHeight;
     this.headerHeight = options.headerHeight ?? SPACING.rowHeight;
+
+    // Bind resize handlers
+    this.boundOnResizeMove = this.onResizeMove.bind(this);
+    this.boundOnResizeEnd = this.onResizeEnd.bind(this);
 
     // Header
     this.headerBg = new Graphics();
@@ -65,6 +84,9 @@ export class Table<T extends { id: string }> extends UIComponent {
     this.columnDividers = new Graphics();
     this.addChild(this.columnDividers);
 
+    // Create resize handles
+    this.createResizeHandles();
+
     // Scroll interaction
     this.eventMode = 'static';
     this.on('wheel', this.onWheel, this);
@@ -76,8 +98,14 @@ export class Table<T extends { id: string }> extends UIComponent {
    * Set table data
    */
   setData(data: T[]): void {
-    this.data = data;
-    this.rebuildRows();
+    this.originalData = data;
+    // Apply current sort if any, otherwise just use data as-is
+    if (this.sortState) {
+      this.applySortAndRebuild();
+    } else {
+      this.data = data;
+      this.rebuildRows();
+    }
   }
 
   /**
@@ -119,9 +147,190 @@ export class Table<T extends { id: string }> extends UIComponent {
         text.x = xOffset + (column.width - text.width) / 2;
       }
 
+      // Make header clickable for sorting
+      text.eventMode = 'static';
+      text.cursor = 'pointer';
+      text.on('pointerdown', () => this.onHeaderClick(column.key));
+
       this.headerContainer.addChild(text);
       this.headerTexts.push(text);
       xOffset += column.width;
+    }
+  }
+
+  private onHeaderClick(columnKey: string): void {
+    if (this.sortState?.columnKey === columnKey) {
+      // Toggle direction
+      this.sortState.direction = this.sortState.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+      // New column
+      this.sortState = { columnKey, direction: 'asc' };
+    }
+    this.applySortAndRebuild();
+  }
+
+  private applySortAndRebuild(): void {
+    if (!this.sortState) {
+      this.data = [...this.originalData];
+    } else {
+      const { columnKey, direction } = this.sortState;
+
+      this.data = [...this.originalData].sort((a, b) => {
+        const aVal = this.getNestedValue(a, columnKey);
+        const bVal = this.getNestedValue(b, columnKey);
+
+        let cmp = 0;
+        if (aVal === undefined || aVal === null) {
+          cmp = 1; // Nulls last
+        } else if (bVal === undefined || bVal === null) {
+          cmp = -1;
+        } else if (typeof aVal === 'string' && typeof bVal === 'string') {
+          cmp = aVal.localeCompare(bVal);
+        } else if (typeof aVal === 'number' && typeof bVal === 'number') {
+          cmp = aVal - bVal;
+        } else {
+          cmp = String(aVal).localeCompare(String(bVal));
+        }
+
+        return direction === 'asc' ? cmp : -cmp;
+      });
+    }
+
+    this.rebuildRows();
+    this.updateHeaderSortIndicators();
+  }
+
+  private getNestedValue(obj: unknown, path: string): unknown {
+    return path.split('.').reduce((acc: unknown, part) => {
+      if (acc && typeof acc === 'object' && part in acc) {
+        return (acc as Record<string, unknown>)[part];
+      }
+      return undefined;
+    }, obj);
+  }
+
+  private updateHeaderSortIndicators(): void {
+    for (let i = 0; i < this.columns.length; i++) {
+      const column = this.columns[i];
+      const text = this.headerTexts[i];
+      if (!column || !text) continue;
+
+      // Remove any existing sort indicator
+      const baseLabel = column.label;
+      let newLabel = baseLabel;
+
+      if (this.sortState?.columnKey === column.key) {
+        const indicator = this.sortState.direction === 'asc' ? ' ▲' : ' ▼';
+        newLabel = baseLabel + indicator;
+      }
+
+      text.text = newLabel;
+    }
+  }
+
+  private createResizeHandles(): void {
+    // Create a resize handle between each column
+    for (let i = 0; i < this.columns.length - 1; i++) {
+      const handle = new Graphics();
+      handle.eventMode = 'static';
+      handle.cursor = 'col-resize';
+      handle.on('pointerdown', (e) => this.onResizeStart(i, e));
+      this.addChild(handle);
+      this.resizeHandles.push(handle);
+    }
+    this.updateResizeHandlePositions();
+  }
+
+  private updateResizeHandlePositions(): void {
+    let xOffset = SPACING.sm;
+    for (let i = 0; i < this.resizeHandles.length; i++) {
+      const handle = this.resizeHandles[i];
+      const width = this.columnWidths[i] ?? 100;
+      xOffset += width;
+
+      if (handle) {
+        handle.clear();
+        // Invisible but larger hit area for easier grabbing
+        handle.rect(xOffset - 4, 0, 8, this._height);
+        handle.fill({ color: 0xffffff, alpha: 0 });
+      }
+    }
+  }
+
+  private onResizeStart(columnIndex: number, event: FederatedPointerEvent): void {
+    this.resizing = {
+      columnIndex,
+      startX: event.clientX,
+      startWidth: this.columnWidths[columnIndex] ?? 100,
+    };
+
+    // Add document-level event listeners for drag
+    document.addEventListener('pointermove', this.boundOnResizeMove);
+    document.addEventListener('pointerup', this.boundOnResizeEnd);
+  }
+
+  private onResizeMove(event: PointerEvent): void {
+    if (!this.resizing) return;
+
+    const delta = event.clientX - this.resizing.startX;
+    const newWidth = Math.max(50, this.resizing.startWidth + delta); // Minimum 50px
+    this.columnWidths[this.resizing.columnIndex] = newWidth;
+
+    // Rebuild headers and rows with new widths
+    this.rebuildHeader();
+    this.rebuildRows();
+    this.updateResizeHandlePositions();
+    this.layout();
+  }
+
+  private onResizeEnd(): void {
+    this.resizing = null;
+    document.removeEventListener('pointermove', this.boundOnResizeMove);
+    document.removeEventListener('pointerup', this.boundOnResizeEnd);
+  }
+
+  private rebuildHeader(): void {
+    // Clear existing header
+    this.headerContainer.removeChildren();
+    this.headerTexts = [];
+
+    const headerStyle = new TextStyle({
+      fontFamily: FONTS.family,
+      fontSize: FONTS.small,
+      fill: COLORS.text,
+      fontWeight: 'bold',
+    });
+
+    let xOffset = SPACING.sm;
+    for (let i = 0; i < this.columns.length; i++) {
+      const column = this.columns[i];
+      const width = this.columnWidths[i] ?? 100;
+      if (!column) continue;
+
+      // Add sort indicator if needed
+      let label = column.label;
+      if (this.sortState?.columnKey === column.key) {
+        const indicator = this.sortState.direction === 'asc' ? ' ▲' : ' ▼';
+        label = column.label + indicator;
+      }
+
+      const text = new Text({ text: label, style: headerStyle });
+      text.x = xOffset + SPACING.xs;
+      text.y = (this.headerHeight - text.height) / 2;
+
+      if (column.align === 'right') {
+        text.x = xOffset + width - text.width - SPACING.sm;
+      } else if (column.align === 'center') {
+        text.x = xOffset + (width - text.width) / 2;
+      }
+
+      text.eventMode = 'static';
+      text.cursor = 'pointer';
+      text.on('pointerdown', () => this.onHeaderClick(column.key));
+
+      this.headerContainer.addChild(text);
+      this.headerTexts.push(text);
+      xOffset += width;
     }
   }
 
@@ -168,16 +377,20 @@ export class Table<T extends { id: string }> extends UIComponent {
     // Create cells
     const cells: Text[] = [];
     let xOffset = SPACING.sm;
-    const cellPadding = SPACING.md; // Padding on each side of cell
+    const cellPadding = SPACING.sm; // Right-side padding for truncation
 
-    for (const column of this.columns) {
+    for (let i = 0; i < this.columns.length; i++) {
+      const column = this.columns[i];
+      const width = this.columnWidths[i] ?? 100;
+      if (!column) continue;
+
       const value = renderCell(item, column);
       const text = new Text({ text: value, style: cellStyle });
       text.x = xOffset + SPACING.xs; // Left padding
       text.y = (this.rowHeight - text.height) / 2;
 
       // Truncate if too wide (account for padding on both sides)
-      const maxWidth = column.width - cellPadding;
+      const maxWidth = width - cellPadding;
       if (text.width > maxWidth) {
         while (text.width > maxWidth && text.text.length > 3) {
           text.text = text.text.slice(0, -4) + '...';
@@ -186,14 +399,14 @@ export class Table<T extends { id: string }> extends UIComponent {
 
       // Right-align if specified (with right padding)
       if (column.align === 'right') {
-        text.x = xOffset + column.width - text.width - cellPadding;
+        text.x = xOffset + width - text.width - SPACING.xs;
       } else if (column.align === 'center') {
-        text.x = xOffset + (column.width - text.width) / 2;
+        text.x = xOffset + (width - text.width) / 2;
       }
 
       container.addChild(text);
       cells.push(text);
-      xOffset += column.width;
+      xOffset += width;
     }
 
     // Draw initial background
@@ -288,9 +501,8 @@ export class Table<T extends { id: string }> extends UIComponent {
       this.columnDividers.clear();
       let xOffset = SPACING.sm;
       for (let i = 0; i < this.columns.length - 1; i++) {
-        const column = this.columns[i];
-        if (!column) continue;
-        xOffset += column.width;
+        const width = this.columnWidths[i] ?? 100;
+        xOffset += width;
 
         // Vertical divider line
         this.columnDividers.moveTo(xOffset, 4);

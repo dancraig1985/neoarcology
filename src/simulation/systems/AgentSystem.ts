@@ -261,7 +261,8 @@ export function processRest(
       ...agent.needs,
       fatigue: newFatigue,
     },
-    status: 'available', // Rest completes, agent is available again
+    // Preserve employment status - only set 'available' if not employed
+    status: agent.status === 'employed' ? 'employed' : 'available',
   };
 }
 

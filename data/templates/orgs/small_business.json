@@ -4,7 +4,7 @@
   "description": "A small owner-operated business like a shop or restaurant",
   "tags": ["small_business", "legal"],
   "defaults": {
-    "credits": { "min": 600, "max": 1200 }
+    "credits": { "min": 1500, "max": 2500 }
   },
   "generation": {
     "spawnAtStart": false,

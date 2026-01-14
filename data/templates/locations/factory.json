@@ -11,9 +11,9 @@
     "maxPerCity": 20
   },
   "balance": {
-    "openingCost": 1000,
+    "openingCost": 500,
     "operatingCost": 0,
-    "employeeSlots": 4,
+    "employeeSlots": 5,
     "startingInventory": 100,
     "inventoryCapacity": 500,
     "production": [
@@ -30,6 +30,8 @@
     ]
   },
   "generation": {
-    "spawnAtStart": false
+    "count": { "min": 6, "max": 8 },
+    "spawnAtStart": true,
+    "ownerOrgTemplate": "corporation"
   }
 }

@@ -9,14 +9,14 @@
     "preferGroundFloor": true
   },
   "balance": {
-    "openingCost": 200,
+    "openingCost": 100,
     "operatingCost": 0,
     "employeeSlots": 2,
     "startingInventory": 20,
     "inventoryCapacity": 50
   },
   "generation": {
-    "count": { "min": 12, "max": 18 },
+    "count": { "min": 10, "max": 12 },
     "spawnAtStart": true,
     "ownerOrgTemplate": "small_business"
   }

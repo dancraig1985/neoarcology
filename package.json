@@ -4,13 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "npm run generate:manifest && vite",
+    "build": "npm run generate:manifest && tsc && vite build",
     "preview": "vite preview",
     "test": "vitest",
     "lint": "eslint src --ext .ts,.tsx",
     "format": "prettier --write \"src/**/*.ts\"",
-    "sim:test": "tsx src/cli/sim-test.ts"
+    "sim:test": "tsx src/cli/sim-test.ts",
+    "generate:manifest": "tsx scripts/generate-manifest.ts"
   },
   "dependencies": {
     "pixi.js": "^8.14.3",
