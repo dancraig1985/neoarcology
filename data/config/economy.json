@@ -18,5 +18,5 @@
   "salary": {
     "unskilled": { "min": 25, "max": 45 }
   },
-  "entrepreneurThreshold": 300
+  "entrepreneurThreshold": 600
 }

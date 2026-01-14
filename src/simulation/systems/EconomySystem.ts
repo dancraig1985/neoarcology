@@ -279,27 +279,15 @@ export function processAgentEconomicDecision(
     updatedOrgs = leisureResult.orgs;
   }
 
-  // 3. Consider opening a business if wealthy enough
-  // Employed agents can quit to start a business (but not if already a business owner)
+  // 3. Consider opening a business if wealthy enough and UNEMPLOYED
+  // Only available (unemployed) agents consider entrepreneurship - employed agents keep their jobs
   let newOrg: Organization | undefined;
   const canStartBusiness =
     updatedAgent.wallet.credits >= economyConfig.entrepreneurThreshold &&
     !leadsAnyOrg(updatedAgent, updatedOrgs) &&
-    updatedAgent.status !== 'dead';
+    updatedAgent.status === 'available'; // Must be unemployed
 
   if (canStartBusiness) {
-    // If employed, need to quit job first
-    if (updatedAgent.status === 'employed' && updatedAgent.employedAt) {
-      const workplace = updatedLocations.find(loc => loc.id === updatedAgent.employedAt);
-      if (workplace) {
-        const releaseResult = releaseAgent(workplace, updatedAgent, 'starting business', phase);
-        updatedAgent = releaseResult.agent;
-        updatedLocations = updatedLocations.map(loc =>
-          loc.id === workplace.id ? releaseResult.location : loc
-        );
-      }
-    }
-
     const result = tryOpenBusiness(updatedAgent, locationTemplates, buildings, updatedLocations, allAgents, agentsConfig, phase);
     if (result.newLocation && result.newOrg) {
       updatedAgent = result.agent;
@@ -1110,8 +1098,16 @@ function tryOpenBusiness(
   const orgName = isApartment ? `${agent.name}'s Rental` : isPub ? `${agent.name}'s Bar` : `${agent.name}'s Shop`;
 
   // Org gets 70% of credits REMAINING after opening cost (not 70% of total)
+  // But ensure minimum capital of 350 for viability (covers ~5 weeks of expenses)
+  const minBusinessCapital = 350;
   const creditsAfterOpeningCost = agent.wallet.credits - openingCost;
-  const businessCapital = Math.floor(creditsAfterOpeningCost * 0.7); // 70% of remaining goes to business
+  const calculatedCapital = Math.floor(creditsAfterOpeningCost * 0.7);
+  const businessCapital = Math.max(calculatedCapital, minBusinessCapital);
+
+  // Agent must have enough for opening cost + minimum capital
+  if (agent.wallet.credits < openingCost + minBusinessCapital) {
+    return { agent };
+  }
 
   let newOrg = createOrganization(
     orgId,
