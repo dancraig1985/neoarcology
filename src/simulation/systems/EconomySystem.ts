@@ -167,6 +167,7 @@ export function processAgentEconomicDecision(
     const orgRetailLocations = updatedLocations.filter(
       (loc) => ledOrg.locations.includes(loc.id) && loc.tags.includes('retail')
     );
+
     for (const retailLoc of orgRetailLocations) {
       const result = tryRestockFromWholesale(ledOrg, retailLoc, updatedLocations, updatedOrgs, economyConfig, phase);
       updatedLocations = result.locations;
@@ -343,7 +344,6 @@ function tryBuyProvisions(
   );
 
   if (retailLocations.length === 0) {
-    console.log(`[DEBUG BUY] ${agent.name} wants to buy but NO retail locations have provisions!`);
     return { agent, locations, orgs };
   }
 
@@ -389,8 +389,21 @@ function tryBuyProvisions(
     }
   }
 
-  // Agent is at a shop with provisions - try to buy
-  const result = purchaseFromLocation(currentShop, updatedAgent, 'provisions', 1, economyConfig, phase);
+  // Agent is at a shop with provisions - buy enough to fill up inventory
+  // Buy as many as possible (up to inventory capacity) while affordable
+  const retailPrice = economyConfig.goods['provisions']?.retailPrice ?? 10;
+  const inventoryCapacity = 10; // Match agent config
+  const currentProvisions = updatedAgent.inventory['provisions'] ?? 0;
+  const shopStock = currentShop.inventory['provisions'] ?? 0;
+  const maxCanAfford = Math.floor(updatedAgent.wallet.credits / retailPrice);
+  const spaceInInventory = inventoryCapacity - currentProvisions;
+  const quantityToBuy = Math.min(shopStock, maxCanAfford, spaceInInventory, 5); // Buy up to 5 at a time
+
+  if (quantityToBuy <= 0) {
+    return { agent: updatedAgent, locations, orgs };
+  }
+
+  const result = purchaseFromLocation(currentShop, updatedAgent, 'provisions', quantityToBuy, economyConfig, phase);
 
   if (result.success) {
     // Update the location in the array
@@ -399,14 +412,9 @@ function tryBuyProvisions(
     );
 
     // Transfer revenue to the org that owns the shop
-    const retailPrice = economyConfig.goods['provisions']?.retailPrice ?? 10;
+    const totalRevenue = retailPrice * quantityToBuy;
     const ownerOrg = orgs.find((org) => org.locations.includes(currentShop.id));
 
-    if (ownerOrg) {
-      console.log(`[DEBUG RETAIL] ${updatedAgent.name} bought from ${currentShop.name}, ${ownerOrg.name} receives ${retailPrice} credits (was: ${ownerOrg.wallet.credits}, now: ${ownerOrg.wallet.credits + retailPrice})`);
-    } else {
-      console.log(`[DEBUG RETAIL] WARNING: No owner org found for shop ${currentShop.id}! Shop locations in orgs:`, orgs.map(o => ({ name: o.name, locations: o.locations })));
-    }
 
     const updatedOrgs = orgs.map((org) => {
       if (org.locations.includes(currentShop.id)) {
@@ -414,7 +422,7 @@ function tryBuyProvisions(
           ...org,
           wallet: {
             ...org.wallet,
-            credits: org.wallet.credits + retailPrice,
+            credits: org.wallet.credits + totalRevenue,
           },
         };
       }
@@ -941,8 +949,6 @@ function tryRestockFromWholesale(
     return { locations, orgs };
   }
 
-  console.log(`[DEBUG WHOLESALE] ${buyerOrg.name} trying to restock ${shop.name} (stock: ${currentStock}, credits: ${buyerOrg.wallet.credits})`);
-
   // Find a wholesale location with provisions (has 'wholesale' tag)
   // Exclude our own locations (can't buy from yourself)
   const wholesaleLocations = locations.filter(
@@ -953,7 +959,6 @@ function tryRestockFromWholesale(
 
   if (wholesaleLocations.length === 0) {
     // No wholesale locations with stock - can't restock
-    console.log(`[DEBUG WHOLESALE] No wholesale locations found with stock!`);
     return { locations, orgs };
   }
 
@@ -979,10 +984,7 @@ function tryRestockFromWholesale(
   const affordableAmount = Math.floor(buyerOrg.wallet.credits / wholesalePrice);
   const amountToBuy = Math.min(desiredAmount, wholesalerStock, affordableAmount);
 
-  console.log(`[DEBUG WHOLESALE] Calculation: desired=${desiredAmount}, wholesalerStock=${wholesalerStock}, affordable=${affordableAmount}, buying=${amountToBuy}`);
-
   if (amountToBuy <= 0) {
-    console.log(`[DEBUG WHOLESALE] Can't buy anything! (no credits or no stock)`);
     return { locations, orgs };
   }
 
@@ -1017,8 +1019,6 @@ function tryRestockFromWholesale(
       credits: sellerOrg.wallet.credits + totalCost,
     },
   };
-
-  console.log(`[DEBUG WHOLESALE] SUCCESS: ${buyerOrg.name} bought ${transferred} from ${wholesaler.name}. Buyer credits: ${buyerOrg.wallet.credits} -> ${updatedBuyerOrg.wallet.credits}, Seller credits: ${sellerOrg.wallet.credits} -> ${updatedSellerOrg.wallet.credits}`);
 
   ActivityLog.info(
     phase,

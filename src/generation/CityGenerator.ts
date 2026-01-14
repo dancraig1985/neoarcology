@@ -957,15 +957,19 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   if (apartmentTemplate?.generation?.spawnAtStart && apartmentTemplate.generation.count && apartmentOrgTemplate) {
     const numApartments = randomFromRange(apartmentTemplate.generation.count, rand);
 
-    for (let i = 0; i < numApartments; i++) {
-      // Find an available agent to be the landlord
+    // Create landlords who each own multiple apartments (10-15 per landlord)
+    const apartmentsPerLandlord = 12;
+    const numLandlords = Math.ceil(numApartments / apartmentsPerLandlord);
+    const landlordOrgs: Organization[] = [];
+
+    // First, create all landlord orgs
+    for (let i = 0; i < numLandlords; i++) {
       const ownerIdx = agents.findIndex((a) => a.status === 'available');
       if (ownerIdx === -1) break;
 
       const owner = agents[ownerIdx];
       if (!owner) continue;
 
-      // Credits from template
       const orgCredits = apartmentTemplate.generation.ownerCredits
         ? randomFromRange(apartmentTemplate.generation.ownerCredits, rand)
         : apartmentOrgTemplate.defaults?.credits
@@ -973,18 +977,26 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           : randomInt(100, 200, rand);
 
       const apartmentOrg = createOrgFromTemplate(
-        `${owner.name}'s Rental`,
+        `${owner.name}'s Properties`,
         apartmentOrgTemplate,
         owner.id,
         orgCredits,
         0
       );
 
-      // Set owner as employed if template specifies
       if (apartmentOrgTemplate.generation?.leaderBecomesEmployed) {
         owner.status = 'employed';
         owner.employer = apartmentOrg.id;
       }
+
+      landlordOrgs.push(apartmentOrg);
+      organizations.push(apartmentOrg);
+    }
+
+    // Now distribute apartments among landlords
+    for (let i = 0; i < numApartments; i++) {
+      const landlordOrg = landlordOrgs[i % landlordOrgs.length];
+      if (!landlordOrg) continue;
 
       // Create the apartment - try building placement first
       const buildingPlacement = findBuildingForLocation(
@@ -1001,18 +1013,16 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           nextApartmentName(),
           apartmentTemplate,
           0, 0, 0,
-          apartmentOrg.id,
+          landlordOrg.id,
           0,
           buildingPlacement
         );
-        // Initialize residential fields
         apartment.maxResidents = apartmentTemplate.balance.maxResidents ?? 1;
         apartment.rentCost = apartmentTemplate.balance.rentCost ?? 20;
         apartment.residents = [];
         locations.push(apartment);
-        apartmentOrg.locations.push(apartment.id);
+        landlordOrg.locations.push(apartment.id);
       } else {
-        // Fallback to legacy placement
         const placement = findValidPlacement(grid, apartmentTemplate.spawnConstraints, rand);
         if (placement) {
           const apartment = createLocationFromTemplate(
@@ -1021,18 +1031,16 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
             placement.x,
             placement.y,
             placement.floor,
-            apartmentOrg.id,
+            landlordOrg.id,
             0
           );
           apartment.maxResidents = apartmentTemplate.balance.maxResidents ?? 1;
           apartment.rentCost = apartmentTemplate.balance.rentCost ?? 20;
           apartment.residents = [];
           locations.push(apartment);
-          apartmentOrg.locations.push(apartment.id);
+          landlordOrg.locations.push(apartment.id);
         }
       }
-
-      organizations.push(apartmentOrg);
     }
   }
 

@@ -1,6 +1,6 @@
 {
   "goods": {
-    "provisions": { "size": 0.1, "retailPrice": 15, "wholesalePrice": 7 },
+    "provisions": { "size": 0.1, "retailPrice": 10, "wholesalePrice": 5 },
     "small_arms": { "size": 1, "retailPrice": 100, "wholesalePrice": 70 },
     "heavy_weapons": { "size": 2, "retailPrice": 500, "wholesalePrice": 350 },
     "narcotics": { "size": 0.1, "retailPrice": 50, "wholesalePrice": 30 },
@@ -15,7 +15,7 @@
   },
   "defaultGoodsSize": 1,
   "salary": {
-    "unskilled": { "min": 20, "max": 40 }
+    "unskilled": { "min": 25, "max": 45 }
   },
   "entrepreneurThreshold": 300
 }
