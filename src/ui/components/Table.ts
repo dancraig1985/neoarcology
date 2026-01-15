@@ -198,7 +198,7 @@ export class Table<T extends { id: string }> extends UIComponent {
       });
     }
 
-    this.rebuildRows();
+    this.rebuildRows(true); // Reset scroll on sort
     this.updateHeaderSortIndicators();
   }
 
@@ -336,7 +336,7 @@ export class Table<T extends { id: string }> extends UIComponent {
     }
   }
 
-  private rebuildRows(): void {
+  private rebuildRows(resetScroll = false): void {
     // Clear existing rows
     this.bodyContainer.removeChildren();
     this.rows = [];
@@ -357,7 +357,16 @@ export class Table<T extends { id: string }> extends UIComponent {
     }
 
     this.updateRowHighlights();
-    this.scrollOffset = 0;
+
+    if (resetScroll) {
+      this.scrollOffset = 0;
+    } else {
+      // Clamp scroll to valid range (in case data shrunk)
+      const contentHeight = this.data.length * this.rowHeight;
+      const viewHeight = this._height - this.headerHeight;
+      const maxScroll = Math.max(0, contentHeight - viewHeight);
+      this.scrollOffset = Math.min(this.scrollOffset, maxScroll);
+    }
     this.updateScroll();
   }
 
