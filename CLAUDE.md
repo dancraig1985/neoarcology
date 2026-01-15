@@ -35,22 +35,29 @@ Other docs: `design/GAME-DESIGN.md` (high-level design), `design/roadmap/plans/`
 
 ## Key Files
 
-**Implemented:**
-- Simulation controller: `src/simulation/Simulation.ts`
-- Time/tick engine: `src/simulation/TickEngine.ts`
-- Agent state helpers: `src/simulation/systems/AgentStateHelpers.ts` (centralized state transitions)
-- Agent system: `src/simulation/systems/AgentSystem.ts` (hunger, eating, death)
-- Economy system: `src/simulation/systems/EconomySystem.ts` (transactions, payroll, business)
-- Org system: `src/simulation/systems/OrgSystem.ts` (production, org operations)
-- Location system: `src/simulation/systems/LocationSystem.ts` (commerce, hiring)
-- Inventory system: `src/simulation/systems/InventorySystem.ts` (goods, capacity)
-- Travel system: `src/simulation/systems/TravelSystem.ts` (distance, travel time)
-- Immigration system: `src/simulation/systems/ImmigrationSystem.ts` (population sustainability)
-- City generation: `src/generation/` (zones, locations, procedural city)
-- Activity log: `src/simulation/ActivityLog.ts`
-- Config loader: `src/config/ConfigLoader.ts`
-- Types: `src/types/*.ts`
-- UI system: `src/ui/` (see UI Architecture below)
+**Simulation Core:**
+- `src/simulation/Simulation.ts` - Main simulation controller
+- `src/simulation/TickEngine.ts` - Time/tick engine
+- `src/simulation/ActivityLog.ts` - Event logging
+
+**Agent Behavior System:**
+- `src/simulation/behaviors/BehaviorProcessor.ts` - Main behavior loop
+- `src/simulation/behaviors/ConditionEvaluator.ts` - Condition checking
+- `src/simulation/behaviors/BehaviorRegistry.ts` - Executor registry
+- `src/simulation/behaviors/executors/index.ts` - All behavior executors
+- `data/config/behaviors.json` - Behavior definitions (data-driven)
+
+**Systems:**
+- `src/simulation/systems/AgentStateHelpers.ts` - Centralized state transitions (use this!)
+- `src/simulation/systems/AgentSystem.ts` - Hunger, eating, death
+- `src/simulation/systems/EconomySystem.ts` - Transactions, payroll, business
+- `src/simulation/systems/TravelSystem.ts` - Distance, travel time
+- `src/simulation/systems/ImmigrationSystem.ts` - Population sustainability
+
+**Generation & Config:**
+- `src/generation/CityGenerator.ts` - Procedural city generation
+- `src/config/ConfigLoader.ts` - Config/template loading
+- `src/types/*.ts` - Type definitions
 
 **Planned:**
 - Agent AI: `src/simulation/ai/AgentAI.ts` (advanced decision making)
@@ -99,6 +106,44 @@ All tunable values live in JSON, no hardcoded constants:
 - Template files are self-contained (all data for a type in one file).
 - Code reads from config, never hardcodes tunable values.
 
+## Behavior System
+
+Agent decisions are **data-driven** via `data/config/behaviors.json`. Each behavior has:
+- **conditions**: When the behavior can START (entry conditions)
+- **completionConditions**: When the behavior ENDS
+- **priority**: critical > high > normal > idle
+- **executor**: Function that runs each tick while active
+
+**Critical concept**: Entry conditions are only checked when selecting a NEW behavior. Once a task starts, only completionConditions are checked. A task with `completionConditions: { never: true }` runs forever unless interrupted by higher priority.
+
+**Priority interrupts**: Critical can always interrupt. High can interrupt normal/idle. Same-priority behaviors are selected by JSON order (first match wins).
+
+**Common pattern**: Use completion conditions that mirror the inverse of entry conditions:
+```json
+"conditions": { "needsBelow": { "hunger": 50 } },
+"completionConditions": { "needsAbove": { "hunger": 50 } }
+```
+
+## Economic Verticals
+
+The economy has separate supply chains (verticals):
+
+**Food Vertical (Sustenance):**
+```
+Provisions Factory → Retail Shop/Restaurant → Agent
+```
+
+**Alcohol Vertical (Discretionary):**
+```
+Brewery → Pub → Agent
+```
+
+Each vertical is independent. Adding a new vertical requires:
+1. Production location template (wholesale tag)
+2. Retail location template (retail tag + inventoryGood)
+3. Consumer behavior (when/why agents buy)
+4. Restock logic (wholesale → retail)
+
 ## Agent State Management
 
 **Always use `AgentStateHelpers.ts` for agent state transitions.** Never directly mutate employment, travel, or location fields.
@@ -109,9 +154,19 @@ See the helpers file for full documentation.
 
 ## Common Pitfalls
 
+### State Management
+- Directly modifying agent state fields (use `AgentStateHelpers`)
+- Mutations in tick processing (always return new state)
+- Revenue to wrong wallet (always org wallet, not agent)
+
+### Behavior System
+- Using `completionConditions: { never: true }` without escape (blocks all lower-priority behaviors)
+- Forgetting that entry conditions aren't re-checked after task starts
+- Behavior order in JSON matters - first matching behavior wins at same priority
+- Not returning updated locations/orgs from executors (state gets lost)
+
+### General
 - Using hardcoded types instead of tags
 - Forgetting to log to ActivityLog
-- Mutations in tick processing (always return new state)
-- Directly modifying agent state fields (use `AgentStateHelpers`)
-- Revenue to wrong wallet (always org wallet, not agent)
 - Adding unused template fields (YAGNI violation)
+- Hardcoding template names in CityGenerator (use dynamic lookup via `ownerOrgTemplate`)

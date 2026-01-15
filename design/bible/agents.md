@@ -27,6 +27,16 @@ Agents **proactively seek rest** before hitting 100%:
 
 **Important**: Employed agents commuting to work are NOT interrupted by urgent rest. They complete their commute and work before resting. Only forced rest (100%) stops them.
 
+### Leisure
+Agents accumulate a leisure need over time. Unlike hunger, low leisure doesn't kill - it's a quality of life metric.
+
+- **Leisure need accumulates** at 0.5/phase
+- **At 50%+**, agents seek entertainment (pub or park)
+- **At a pub**: Agent buys alcohol (if available), gets full satisfaction
+- **At a park**: Free but slower satisfaction
+
+**The alcohol economy**: When leisure need triggers, agents may visit pubs and purchase alcohol. This creates demand for the discretionary goods vertical (brewery → pub → agent).
+
 ### Eating Priority
 When hungry, an agent will:
 1. First, eat from their personal inventory (if they have provisions)
@@ -71,21 +81,62 @@ Rent and housing thresholds are defined in location templates:
 - `apartment.json`: `rentCost: 20`, `maxResidents: 1`
 - `shelter.json`: `rentCost: 0`, `maxResidents: 20`
 
-## Economic Behavior
+## Behavior System
 
-Agents make decisions each phase based on their situation:
+Agent decisions are **data-driven** via `data/config/behaviors.json`. The behavior system replaces hardcoded priority chains with configurable behaviors.
 
-### Priority 1: Feed the Business
-Shop owners restock their inventory from wholesale suppliers before doing anything else. A shop owner who lets their store run empty will lose customers.
+### How It Works
 
-### Priority 2: Feed Yourself
-Hungry agents with no food will try to buy provisions. They need both money and a shop with stock.
+Each tick, the behavior processor:
+1. Checks if agent is traveling (process travel tick)
+2. Checks for CRITICAL behaviors (always interrupt)
+3. If has task: check completion conditions, then execute
+4. If no task: find first matching behavior by priority
 
-### Priority 3: Find Work
-Unemployed agents look for jobs at locations that are hiring. Jobs provide steady income (weekly salary).
+### Priorities
 
-### Priority 4: Start a Business
-Agents who accumulate enough savings may quit their job and open their own shop. This requires significant capital and creates a new organization to own the business.
+| Priority | Behaviors | Can Interrupt |
+|----------|-----------|---------------|
+| critical | emergency_hunger, forced_rest | Everything |
+| high | urgent_rest | normal, idle |
+| normal | commuting, working, buying_food, leisure, housing, business, job | idle |
+| idle | wandering | Nothing |
+
+### Key Behaviors
+
+| Behavior | Triggers When | Does What |
+|----------|--------------|-----------|
+| `working` | employed, at work, hunger < 50% | Stay at workplace |
+| `buying_food` | hunger > 25%, no food, has money | Travel to shop, buy provisions |
+| `seeking_job` | unemployed | Find location with open slots, get hired |
+| `seeking_leisure` | leisure need > 50% | Go to pub/park for entertainment |
+
+### Entry vs Completion Conditions
+
+**Critical distinction:**
+- **Entry conditions**: Only checked when STARTING a new behavior
+- **Completion conditions**: Checked every tick while behavior is active
+
+A behavior with `completionConditions: { never: true }` will run forever. To allow interruption, use conditions that become true when needs change:
+
+```json
+"conditions": { "needsBelow": { "hunger": 50 } },
+"completionConditions": { "needsAbove": { "hunger": 50 } }
+```
+
+This means: "Start working if not hungry, stop working when hungry enough to need food."
+
+### The Hunger Interrupt Pattern
+
+Employed agents stop working when hunger > 50% to buy food:
+1. Agent working (hunger < 50%)
+2. Hunger rises to 50%
+3. `working` completion condition triggers
+4. Task cleared, behavior re-evaluated
+5. `buying_food` matches (hunger > 25%, no provisions)
+6. Agent travels to shop, buys food
+7. `buying_food` completes (has provisions)
+8. `commuting` matches, agent returns to work
 
 ## Employment
 

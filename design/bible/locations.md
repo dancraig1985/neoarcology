@@ -26,17 +26,16 @@ Each location has:
 
 Locations are classified by **tags**, not rigid types:
 
-### Wholesale Locations
-Tagged with `wholesale`. These sell to businesses:
-- Factories
-- Warehouses
-- Distributors
+### Production Locations
+Tagged with `wholesale` and `production`. These create goods:
+- `provisions_factory` - Produces food (provisions)
+- `brewery` - Produces alcohol
 
 ### Retail Locations
 Tagged with `retail`. These sell to consumers:
-- Shops
-- Restaurants
-- Markets
+- `retail_shop` - Sells provisions
+- `restaurant` - Sells provisions (food service)
+- `pub` - Sells alcohol (leisure venue, also has `leisure` tag)
 
 ### Residential Locations
 Tagged with `residential`. These house agents:

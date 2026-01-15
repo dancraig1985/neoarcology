@@ -42,12 +42,35 @@ A factory with no buyers will fill up and stop producing.
 
 ## What Gets Produced
 
-Different factories produce different goods:
-- Food factories → Provisions
-- Arms manufacturers → Weapons
-- Electronics plants → Tech goods
+Production is defined in location templates via the `production` array:
 
-Each factory type has its own production rate and cycle.
+### Current Production Facilities
+
+| Template | Good | Rate | Notes |
+|----------|------|------|-------|
+| `provisions_factory` | provisions | 1/phase/worker | Food for survival |
+| `brewery` | alcohol | 1/2phases/worker | Discretionary goods |
+
+### Production Configuration
+
+Each facility template defines:
+```json
+"production": [
+  { "good": "provisions", "amountPerEmployee": 1, "phasesPerCycle": 1 }
+]
+```
+
+- **good**: What's produced
+- **amountPerEmployee**: Output per worker per cycle
+- **phasesPerCycle**: 1 = every phase, 2 = every other phase, 28 = weekly
+
+### Adding New Production
+
+To add a new production vertical:
+1. Create location template with `production` config
+2. Add `wholesale` and `production` tags
+3. Set `ownerOrgTemplate: "corporation"` for city generation
+4. Create corresponding retail location to sell the good
 
 ## The Supply Chain
 

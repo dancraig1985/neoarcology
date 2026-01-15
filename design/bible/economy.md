@@ -2,20 +2,54 @@
 
 Money flows in a circle through NeoArcology. Understanding this flow is key to understanding why agents live or die.
 
+## Economic Verticals
+
+The economy is organized into **verticals** - independent supply chains for different goods. Each vertical has its own production, distribution, and consumption.
+
+### Food Vertical (Sustenance)
+```
+Provisions Factory → Retail Shop/Restaurant → Agent
+         │                    │                  │
+    produces food      restocks from       buys when hungry
+    (wholesale)        wholesale           (survival need)
+```
+
+**Critical for survival.** Without food, agents starve.
+
+### Alcohol Vertical (Discretionary)
+```
+Brewery → Pub → Agent
+    │       │       │
+ produces  restocks  buys for leisure
+ alcohol   alcohol   (optional need)
+```
+
+**Not required for survival.** Provides additional employment and revenue stream.
+
+### The Pattern
+
+Each vertical follows the same structure:
+1. **Production location** (wholesale tag) - Creates the good
+2. **Retail location** (retail tag) - Sells to consumers
+3. **Consumer behavior** - When/why agents buy
+4. **Restock logic** - Wholesale → retail transfer
+
+Adding a new vertical (e.g., weapons, luxury goods) requires all four components.
+
 ## The Money Circle
 
 ```
-    FACTORY ──────► SHOPS ──────► AGENTS ◄────── APARTMENTS
-       ▲              │              │               │
-       │              │              │               │
-       │         (wholesale)    (retail)         (rent)
-       │              │              │               │
-       │              ▼              ▼               ▼
-       └──── WAGES ◄─────────────────────────────────┘
+    PRODUCTION ──────► RETAIL ──────► AGENTS ◄────── APARTMENTS
+       ▲                 │               │               │
+       │                 │               │               │
+       │            (wholesale)     (retail)         (rent)
+       │                 │               │               │
+       │                 ▼               ▼               ▼
+       └──── WAGES ◄─────────────────────────────────────┘
 ```
 
-1. **Factories sell wholesale** to shops
-2. **Shops sell retail** to agents (consumers)
+1. **Production locations sell wholesale** to retail locations
+2. **Retail locations sell** to agents (consumers)
 3. **Apartments collect rent** from tenants
 4. **All businesses pay wages** to their employees
 5. **Employees spend wages** at shops and on rent
