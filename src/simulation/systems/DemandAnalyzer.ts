@@ -1,0 +1,389 @@
+/**
+ * DemandAnalyzer - Calculates market demand for goods and business opportunities
+ *
+ * This system analyzes agent needs and org requirements to determine demand for
+ * goods across all economic verticals. Used by entrepreneurs to make informed
+ * business decisions.
+ */
+
+import type { Agent, Location, Organization } from '../../types';
+import type { EconomyConfig, AgentsConfig, LocationTemplate, VerticalConfig } from '../../config/ConfigLoader';
+
+/**
+ * Demand signal for a single vertical/good type
+ */
+export interface DemandSignal {
+  good: string;                          // Good type (e.g., 'provisions', 'alcohol')
+  vertical: VerticalConfig | undefined;  // Vertical config from economy.json
+  demandType: 'consumer' | 'business';   // Who wants this good
+  score: number;                         // Calculated demand intensity (number of demanders)
+  supplierCount: number;                 // Existing locations that produce/sell this good
+  consumerCount: number;                 // Agents/orgs that want this good
+  productionTemplate: string | null;     // Template for production location
+  retailTemplate: string | null;         // Template for retail location
+}
+
+/**
+ * Business opportunity recommendation
+ */
+export interface BusinessOpportunity {
+  templateId: string;       // Location template to open
+  demandScore: number;      // How much demand exists
+  competitionScore: number; // How saturated the market is (lower = better)
+  finalScore: number;       // Combined score for comparison
+  reason: string;           // Human-readable explanation
+}
+
+/**
+ * Calculate consumer demand for a good based on agent needs
+ */
+function calculateConsumerDemand(
+  _good: string,
+  vertical: VerticalConfig,
+  agents: Agent[],
+  _agentsConfig: AgentsConfig
+): number {
+  const livingAgents = agents.filter(a => a.status !== 'dead');
+
+  // Get the needs field and threshold from vertical config
+  const needsField = vertical.needsField;
+  const needsThreshold = vertical.needsThreshold ?? 50;
+  const minCredits = vertical.minCredits ?? 0;
+
+  if (!needsField) {
+    return 0;
+  }
+
+  // Count agents who have the need above threshold and can afford
+  return livingAgents.filter(agent => {
+    // Check if need is above threshold
+    const needValue = agent.needs[needsField as keyof typeof agent.needs] ?? 0;
+    if (needValue < needsThreshold) return false;
+
+    // Check if agent can afford (if minCredits specified)
+    if (minCredits > 0 && agent.wallet.credits < minCredits) return false;
+
+    // For hunger specifically, also check if they have no provisions
+    if (needsField === 'hunger') {
+      const hasFood = (agent.inventory['provisions'] ?? 0) > 0;
+      if (hasFood) return false;
+    }
+
+    return true;
+  }).length;
+}
+
+/**
+ * Calculate business (B2B) demand for a good
+ */
+function calculateBusinessDemand(
+  _good: string,
+  vertical: VerticalConfig,
+  locations: Location[],
+  orgs: Organization[]
+): number {
+  const condition = vertical.demandCondition;
+
+  if (!condition) {
+    return 0;
+  }
+
+  switch (condition) {
+    case 'needsDataStorage':
+      // Orgs that produce valuable_data but have no data_storage
+      return orgs.filter(org => {
+        const orgLocs = locations.filter(loc => org.locations.includes(loc.id));
+        const producesData = orgLocs.some(loc =>
+          loc.tags.includes('office') || loc.tags.includes('laboratory')
+        );
+        const hasStorage = orgLocs.some(loc =>
+          (loc.inventory['data_storage'] ?? 0) > 0
+        );
+        return producesData && !hasStorage;
+      }).length;
+
+    case 'hasDataStorage':
+      // Orgs that have data_storage and could benefit from offices
+      return orgs.filter(org => {
+        const orgLocs = locations.filter(loc => org.locations.includes(loc.id));
+        const hasStorage = orgLocs.some(loc =>
+          (loc.inventory['data_storage'] ?? 0) > 0
+        );
+        return hasStorage && org.wallet.credits > 1000;
+      }).length;
+
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Count suppliers (locations that produce or sell a good)
+ */
+function countSuppliers(
+  good: string,
+  vertical: VerticalConfig | undefined,
+  locations: Location[]
+): number {
+  if (!vertical) {
+    return 0;
+  }
+
+  // Count production locations
+  const productionCount = locations.filter(loc =>
+    loc.tags.includes('production') &&
+    loc.tags.includes('wholesale') &&
+    (loc.inventory[good] !== undefined ||
+     loc.tags.some(t => t === vertical.productionTemplate?.replace('_factory', '').replace('_', '-')))
+  ).length;
+
+  // Count retail locations (if applicable)
+  const retailCount = vertical.retailTemplate
+    ? locations.filter(loc =>
+        loc.tags.includes('retail') &&
+        (loc.inventory[good] !== undefined ||
+         loc.tags.includes(good.replace('_', '-')))
+      ).length
+    : 0;
+
+  return productionCount + retailCount;
+}
+
+/**
+ * Analyze demand for all configured verticals
+ */
+export function analyzeAllDemand(
+  agents: Agent[],
+  locations: Location[],
+  orgs: Organization[],
+  economyConfig: EconomyConfig,
+  agentsConfig: AgentsConfig
+): DemandSignal[] {
+  const signals: DemandSignal[] = [];
+
+  for (const [good, config] of Object.entries(economyConfig.goods)) {
+    const vertical = config.vertical;
+
+    if (!vertical) {
+      continue; // Skip goods without vertical config
+    }
+
+    let score = 0;
+
+    if (vertical.demandType === 'consumer') {
+      score = calculateConsumerDemand(good, vertical, agents, agentsConfig);
+    } else if (vertical.demandType === 'business') {
+      score = calculateBusinessDemand(good, vertical, locations, orgs);
+    }
+
+    const supplierCount = countSuppliers(good, vertical, locations);
+
+    signals.push({
+      good,
+      vertical,
+      demandType: vertical.demandType,
+      score,
+      supplierCount,
+      consumerCount: score,
+      productionTemplate: vertical.productionTemplate,
+      retailTemplate: vertical.retailTemplate,
+    });
+  }
+
+  return signals;
+}
+
+/**
+ * Calculate housing demand (special case - not a goods vertical)
+ */
+export function analyzeHousingDemand(
+  agents: Agent[],
+  locations: Location[],
+  agentsConfig: AgentsConfig
+): { demand: number; supply: number } {
+  const bufferWeeks = agentsConfig.housing.bufferWeeks;
+  const avgRent = 20;
+  const housingBuffer = avgRent * bufferWeeks;
+
+  // Agents who need housing and can afford it
+  const demand = agents.filter(a =>
+    a.status !== 'dead' &&
+    !a.residence &&
+    a.wallet.credits >= housingBuffer
+  ).length;
+
+  // Available apartment slots
+  const apartments = locations.filter(loc =>
+    loc.tags.includes('residential') &&
+    !loc.tags.includes('public')
+  );
+
+  const supply = apartments.reduce((total, apt) => {
+    const maxResidents = apt.maxResidents ?? 1;
+    const currentResidents = apt.residents?.length ?? 0;
+    return total + (maxResidents - currentResidents);
+  }, 0);
+
+  return { demand, supply };
+}
+
+/**
+ * Analyze wholesale supply shortage
+ * Returns goods where retail exists but wholesale is insufficient
+ */
+export function analyzeWholesaleShortage(
+  locations: Location[],
+  economyConfig: EconomyConfig
+): DemandSignal[] {
+  const shortages: DemandSignal[] = [];
+
+  for (const [good, config] of Object.entries(economyConfig.goods)) {
+    const vertical = config.vertical;
+
+    if (!vertical || !vertical.retailTemplate) {
+      continue; // Skip non-retail goods
+    }
+
+    // Count retail locations for this good
+    const retailCount = locations.filter(loc =>
+      loc.tags.includes('retail') &&
+      (loc.inventory[good] !== undefined || loc.tags.includes(good.replace('_goods', '')))
+    ).length;
+
+    // Count wholesale/production locations for this good
+    const wholesaleCount = locations.filter(loc =>
+      loc.tags.includes('wholesale') &&
+      loc.tags.includes('production') &&
+      (loc.inventory[good] !== undefined || loc.tags.includes(good.replace('_goods', '')))
+    ).length;
+
+    // If retail exists but wholesale is scarce, there's opportunity
+    if (retailCount > 0 && wholesaleCount < 2) {
+      shortages.push({
+        good,
+        vertical,
+        demandType: 'business',
+        score: retailCount * 2, // High priority - supply chain broken
+        supplierCount: wholesaleCount,
+        consumerCount: retailCount,
+        productionTemplate: vertical.productionTemplate,
+        retailTemplate: vertical.retailTemplate,
+      });
+    }
+  }
+
+  return shortages;
+}
+
+/**
+ * Get best business opportunities based on current market conditions
+ * Returns sorted list of opportunities with scores
+ */
+export function getBestBusinessOpportunities(
+  agents: Agent[],
+  locations: Location[],
+  orgs: Organization[],
+  economyConfig: EconomyConfig,
+  agentsConfig: AgentsConfig,
+  locationTemplates: Record<string, LocationTemplate>
+): BusinessOpportunity[] {
+  const opportunities: BusinessOpportunity[] = [];
+
+  // Analyze all demand signals
+  const demandSignals = analyzeAllDemand(agents, locations, orgs, economyConfig, agentsConfig);
+  const wholesaleShortages = analyzeWholesaleShortage(locations, economyConfig);
+  const housingDemand = analyzeHousingDemand(agents, locations, agentsConfig);
+
+  // Convert demand signals to business opportunities
+  for (const signal of demandSignals) {
+    if (signal.score < 3) {
+      continue; // Minimum demand threshold
+    }
+
+    // Add retail opportunity if retail template exists
+    if (signal.retailTemplate && locationTemplates[signal.retailTemplate]) {
+      const competition = locations.filter(loc =>
+        loc.tags.includes('retail') &&
+        (loc.inventory[signal.good] !== undefined || loc.tags.includes(signal.good.replace('_goods', '')))
+      ).length;
+
+      opportunities.push({
+        templateId: signal.retailTemplate,
+        demandScore: signal.score,
+        competitionScore: competition,
+        finalScore: signal.score - (competition * 2),
+        reason: `${signal.consumerCount} ${signal.demandType === 'consumer' ? 'agents' : 'orgs'} want ${signal.good}`,
+      });
+    }
+  }
+
+  // Add wholesale opportunities from shortages
+  for (const shortage of wholesaleShortages) {
+    if (shortage.productionTemplate && locationTemplates[shortage.productionTemplate]) {
+      opportunities.push({
+        templateId: shortage.productionTemplate,
+        demandScore: shortage.score,
+        competitionScore: shortage.supplierCount,
+        finalScore: shortage.score * 2, // High priority for supply chain
+        reason: `Supply chain gap: ${shortage.consumerCount} retail locations need ${shortage.good}`,
+      });
+    }
+  }
+
+  // Add housing opportunity if demand exists
+  if (housingDemand.demand >= 3 && housingDemand.supply < housingDemand.demand && locationTemplates['apartment']) {
+    opportunities.push({
+      templateId: 'apartment',
+      demandScore: housingDemand.demand,
+      competitionScore: Math.floor(housingDemand.supply / 10),
+      finalScore: housingDemand.demand - housingDemand.supply,
+      reason: `${housingDemand.demand} homeless agents with funds, only ${housingDemand.supply} available units`,
+    });
+  }
+
+  // Always include retail_shop as fallback (food is always needed)
+  if (locationTemplates['retail_shop']) {
+    const foodDemand = demandSignals.find(s => s.good === 'provisions');
+    opportunities.push({
+      templateId: 'retail_shop',
+      demandScore: foodDemand?.score ?? 1,
+      competitionScore: foodDemand?.supplierCount ?? 0,
+      finalScore: Math.max(foodDemand?.score ?? 1, 1),
+      reason: 'Food retail (base demand)',
+    });
+  }
+
+  // Sort by final score descending
+  return opportunities.sort((a, b) => b.finalScore - a.finalScore);
+}
+
+/**
+ * Select a business opportunity using weighted random selection
+ * Higher-scored opportunities are more likely to be chosen
+ */
+export function selectBusinessOpportunity(
+  opportunities: BusinessOpportunity[]
+): BusinessOpportunity | null {
+  if (opportunities.length === 0) {
+    return null;
+  }
+
+  // Ensure all scores are positive for weighting
+  const adjustedOpportunities = opportunities.map(opp => ({
+    ...opp,
+    weight: Math.max(opp.finalScore, 1),
+  }));
+
+  const totalWeight = adjustedOpportunities.reduce((sum, opp) => sum + opp.weight, 0);
+  let roll = Math.random() * totalWeight;
+
+  for (const opp of adjustedOpportunities) {
+    roll -= opp.weight;
+    if (roll <= 0) {
+      return opp;
+    }
+  }
+
+  // Fallback to first opportunity
+  return opportunities[0] ?? null;
+}

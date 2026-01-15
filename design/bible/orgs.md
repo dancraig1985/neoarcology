@@ -56,6 +56,30 @@ When an org dissolves:
 - All locations are removed
 - Any remaining money is lost
 
+## Org Behaviors (OrgBehaviorSystem)
+
+Organizations make decisions independently of their human members. The `OrgBehaviorSystem` processes org-level behaviors each phase.
+
+### Procurement
+
+Orgs automatically procure resources needed for their operations:
+
+**Data Storage Procurement**
+- If org has offices/labs that need `data_storage` to produce
+- And org has 1000+ credits
+- Then org buys data_storage from server factories
+
+This creates B2B demand without requiring human intervention.
+
+### Expansion (Future)
+
+Wealthy orgs with consistent profits may:
+- Open additional locations
+- Diversify into new verticals
+- Acquire smaller businesses
+
+Currently deferred but the OrgBehaviorSystem provides the framework.
+
 ## Owner Dividends
 
 The owner doesn't receive a salary - they receive **dividends** from profits. This happens weekly:

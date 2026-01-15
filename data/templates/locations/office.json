@@ -1,0 +1,35 @@
+{
+  "id": "office",
+  "name": "Corporate Office",
+  "description": "A corporate office where professionals generate valuable research data",
+  "tags": ["office", "corporate", "professional"],
+  "spawnConstraints": {
+    "allowedZones": ["downtown", "commercial"],
+    "floorRange": [1, 50],
+    "preferGroundFloor": false,
+    "minDistanceFromCenter": 0,
+    "maxPerCity": 10
+  },
+  "balance": {
+    "openingCost": 600,
+    "operatingCost": 0,
+    "employeeSlots": 8,
+    "salaryTier": "professional",
+    "startingInventory": 0,
+    "inventoryCapacity": 50,
+    "inventoryGood": "valuable_data",
+    "production": [
+      {
+        "good": "valuable_data",
+        "amountPerEmployee": 1,
+        "phasesPerCycle": 8,
+        "requiresStorage": true
+      }
+    ]
+  },
+  "generation": {
+    "count": { "min": 0, "max": 0 },
+    "spawnAtStart": false,
+    "ownerOrgTemplate": "corporation"
+  }
+}

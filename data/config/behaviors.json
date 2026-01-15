@@ -106,6 +106,40 @@
       }
     },
     {
+      "id": "buying_luxury",
+      "name": "Buy Luxury Goods",
+      "priority": "normal",
+      "executor": "purchase",
+      "conditions": {
+        "needsAbove": { "leisure": 40 },
+        "inventoryBelow": { "luxury_goods": 1 },
+        "hasCreditsAbove": 249,
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "inventoryAbove": { "luxury_goods": 0 }
+      },
+      "params": {
+        "goodsType": "luxury_goods",
+        "locationTag": "luxury"
+      }
+    },
+    {
+      "id": "consume_luxury",
+      "name": "Enjoy Luxury Item",
+      "priority": "normal",
+      "executor": "consume_luxury",
+      "conditions": {
+        "inventoryAbove": { "luxury_goods": 0 },
+        "needsAbove": { "leisure": 30 },
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "inventoryBelow": { "luxury_goods": 1 }
+      },
+      "params": {}
+    },
+    {
       "id": "seeking_leisure",
       "name": "Seek Entertainment",
       "priority": "normal",

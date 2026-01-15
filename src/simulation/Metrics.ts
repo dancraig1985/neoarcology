@@ -1,9 +1,37 @@
 /**
  * Metrics - Track simulation metrics for analysis
  * Collects population, economy, business, and supply data
+ *
+ * Uses a singleton pattern (like ActivityLog) for easy instrumentation.
+ * Call setActiveMetrics() at simulation start to enable tracking.
  */
 
 import type { SimulationState } from './Simulation';
+
+// Module-level active metrics reference for easy instrumentation
+let activeMetrics: SimulationMetrics | null = null;
+
+/**
+ * Set the active metrics object for the current simulation
+ * Call this at simulation creation
+ */
+export function setActiveMetrics(metrics: SimulationMetrics): void {
+  activeMetrics = metrics;
+}
+
+/**
+ * Get the active metrics (or null if not set)
+ */
+export function getActiveMetrics(): SimulationMetrics | null {
+  return activeMetrics;
+}
+
+/**
+ * Clear active metrics (call when simulation ends)
+ */
+export function clearActiveMetrics(): void {
+  activeMetrics = null;
+}
 
 /**
  * Snapshot of simulation state at a point in time
@@ -35,12 +63,20 @@ export interface MetricsSnapshot {
     wholesale: number;
   };
 
-  // Food supply
+  // Supply chain inventory (all goods)
   supply: {
+    // Legacy fields for backward compatibility (provisions only)
     factoryInventory: number;
     shopInventory: number;
     agentInventory: number;
     total: number;
+    // New: inventory by good type
+    byGood: {
+      factory: Record<string, number>;
+      retail: Record<string, number>;
+      agent: Record<string, number>;
+      org: Record<string, number>;  // B2B goods held by orgs
+    };
   };
 }
 
@@ -48,6 +84,7 @@ export interface MetricsSnapshot {
  * Cumulative transaction counts during simulation run
  */
 export interface TransactionCounts {
+  // Legacy totals (for backward compatibility)
   retailSales: number;
   wholesaleSales: number;
   wagesPaid: number;
@@ -59,6 +96,11 @@ export interface TransactionCounts {
   hires: number;
   fires: number;
   immigrants: number;
+  // New: sales broken down by good
+  retailSalesByGood: Record<string, number>;
+  wholesaleSalesByGood: Record<string, number>;
+  b2bSales: number;  // Business-to-business (e.g., data_storage)
+  b2bSalesByGood: Record<string, number>;
 }
 
 /**
@@ -114,11 +156,28 @@ export function createMetrics(seed?: number): SimulationMetrics {
       hires: 0,
       fires: 0,
       immigrants: 0,
+      retailSalesByGood: {},
+      wholesaleSalesByGood: {},
+      b2bSales: 0,
+      b2bSalesByGood: {},
     },
     snapshots: [],
     weeklyEvents: [],
     finalSnapshot: null,
   };
+}
+
+/**
+ * Aggregate inventory across entities by good type
+ */
+function aggregateInventory(inventories: Record<string, number>[]): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const inv of inventories) {
+    for (const [good, count] of Object.entries(inv)) {
+      result[good] = (result[good] ?? 0) + count;
+    }
+  }
+  return result;
 }
 
 /**
@@ -137,20 +196,19 @@ export function takeSnapshot(state: SimulationState, tick: number): MetricsSnaps
   const orgCredits = organizations.reduce((sum, o) => sum + o.wallet.credits, 0);
 
   const retailLocations = locations.filter(l => l.tags.includes('retail'));
-  const wholesaleLocations = locations.filter(l => l.tags.includes('wholesale'));
+  const wholesaleLocations = locations.filter(l => l.tags.includes('wholesale') || l.tags.includes('production'));
 
-  const factoryInventory = wholesaleLocations.reduce(
-    (sum, l) => sum + (l.inventory['provisions'] ?? 0),
-    0
-  );
-  const shopInventory = retailLocations.reduce(
-    (sum, l) => sum + (l.inventory['provisions'] ?? 0),
-    0
-  );
-  const agentInventory = alive.reduce(
-    (sum, a) => sum + (a.inventory['provisions'] ?? 0),
-    0
-  );
+  // Aggregate inventory by good type for each category
+  const factoryByGood = aggregateInventory(wholesaleLocations.map(l => l.inventory));
+  const retailByGood = aggregateInventory(retailLocations.map(l => l.inventory));
+  const agentByGood = aggregateInventory(alive.map(a => a.inventory));
+  // Note: orgs don't have inventory directly - B2B goods like data_storage go to org-owned locations
+  const orgByGood: Record<string, number> = {};
+
+  // Legacy: provisions-only counts for backward compatibility
+  const factoryInventory = factoryByGood['provisions'] ?? 0;
+  const shopInventory = retailByGood['provisions'] ?? 0;
+  const agentInventory = agentByGood['provisions'] ?? 0;
 
   return {
     tick,
@@ -173,10 +231,18 @@ export function takeSnapshot(state: SimulationState, tick: number): MetricsSnaps
       wholesale: wholesaleLocations.length,
     },
     supply: {
+      // Legacy fields (provisions only)
       factoryInventory,
       shopInventory,
       agentInventory,
       total: factoryInventory + shopInventory + agentInventory,
+      // New: all goods by category
+      byGood: {
+        factory: factoryByGood,
+        retail: retailByGood,
+        agent: agentByGood,
+        org: orgByGood,
+      },
     },
   };
 }
@@ -263,12 +329,26 @@ export function recordFire(metrics: SimulationMetrics): void {
 /**
  * Record transaction counts
  */
-export function recordRetailSale(metrics: SimulationMetrics): void {
+export function recordRetailSale(metrics: SimulationMetrics, good?: string): void {
   metrics.transactions.retailSales++;
+  if (good) {
+    metrics.transactions.retailSalesByGood[good] =
+      (metrics.transactions.retailSalesByGood[good] ?? 0) + 1;
+  }
 }
 
-export function recordWholesaleSale(metrics: SimulationMetrics): void {
+export function recordWholesaleSale(metrics: SimulationMetrics, good?: string): void {
   metrics.transactions.wholesaleSales++;
+  if (good) {
+    metrics.transactions.wholesaleSalesByGood[good] =
+      (metrics.transactions.wholesaleSalesByGood[good] ?? 0) + 1;
+  }
+}
+
+export function recordB2BSale(metrics: SimulationMetrics, good: string): void {
+  metrics.transactions.b2bSales++;
+  metrics.transactions.b2bSalesByGood[good] =
+    (metrics.transactions.b2bSalesByGood[good] ?? 0) + 1;
 }
 
 export function recordWagePayment(metrics: SimulationMetrics, amount: number): void {
@@ -318,4 +398,108 @@ export function finalizeMetrics(
   tick: number
 ): void {
   metrics.finalSnapshot = takeSnapshot(state, tick);
+}
+
+// =============================================================================
+// Convenience functions using active metrics (for easy instrumentation)
+// These allow systems to record metrics without passing metrics object around
+// =============================================================================
+
+/**
+ * Track a retail sale (uses active metrics)
+ */
+export function trackRetailSale(good: string): void {
+  if (activeMetrics) {
+    recordRetailSale(activeMetrics, good);
+  }
+}
+
+/**
+ * Track a wholesale sale (uses active metrics)
+ */
+export function trackWholesaleSale(good: string): void {
+  if (activeMetrics) {
+    recordWholesaleSale(activeMetrics, good);
+  }
+}
+
+/**
+ * Track a B2B sale (uses active metrics)
+ */
+export function trackB2BSale(good: string): void {
+  if (activeMetrics) {
+    recordB2BSale(activeMetrics, good);
+  }
+}
+
+/**
+ * Track a wage payment (uses active metrics)
+ */
+export function trackWagePayment(amount: number): void {
+  if (activeMetrics) {
+    recordWagePayment(activeMetrics, amount);
+  }
+}
+
+/**
+ * Track a dividend payment (uses active metrics)
+ */
+export function trackDividendPayment(amount: number): void {
+  if (activeMetrics) {
+    recordDividendPayment(activeMetrics, amount);
+  }
+}
+
+/**
+ * Track a death (uses active metrics)
+ */
+export function trackDeath(agentName: string, cause: string): void {
+  if (activeMetrics) {
+    recordDeath(activeMetrics, agentName, cause);
+  }
+}
+
+/**
+ * Track a business opening (uses active metrics)
+ */
+export function trackBusinessOpened(businessName: string): void {
+  if (activeMetrics) {
+    recordBusinessOpened(activeMetrics, businessName);
+  }
+}
+
+/**
+ * Track a business closing (uses active metrics)
+ */
+export function trackBusinessClosed(businessName: string): void {
+  if (activeMetrics) {
+    recordBusinessClosed(activeMetrics, businessName);
+  }
+}
+
+/**
+ * Track a hire (uses active metrics)
+ */
+export function trackHire(): void {
+  if (activeMetrics) {
+    recordHire(activeMetrics);
+  }
+}
+
+/**
+ * Track a fire/quit (uses active metrics)
+ */
+export function trackFire(): void {
+  if (activeMetrics) {
+    recordFire(activeMetrics);
+  }
+}
+
+/**
+ * Track an immigrant (uses active metrics)
+ */
+export function trackImmigrant(): void {
+  if (activeMetrics) {
+    recordImmigrant(activeMetrics);
+  }
 }

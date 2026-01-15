@@ -14,6 +14,7 @@
     "openingCost": 400,
     "operatingCost": 0,
     "employeeSlots": 3,
+    "salaryTier": "skilled",
     "startingInventory": 50,
     "inventoryCapacity": 200,
     "production": [

@@ -1,0 +1,35 @@
+{
+  "id": "laboratory",
+  "name": "Research Laboratory",
+  "description": "A research facility where scientists generate valuable data at an accelerated rate",
+  "tags": ["laboratory", "corporate", "research", "professional"],
+  "spawnConstraints": {
+    "allowedZones": ["industrial", "commercial"],
+    "floorRange": [0, 10],
+    "preferGroundFloor": true,
+    "minDistanceFromCenter": 3,
+    "maxPerCity": 5
+  },
+  "balance": {
+    "openingCost": 800,
+    "operatingCost": 0,
+    "employeeSlots": 5,
+    "salaryTier": "professional",
+    "startingInventory": 0,
+    "inventoryCapacity": 100,
+    "inventoryGood": "valuable_data",
+    "production": [
+      {
+        "good": "valuable_data",
+        "amountPerEmployee": 1,
+        "phasesPerCycle": 4,
+        "requiresStorage": true
+      }
+    ]
+  },
+  "generation": {
+    "count": { "min": 0, "max": 0 },
+    "spawnAtStart": false,
+    "ownerOrgTemplate": "corporation"
+  }
+}

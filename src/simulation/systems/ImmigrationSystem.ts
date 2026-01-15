@@ -6,6 +6,7 @@
 import type { Agent, Location } from '../../types';
 import type { PopulationConfig, AgentTemplate } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
+import { trackImmigrant } from '../Metrics';
 
 // Name pools for immigrants
 const FIRST_NAMES = [
@@ -158,6 +159,9 @@ export function checkImmigration(
       immigrant.id,
       immigrant.name
     );
+
+    // Track immigrant in metrics
+    trackImmigrant();
   }
 
   if (isEmergency) {

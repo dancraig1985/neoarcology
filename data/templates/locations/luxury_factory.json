@@ -1,0 +1,34 @@
+{
+  "id": "luxury_factory",
+  "name": "Luxury Goods Factory",
+  "description": "A facility that produces high-end consumer goods and fashion items",
+  "tags": ["wholesale", "production", "luxury", "industrial"],
+  "spawnConstraints": {
+    "allowedZones": ["industrial", "commercial"],
+    "floorRange": [0, 5],
+    "preferGroundFloor": true,
+    "minDistanceFromCenter": 4,
+    "maxPerCity": 3
+  },
+  "balance": {
+    "openingCost": 600,
+    "operatingCost": 0,
+    "employeeSlots": 3,
+    "salaryTier": "skilled",
+    "startingInventory": 10,
+    "inventoryCapacity": 50,
+    "inventoryGood": "luxury_goods",
+    "production": [
+      {
+        "good": "luxury_goods",
+        "amountPerEmployee": 1,
+        "phasesPerCycle": 8
+      }
+    ]
+  },
+  "generation": {
+    "count": { "min": 1, "max": 2 },
+    "spawnAtStart": true,
+    "ownerOrgTemplate": "corporation"
+  }
+}

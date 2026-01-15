@@ -19,7 +19,8 @@
     "threshold": 50,
     "max": 100,
     "pubSatisfaction": 40,
-    "parkSatisfactionPerPhase": 2
+    "parkSatisfactionPerPhase": 2,
+    "luxurySatisfaction": 70
   },
   "housing": {
     "bufferWeeks": 4

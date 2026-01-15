@@ -9,6 +9,7 @@ import type { Agent, AgentTask, Location, Organization } from '../../../types/en
 import { registerExecutor, type BehaviorContext, type TaskResult } from '../BehaviorRegistry';
 import { isTraveling, startTravel, findNearestLocation, redirectTravel } from '../../systems/TravelSystem';
 import { ActivityLog } from '../../ActivityLog';
+import { trackRetailSale, trackBusinessOpened } from '../../Metrics';
 
 // ============================================
 // Task State Helpers
@@ -408,6 +409,9 @@ function executePurchaseBehavior(
     agent.name
   );
 
+  // Track retail sale in metrics
+  trackRetailSale(goodsType);
+
   return {
     agent: clearTask(updatedAgent),
     locations: updatedLocations,
@@ -456,12 +460,36 @@ function executeLeisureBehavior(
   const atLeisureLocation = atPub || atPark;
 
   if (!atLeisureLocation) {
-    // Find nearest pub or public space
-    const leisureLoc = findNearestLocation(
-      agent,
-      ctx.locations,
-      loc => loc.tags.includes('leisure') || loc.tags.includes('public')
-    );
+    // Find best leisure destination based on affordability and stock
+    const alcoholPrice = ctx.economyConfig.goods['alcohol']?.retailPrice ?? 15;
+    const canAffordAlcohol = agent.wallet.credits >= alcoholPrice;
+
+    // Priority 1: If can afford, find pub with alcohol stock
+    let leisureLoc = canAffordAlcohol
+      ? findNearestLocation(
+          agent,
+          ctx.locations,
+          loc => loc.tags.includes('leisure') && (loc.inventory['alcohol'] ?? 0) > 0
+        )
+      : null;
+
+    // Priority 2: Public space (free leisure)
+    if (!leisureLoc) {
+      leisureLoc = findNearestLocation(
+        agent,
+        ctx.locations,
+        loc => loc.tags.includes('public')
+      );
+    }
+
+    // Priority 3: Any leisure location (including empty pubs) as last resort
+    if (!leisureLoc) {
+      leisureLoc = findNearestLocation(
+        agent,
+        ctx.locations,
+        loc => loc.tags.includes('leisure')
+      );
+    }
 
     if (leisureLoc) {
       const travelingAgent = startTravel(agent, leisureLoc, ctx.locations, ctx.transportConfig);
@@ -539,6 +567,9 @@ function executeLeisureBehavior(
         agent.id,
         agent.name
       );
+
+      // Track alcohol retail sale in metrics
+      trackRetailSale('alcohol');
 
       // Full satisfaction when buying alcohol
       leisureReduction = ctx.agentsConfig.leisure.pubSatisfaction;
@@ -1119,12 +1150,15 @@ function executeEntrepreneurBehavior(
     ctx.buildings,
     ctx.locations,
     ctx.agents,
+    ctx.orgs,
     ctx.agentsConfig,
+    ctx.economyConfig,
     ctx.phase
   );
 
   // If business was created, return with new entities
   if (result.newLocation || result.newOrg) {
+    const businessName = result.newOrg?.name ?? result.newLocation?.name ?? 'a new business';
     ActivityLog.info(
       ctx.phase,
       'business',
@@ -1132,6 +1166,9 @@ function executeEntrepreneurBehavior(
       result.agent.id,
       result.agent.name
     );
+
+    // Track business opening in metrics
+    trackBusinessOpened(businessName);
 
     return {
       agent: clearTask(result.agent),
@@ -1154,6 +1191,61 @@ function executeEntrepreneurBehavior(
 }
 
 // ============================================
+// Consume Luxury Executor
+// ============================================
+
+function executeConsumeLuxuryBehavior(
+  agent: Agent,
+  _task: AgentTask,
+  ctx: BehaviorContext
+): TaskResult {
+  // Check if agent has luxury_goods
+  const luxuryCount = agent.inventory['luxury_goods'] ?? 0;
+
+  if (luxuryCount <= 0) {
+    // No luxury goods to consume
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // Consume 1 luxury_goods
+  const newInventory = { ...agent.inventory };
+  newInventory['luxury_goods'] = luxuryCount - 1;
+  if (newInventory['luxury_goods'] <= 0) {
+    delete newInventory['luxury_goods'];
+  }
+
+  // Apply leisure satisfaction
+  const luxurySatisfaction = ctx.agentsConfig.leisure.luxurySatisfaction ?? 70;
+  const newLeisure = Math.max(0, agent.needs.leisure - luxurySatisfaction);
+
+  const updatedAgent: Agent = {
+    ...agent,
+    inventory: newInventory,
+    needs: { ...agent.needs, leisure: newLeisure },
+  };
+
+  ActivityLog.info(
+    ctx.phase,
+    'leisure',
+    `enjoyed a luxury item (leisure: ${agent.needs.leisure.toFixed(0)} → ${newLeisure.toFixed(0)})`,
+    agent.id,
+    agent.name
+  );
+
+  return {
+    agent: clearTask(updatedAgent),
+    locations: ctx.locations,
+    orgs: ctx.orgs,
+    complete: true,
+  };
+}
+
+// ============================================
 // Register All Executors
 // ============================================
 
@@ -1169,6 +1261,7 @@ export function registerAllExecutors(): void {
   registerExecutor('restock', executeRestockBehavior);
   registerExecutor('wander', executeWanderBehavior);
   registerExecutor('entrepreneur', executeEntrepreneurBehavior);
+  registerExecutor('consume_luxury', executeConsumeLuxuryBehavior);
 }
 
 // Auto-register on import

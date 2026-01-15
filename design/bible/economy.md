@@ -26,6 +26,28 @@ Brewery → Pub → Agent
 
 **Not required for survival.** Provides additional employment and revenue stream.
 
+### Luxury Goods Vertical (Wealth-based)
+```
+Luxury Factory → Luxury Boutique → Wealthy Agent
+       │                │                │
+   produces         restocks         buys for
+   luxury_goods     luxury_goods     enhanced leisure
+```
+
+**Requires 250+ credits.** Provides ~1.75x leisure satisfaction vs alcohol. Agents only buy one at a time.
+
+### Knowledge Economy Verticals (B2B)
+```
+Server Factory → Corporate Buyers (Orgs)
+       │                │
+   produces         purchase for
+   data_storage     office production
+
+Office/Laboratory → (produces valuable_data, requires data_storage)
+```
+
+**Business-to-business demand.** Server factories sell to corporations that need data storage for their offices to produce valuable_data.
+
 ### The Pattern
 
 Each vertical follows the same structure:
@@ -140,7 +162,19 @@ Locations don't hire - the simulation matches unemployed agents to open position
 Each phase, unemployed agents (`status: 'available'`) look for jobs:
 1. Find locations with open slots (`employees.length < employeeSlots`)
 2. Get hired at the first available position
-3. Salary is set randomly within the unskilled range (from `economy.json`)
+3. Salary is set based on the location's **salary tier** (from template)
+
+### Salary Tiers
+
+Different jobs pay differently based on skill requirements:
+
+| Tier | Range | Location Types |
+|------|-------|----------------|
+| `unskilled` | 70-90/week | retail_shop, pub, restaurant, luxury_boutique |
+| `skilled` | 90-110/week | provisions_factory, brewery, server_factory, luxury_factory |
+| `professional` | 120-160/week | office, laboratory |
+
+Each location template specifies its `salaryTier` in the balance section. This creates natural economic stratification where factory workers earn more than retail workers, and office workers earn the most.
 
 ### At City Generation
 
@@ -185,28 +219,55 @@ If too many shops open, customers are spread thin. Each shop gets less revenue. 
 
 ## Entrepreneurship
 
-When agents accumulate enough savings (300+ credits), they may quit their job and start a business.
+When agents accumulate enough savings (500+ credits), they may quit their job and start a business.
 
-### Demand-Based Business Selection
-Entrepreneurs choose what business to start based on current market demand:
+### DemandAnalyzer: Market-Driven Business Selection
 
-1. **Calculate food demand**: Agents eating per week vs shop capacity
-2. **Calculate housing demand**: Homeless agents vs available apartments
-3. **Apply priority weights**: Food demand weighted 2x (survival critical)
-4. **Choose highest demand**: Open a grocery store OR apartment building
+The `DemandAnalyzer` system calculates demand signals for all economic verticals dynamically. Entrepreneurs choose businesses based on real market conditions:
 
-This ensures entrepreneurs naturally fill gaps in the economy rather than oversaturating one market.
+**Consumer Demand (B2C)**
+Calculated from agent needs:
+- Agents with hunger > threshold who lack provisions → food retail demand
+- Agents with leisure > threshold who can afford drinks → pub demand
+- Wealthy agents (250+ credits) with leisure need → luxury boutique demand
+
+**Business Demand (B2B)**
+Calculated from org needs:
+- Retail shops with low inventory → wholesale production demand
+- Orgs with offices but no data_storage → server factory demand
+
+**Supply Analysis**
+- Count existing suppliers for each good
+- Identify wholesale supply gaps (retail exists but production is scarce)
+
+### Opportunity Selection
+
+The DemandAnalyzer returns ranked `BusinessOpportunity` objects:
+```typescript
+{
+  templateId: string;       // What to build
+  demandScore: number;      // Market demand
+  competitionScore: number; // Existing suppliers
+  finalScore: number;       // Combined score
+  reason: string;           // Why this opportunity
+}
+```
+
+Selection uses weighted random - higher scores are more likely but not guaranteed. This creates variety while still responding to market needs.
 
 ### Business Types
-| Business | Location Template | Revenue Source |
-|----------|-------------------|----------------|
-| Grocery Store | `grocery_store` | Retail food sales |
-| Apartment | `apartment` | Tenant rent |
+| Business | Location Template | Demand Signal |
+|----------|-------------------|---------------|
+| Retail Shop | `retail_shop` | Hungry agents without food |
+| Pub | `pub` | Agents with leisure need + credits |
+| Luxury Boutique | `luxury_boutique` | Wealthy agents (250+ credits) |
+| Apartment | `apartment` | Homeless agents with savings |
+| Factory | Various | Wholesale supply shortage |
 
 ### The Entrepreneur Loop
-1. Agent accumulates 300+ credits
-2. Agent quits current job
-3. Agent evaluates food vs housing demand
+1. Agent accumulates 500+ credits
+2. DemandAnalyzer evaluates all market opportunities
+3. Agent selects opportunity (weighted by demand score)
 4. Agent creates `small_business` org
 5. Agent opens appropriate location
 6. Agent receives weekly dividends as owner

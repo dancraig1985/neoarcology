@@ -30,12 +30,35 @@ export interface SimulationConfig {
 }
 
 /**
+ * Vertical configuration for a good (supply chain metadata)
+ */
+export interface VerticalConfig {
+  demandType: 'consumer' | 'business';
+  needsField?: string;           // For consumer: which need drives demand (hunger, leisure)
+  needsThreshold?: number;       // For consumer: need level that triggers demand
+  minCredits?: number;           // For consumer: minimum credits to consider purchase
+  demandCondition?: string;      // For business: condition name (e.g., 'needsDataStorage')
+  productionTemplate: string;    // Location template that produces this good
+  retailTemplate: string | null; // Location template that sells this good (null for B2B only)
+}
+
+/**
  * Goods category configuration (size, prices, etc.)
  */
 export interface GoodsConfig {
   size: number;           // How much inventory space 1 unit occupies
-  retailPrice: number;    // Price when sold to consumers
-  wholesalePrice: number; // Price for B2B transactions
+  retailPrice?: number;    // Price when sold to consumers (optional for B2B-only goods)
+  wholesalePrice?: number; // Price for B2B transactions
+  storageCapacity?: number; // For infrastructure goods: how many units of another good this can store
+  vertical?: VerticalConfig; // Supply chain metadata (optional - not all goods have verticals yet)
+}
+
+/**
+ * Salary tier configuration
+ */
+export interface SalaryTier {
+  min: number;
+  max: number;
 }
 
 /**
@@ -46,7 +69,9 @@ export interface EconomyConfig {
   goods: Record<string, GoodsConfig>;
   defaultGoodsSize: number;
   salary: {
-    unskilled: { min: number; max: number };
+    unskilled: SalaryTier;
+    skilled: SalaryTier;
+    professional: SalaryTier;
   };
   entrepreneurThreshold: number;
 }
@@ -77,6 +102,7 @@ export interface AgentsConfig {
     max: number;
     pubSatisfaction: number;
     parkSatisfactionPerPhase: number;
+    luxurySatisfaction?: number;
   };
   housing: {
     bufferWeeks: number;
@@ -230,6 +256,7 @@ export interface ProductionConfig {
   good: string;              // e.g., "provisions", "small_arms", "heavy_weapons"
   amountPerEmployee: number; // How much each worker produces per cycle
   phasesPerCycle: number;    // Production interval: 1 = every phase, 4 = daily, 28 = weekly
+  requiresStorage?: boolean; // If true, org needs data_storage in inventory to produce (for valuable_data)
 }
 
 /**
@@ -288,6 +315,7 @@ export interface LocationTemplate extends EntityTemplate {
     openingCost?: number;
     operatingCost?: number;
     employeeSlots?: number;
+    salaryTier?: 'unskilled' | 'skilled' | 'professional'; // Salary tier for employees
     startingInventory?: number;
     inventoryCapacity?: number;
     inventoryGood?: string;     // What good to stock (default: 'provisions')

@@ -12,6 +12,7 @@
     "openingCost": 100,
     "operatingCost": 0,
     "employeeSlots": 2,
+    "salaryTier": "unskilled",
     "startingInventory": 20,
     "inventoryCapacity": 50
   },

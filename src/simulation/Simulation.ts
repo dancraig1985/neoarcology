@@ -11,10 +11,11 @@ import { processAgentPhase, countLivingAgents, countDeadAgents } from './systems
 import { processWeeklyEconomy, fixHomelessAgents, tryRestockFromWholesale } from './systems/EconomySystem';
 import { processAgentBehavior } from './behaviors/BehaviorProcessor';
 import { processFactoryProduction } from './systems/OrgSystem';
+import { processOrgBehaviors } from './systems/OrgBehaviorSystem';
 import { cleanupDeadEmployees } from './systems/LocationSystem';
 import { checkImmigration } from './systems/ImmigrationSystem';
 import { generateCity } from '../generation/CityGenerator';
-import { createMetrics, takeSnapshot, startNewWeek, type SimulationMetrics, type MetricsSnapshot } from './Metrics';
+import { createMetrics, takeSnapshot, startNewWeek, setActiveMetrics, type SimulationMetrics, type MetricsSnapshot } from './Metrics';
 
 export interface SimulationState {
   time: TimeState;
@@ -74,6 +75,9 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
   metrics.startingPopulation = city.agents.length;
   metrics.startingBusinesses = city.organizations.length;
   startNewWeek(metrics, 1);
+
+  // Set active metrics for easy instrumentation
+  setActiveMetrics(metrics);
 
   const initialState: SimulationState = {
     time,
@@ -173,6 +177,18 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
       updatedOrgs.push(result.newOrg);
     }
   }
+
+  // 3b. Process org-level behaviors (procurement, expansion)
+  const orgBehaviorResult = processOrgBehaviors(
+    updatedOrgs,
+    updatedLocations,
+    state.buildings,
+    config.locationTemplates,
+    config.economy,
+    newTime.currentPhase
+  );
+  updatedOrgs = orgBehaviorResult.orgs;
+  updatedLocations = orgBehaviorResult.locations;
 
   // 4. Process weekly economy on week rollover (payroll, operating costs for all orgs)
   if (weekRollover) {

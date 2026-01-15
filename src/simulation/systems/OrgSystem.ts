@@ -101,6 +101,8 @@ export function createFactoryLocation(
  * Production = present employees × amountPerEmployee (when phase aligns with cycle)
  * No employees = no production
  * Workers must be physically present at the location to produce
+ * For production requiring storage (valuable_data), uses capacity-based check:
+ *   1 data_storage = N valuable_data capacity (from economy.json storageCapacity)
  */
 export function processFactoryProduction(
   location: Location,
@@ -159,6 +161,53 @@ export function processFactoryProduction(
       continue; // Not a production cycle for this good
     }
 
+    // Check if production requires storage (e.g., valuable_data needs data_storage)
+    // Storage is capacity-based: 1 data_storage = N valuable_data capacity
+    let availableStorageSpace = Infinity; // No limit unless requiresStorage
+    if (config.requiresStorage) {
+      const dataStorageCount = updatedLocation.inventory['data_storage'] ?? 0;
+
+      if (dataStorageCount === 0) {
+        ActivityLog.warning(
+          phase,
+          'production',
+          `cannot produce ${config.good} - no data_storage at this location`,
+          location.id,
+          location.name
+        );
+        continue;
+      }
+
+      // Get storage capacity per unit from config (default 10 if not specified)
+      const storageCapacityPerUnit = goodsSizes?.goods['data_storage']?.storageCapacity ?? 10;
+      const totalStorageCapacity = dataStorageCount * storageCapacityPerUnit;
+      const currentValuableData = updatedLocation.inventory['valuable_data'] ?? 0;
+      availableStorageSpace = totalStorageCapacity - currentValuableData;
+
+      if (availableStorageSpace <= 0) {
+        ActivityLog.warning(
+          phase,
+          'production',
+          `storage full (${currentValuableData}/${totalStorageCapacity} capacity) - ${config.good} production halted`,
+          location.id,
+          location.name
+        );
+        continue;
+      }
+
+      // Log storage status periodically (every 4 phases = daily)
+      if (phase % 4 === 0) {
+        const percentFull = Math.round((currentValuableData / totalStorageCapacity) * 100);
+        ActivityLog.info(
+          phase,
+          'production',
+          `storage at ${currentValuableData}/${totalStorageCapacity} capacity (${percentFull}%)`,
+          location.id,
+          location.name
+        );
+      }
+    }
+
     const capacity = getAvailableCapacity(updatedLocation, goodsSizes);
 
     if (capacity <= 0) {
@@ -174,7 +223,9 @@ export function processFactoryProduction(
     }
 
     // Production scales with number of present employees
-    const productionAmount = presentEmployeeCount * config.amountPerEmployee;
+    // Cap to available storage space for goods requiring storage
+    const rawProductionAmount = presentEmployeeCount * config.amountPerEmployee;
+    const productionAmount = Math.min(rawProductionAmount, availableStorageSpace);
 
     // Produce up to available capacity (respects goods sizes)
     const { holder, added } = addToInventory(

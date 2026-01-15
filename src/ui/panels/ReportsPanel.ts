@@ -74,32 +74,67 @@ export class ReportsPanel extends Panel {
       },
       {
         title: 'SUPPLY CHAIN',
-        items: [
-          { label: 'Factory Stock', value: this.formatNumber(snapshot.supply.factoryInventory) },
-          { label: 'Shop Stock', value: this.formatNumber(snapshot.supply.shopInventory) },
-          { label: 'Agent Inventory', value: this.formatNumber(snapshot.supply.agentInventory) },
-          { label: 'Total Provisions', value: this.formatNumber(snapshot.supply.total) },
-        ],
+        items: this.buildSupplyChainItems(snapshot),
       },
       {
         title: 'SESSION ACTIVITY',
         items: [
           { label: 'Retail Sales', value: transactions.retailSales.toString() },
           { label: 'Wholesale Sales', value: transactions.wholesaleSales.toString() },
+          { label: 'B2B Sales', value: transactions.b2bSales.toString() },
           { label: 'Wages Paid', value: this.formatNumber(transactions.wagesPaid) },
           { label: 'Dividends Paid', value: this.formatNumber(transactions.dividendsPaid) },
           { label: 'Deaths', value: transactions.deaths.toString() },
           { label: 'Immigrants', value: transactions.immigrants.toString() },
-          { label: 'Businesses Opened', value: transactions.businessesOpened.toString() },
-          { label: 'Businesses Closed', value: transactions.businessesClosed.toString() },
-          { label: 'Hires', value: transactions.hires.toString() },
-          { label: 'Fires', value: transactions.fires.toString() },
+          { label: 'Biz Opened', value: transactions.businessesOpened.toString() },
+          { label: 'Biz Closed', value: transactions.businessesClosed.toString() },
+          { label: 'Hires/Fires', value: `${transactions.hires}/${transactions.fires}` },
         ],
       },
     ];
 
     // Layout sections in a 2-column grid
     this.layoutSections(reportSections);
+  }
+
+  /**
+   * Build supply chain items showing all goods in the economy
+   */
+  private buildSupplyChainItems(snapshot: MetricsSnapshot): { label: string; value: string }[] {
+    const items: { label: string; value: string }[] = [];
+    const { byGood } = snapshot.supply;
+
+    // Collect all goods that exist in any category
+    const allGoods = new Set<string>();
+    for (const good of Object.keys(byGood.factory)) allGoods.add(good);
+    for (const good of Object.keys(byGood.retail)) allGoods.add(good);
+    for (const good of Object.keys(byGood.agent)) allGoods.add(good);
+
+    // Display order: provisions first, then alphabetically
+    const sortedGoods = Array.from(allGoods).sort((a, b) => {
+      if (a === 'provisions') return -1;
+      if (b === 'provisions') return 1;
+      return a.localeCompare(b);
+    });
+
+    // Show totals for each good
+    for (const good of sortedGoods) {
+      const factory = byGood.factory[good] ?? 0;
+      const retail = byGood.retail[good] ?? 0;
+      const agent = byGood.agent[good] ?? 0;
+      const total = factory + retail + agent;
+
+      // Format good name (replace underscores with spaces, capitalize)
+      const label = good.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      items.push({ label, value: this.formatNumber(total) });
+    }
+
+    // If no goods, show placeholder
+    if (items.length === 0) {
+      items.push({ label: 'No goods', value: '0' });
+    }
+
+    return items;
   }
 
   private formatNumber(n: number): string {

@@ -12,6 +12,7 @@
     "openingCost": 250,
     "operatingCost": 0,
     "employeeSlots": 1,
+    "salaryTier": "unskilled",
     "startingInventory": 30,
     "inventoryCapacity": 60,
     "inventoryGood": "alcohol"

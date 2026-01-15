@@ -6,6 +6,7 @@ import type { Location, Agent, Building } from '../../types';
 import type { LocationTemplate, EconomyConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import { setEmployment, clearEmployment } from './AgentStateHelpers';
+import { trackHire, trackFire } from '../Metrics';
 
 /**
  * Building placement info for runtime location creation
@@ -220,6 +221,9 @@ export function hireAgent(
     agent.name
   );
 
+  // Track hire in metrics
+  trackHire();
+
   // Set employer to the org that owns the location (if org-owned)
   const employer = location.ownerType === 'org' ? (location.owner ?? '') : '';
 
@@ -249,6 +253,9 @@ export function releaseAgent(
     agent.id,
     agent.name
   );
+
+  // Track fire/quit in metrics
+  trackFire();
 
   return {
     location: {

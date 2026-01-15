@@ -1,0 +1,27 @@
+{
+  "id": "luxury_boutique",
+  "name": "Luxury Boutique",
+  "description": "An upscale retail store selling high-end goods to wealthy customers",
+  "tags": ["retail", "luxury", "commercial"],
+  "spawnConstraints": {
+    "allowedZones": ["downtown", "commercial"],
+    "floorRange": [0, 5],
+    "preferGroundFloor": true,
+    "minDistanceFromCenter": 0,
+    "maxPerCity": 5
+  },
+  "balance": {
+    "openingCost": 400,
+    "operatingCost": 0,
+    "employeeSlots": 2,
+    "salaryTier": "unskilled",
+    "startingInventory": 5,
+    "inventoryCapacity": 30,
+    "inventoryGood": "luxury_goods"
+  },
+  "generation": {
+    "count": { "min": 2, "max": 3 },
+    "spawnAtStart": true,
+    "ownerOrgTemplate": "small_business"
+  }
+}

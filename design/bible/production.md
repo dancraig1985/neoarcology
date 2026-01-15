@@ -46,10 +46,14 @@ Production is defined in location templates via the `production` array:
 
 ### Current Production Facilities
 
-| Template | Good | Rate | Notes |
-|----------|------|------|-------|
-| `provisions_factory` | provisions | 1/phase/worker | Food for survival |
-| `brewery` | alcohol | 1/2phases/worker | Discretionary goods |
+| Template | Good | Rate | Salary Tier | Notes |
+|----------|------|------|-------------|-------|
+| `provisions_factory` | provisions | 1/phase/worker | skilled | Food for survival |
+| `brewery` | alcohol | 1/2phases/worker | skilled | Discretionary leisure |
+| `server_factory` | data_storage | 1/4phases/worker | skilled | B2B infrastructure |
+| `luxury_factory` | luxury_goods | 1/8phases/worker | skilled | High-end consumer goods |
+| `office` | valuable_data | 1/8phases/worker | professional | Requires data_storage |
+| `laboratory` | valuable_data | 1/4phases/worker | professional | Requires data_storage, faster |
 
 ### Production Configuration
 
@@ -63,6 +67,18 @@ Each facility template defines:
 - **good**: What's produced
 - **amountPerEmployee**: Output per worker per cycle
 - **phasesPerCycle**: 1 = every phase, 2 = every other phase, 28 = weekly
+- **requiresStorage**: If true, org needs `data_storage` in inventory to produce
+
+### Production with Dependencies
+
+Some production requires input goods:
+
+**Offices and Laboratories** produce `valuable_data` but only if the owning org has `data_storage` in inventory. This creates a B2B supply chain:
+1. Server Factory produces data_storage
+2. Corporation buys data_storage from server factory
+3. Corporation's Office/Lab can now produce valuable_data
+
+If an org runs out of data_storage, its offices stop producing until more is procured.
 
 ### Adding New Production
 
@@ -70,7 +86,8 @@ To add a new production vertical:
 1. Create location template with `production` config
 2. Add `wholesale` and `production` tags
 3. Set `ownerOrgTemplate: "corporation"` for city generation
-4. Create corresponding retail location to sell the good
+4. Create corresponding retail location to sell the good (if B2C)
+5. Add vertical metadata to `economy.json` goods config
 
 ## The Supply Chain
 

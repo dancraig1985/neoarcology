@@ -10,36 +10,24 @@
  *   npm run sim:test -- --verbose              # Show weekly events
  *   npm run sim:test -- --json                 # Output JSON format
  *   npm run sim:test -- --quiet                # Suppress simulation logs
+ *
+ * Metrics are now tracked directly by the simulation systems via the Metrics module.
+ * This CLI simply runs the simulation and reports from state.metrics.
  */
 
 import { parseArgs } from 'util';
 import { writeFileSync } from 'fs';
 import { loadConfigSync } from './ConfigLoaderNode';
-import { createSimulationWithCity, tick, type SimulationState } from '../simulation/Simulation';
+import { createSimulationWithCity, tick } from '../simulation/Simulation';
 import {
-  createMetrics,
-  recordInitialState,
   recordWeeklySnapshot,
   finalizeMetrics,
-  startNewWeek,
-  recordDeath,
-  recordBusinessOpened,
-  recordBusinessClosed,
-  recordRetailSale,
-  recordWholesaleSale,
-  recordWagePayment,
-  recordDividendPayment,
-  recordHire,
-  recordFire,
-  recordImmigrant,
-  type SimulationMetrics,
 } from '../simulation/Metrics';
 import {
   generateTextReport,
   generateVerboseReport,
   generateJsonReport,
 } from './ReportGenerator';
-import { ActivityLog } from '../simulation/ActivityLog';
 
 // Parse command line arguments
 const { values } = parseArgs({
@@ -90,12 +78,6 @@ const totalTicks = parseInt(values.ticks ?? '1000', 10);
 const seed = values.seed ? parseInt(values.seed, 10) : undefined;
 const phasesPerWeek = 28;
 
-// Track previous state for detecting changes
-let prevAgentCount = 0;
-let prevOrgCount = 0;
-let prevDeadAgents = new Set<string>();
-let prevOrgIds = new Set<string>();
-
 /**
  * Main simulation runner
  */
@@ -109,16 +91,9 @@ async function main() {
   log(`Creating simulation${seed !== undefined ? ` with seed ${seed}` : ''}...`);
   let state = createSimulationWithCity(config, seed);
 
-  // Initialize metrics
-  const metrics = createMetrics(seed);
-  recordInitialState(metrics, state);
-  startNewWeek(metrics, 1);
-
-  // Track initial state
-  prevAgentCount = state.agents.length;
-  prevOrgCount = state.organizations.length;
-  prevDeadAgents = new Set(state.agents.filter(a => a.status === 'dead').map(a => a.id));
-  prevOrgIds = new Set(state.organizations.map(o => o.id));
+  // Metrics are now initialized inside createSimulationWithCity
+  // and tracked automatically by instrumented systems
+  const metrics = state.metrics;
 
   log(`Starting simulation: ${state.agents.length} agents, ${state.organizations.length} orgs`);
   log(`Running for ${totalTicks} ticks (${Math.floor(totalTicks / phasesPerWeek)} weeks)...\n`);
@@ -129,13 +104,9 @@ async function main() {
     state = tick(state, config);
     const currentWeek = state.time.week;
 
-    // Detect events by comparing state
-    detectEvents(state, metrics);
-
-    // Week rollover
+    // Week rollover - record snapshot for reports
     if (currentWeek > prevWeek) {
       recordWeeklySnapshot(metrics, state, t);
-      startNewWeek(metrics, currentWeek);
 
       // Progress indicator
       if (!values.quiet) {
@@ -147,11 +118,8 @@ async function main() {
   // Restore console
   console.log = originalLog;
 
-  // Finalize metrics
+  // Finalize metrics with final state
   finalizeMetrics(metrics, state, totalTicks);
-
-  // Count transactions from activity log
-  countTransactionsFromLog(metrics);
 
   // Generate report
   let report: string;
@@ -170,88 +138,6 @@ async function main() {
     log(`Report written to: ${values.output}`);
   } else {
     log(report);
-  }
-}
-
-/**
- * Detect events by comparing current state to previous state
- */
-function detectEvents(state: SimulationState, metrics: SimulationMetrics) {
-  // Detect deaths
-  const currentDeadAgents = new Set(state.agents.filter(a => a.status === 'dead').map(a => a.id));
-  for (const agentId of currentDeadAgents) {
-    if (!prevDeadAgents.has(agentId)) {
-      const agent = state.agents.find(a => a.id === agentId);
-      if (agent) {
-        // Determine cause (currently only starvation)
-        recordDeath(metrics, agent.name, 'starvation');
-      }
-    }
-  }
-  prevDeadAgents = currentDeadAgents;
-
-  // Detect new businesses
-  const currentOrgIds = new Set(state.organizations.map(o => o.id));
-  for (const orgId of currentOrgIds) {
-    if (!prevOrgIds.has(orgId)) {
-      const org = state.organizations.find(o => o.id === orgId);
-      if (org) {
-        recordBusinessOpened(metrics, org.name);
-      }
-    }
-  }
-
-  // Detect closed businesses
-  for (const orgId of prevOrgIds) {
-    if (!currentOrgIds.has(orgId)) {
-      recordBusinessClosed(metrics, orgId); // We don't have the name anymore
-    }
-  }
-  prevOrgIds = currentOrgIds;
-}
-
-/**
- * Count transactions from activity log
- * This is a workaround since we're not instrumenting the simulation code directly
- */
-function countTransactionsFromLog(metrics: SimulationMetrics) {
-  const entries = ActivityLog.getEntries();
-
-  for (const entry of entries) {
-    // Detect retail sales (category: purchase, message: bought X provisions for Y credits at Z)
-    if (entry.category === 'purchase' && entry.message.includes('bought') && entry.message.includes('provisions')) {
-      recordRetailSale(metrics);
-    }
-    // Detect wholesale sales (category: wholesale, message: bought X provisions)
-    if (entry.category === 'wholesale' && entry.message.includes('bought')) {
-      recordWholesaleSale(metrics);
-    }
-    // Detect wage payments (category: payroll, message: paid X credits by)
-    if (entry.category === 'payroll' && entry.message.includes('paid') && entry.message.includes('credits by')) {
-      const match = entry.message.match(/(\d+) credits/);
-      if (match) {
-        recordWagePayment(metrics, parseInt(match[1], 10));
-      }
-    }
-    // Detect dividend payments (category: dividend, message: received X credits from)
-    if (entry.category === 'dividend' && entry.message.includes('received')) {
-      const match = entry.message.match(/(\d+) credits/);
-      if (match) {
-        recordDividendPayment(metrics, parseInt(match[1], 10));
-      }
-    }
-    // Detect hires (category: employment, message: hired at)
-    if (entry.category === 'employment' && entry.message.includes('hired at')) {
-      recordHire(metrics);
-    }
-    // Detect fires/quits (category: employment, message: left job at)
-    if (entry.category === 'employment' && entry.message.includes('left job')) {
-      recordFire(metrics);
-    }
-    // Detect immigration (category: immigration, message: arrived in the city)
-    if (entry.category === 'immigration' && entry.message.includes('arrived')) {
-      recordImmigrant(metrics);
-    }
   }
 }
 

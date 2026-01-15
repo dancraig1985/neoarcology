@@ -19,6 +19,13 @@ import { createOrganization, addLocationToOrg } from './OrgSystem';
 import { findNearestLocation, isTraveling, startTravel, redirectTravel } from './TravelSystem';
 import { setLocation, clearEmployment, onOrgDissolvedWithLocations } from './AgentStateHelpers';
 import { needsRest, processRest } from './AgentSystem';
+import { getBestBusinessOpportunities, selectBusinessOpportunity } from './DemandAnalyzer';
+import {
+  trackWholesaleSale,
+  trackWagePayment,
+  trackDividendPayment,
+  trackBusinessClosed,
+} from '../Metrics';
 
 // Location name generator
 const SHOP_NAMES = [
@@ -47,8 +54,22 @@ const PUB_NAMES = [
   "The Glitch",
 ];
 
+const BOUTIQUE_NAMES = [
+  "Luxe Noir",
+  "Velvet Circuit",
+  "Gilded Edge",
+  "Chrome & Diamond",
+  "Stellar Goods",
+  "Neo Opulence",
+  "High Wire",
+  "Platinum Cache",
+  "Crystal Grid",
+  "Prestige Lane",
+];
+
 let shopNameIndex = 0;
 let pubNameIndex = 0;
+let boutiqueNameIndex = 0;
 let locationIdCounter = 1;
 let orgIdCounter = 100; // Start at 100 to avoid conflicts with initial orgs
 
@@ -62,6 +83,12 @@ function getNextPubName(): string {
   const name = PUB_NAMES[pubNameIndex % PUB_NAMES.length];
   pubNameIndex++;
   return name ?? "Pub";
+}
+
+function getNextBoutiqueName(): string {
+  const name = BOUTIQUE_NAMES[boutiqueNameIndex % BOUTIQUE_NAMES.length];
+  boutiqueNameIndex++;
+  return name ?? "Boutique";
 }
 
 function getNextLocationId(): string {
@@ -239,7 +266,7 @@ export function processAgentEconomicDecision(
 
   // 2. Try to get a job if unemployed
   if (updatedAgent.status === 'available' && !updatedAgent.employedAt) {
-    const result = tryGetJob(updatedAgent, updatedLocations, updatedOrgs, economyConfig, phase);
+    const result = tryGetJob(updatedAgent, updatedLocations, updatedOrgs, economyConfig, locationTemplates, phase);
     updatedAgent = result.agent;
     updatedLocations = result.locations;
   }
@@ -288,7 +315,7 @@ export function processAgentEconomicDecision(
     updatedAgent.status === 'available'; // Must be unemployed
 
   if (canStartBusiness) {
-    const result = tryOpenBusiness(updatedAgent, locationTemplates, buildings, updatedLocations, allAgents, agentsConfig, phase);
+    const result = tryOpenBusiness(updatedAgent, locationTemplates, buildings, updatedLocations, allAgents, updatedOrgs, agentsConfig, economyConfig, phase);
     if (result.newLocation && result.newOrg) {
       updatedAgent = result.agent;
       newLocation = result.newLocation;
@@ -901,12 +928,14 @@ function buyDrinkAtPub(
 
 /**
  * Try to get a job at a hiring location (factory or shop)
+ * Uses salary tiers from location templates for stratified pay
  */
 function tryGetJob(
   agent: Agent,
   locations: Location[],
   orgs: Organization[],
   economyConfig: EconomyConfig,
+  locationTemplates: Record<string, LocationTemplate>,
   phase: number
 ): { agent: Agent; locations: Location[] } {
   const hiringLocations = getHiringLocations(locations);
@@ -933,8 +962,12 @@ function tryGetJob(
     return { agent, locations };
   }
 
-  // Random salary within unskilled range
-  const salaryRange = economyConfig.salary.unskilled;
+  // Determine salary tier from location template
+  // Fallback to unskilled if not specified
+  const template = location.template ? locationTemplates[location.template] : undefined;
+  const salaryTierName = template?.balance?.salaryTier ?? 'unskilled';
+  const salaryRange = economyConfig.salary[salaryTierName] ?? economyConfig.salary.unskilled;
+
   const salary = Math.floor(
     Math.random() * (salaryRange.max - salaryRange.min + 1) + salaryRange.min
   );
@@ -961,79 +994,41 @@ function leadsAnyOrg(agent: Agent, orgs: Organization[]): boolean {
 /**
  * Calculate demand signals for entrepreneurship decisions
  * Returns the best business type to open based on market needs
+ * Uses DemandAnalyzer for data-driven, scalable demand calculation
  */
 function chooseBestBusiness(
   agents: Agent[],
-  _locations: Location[],
+  locations: Location[],
   locationTemplates: Record<string, LocationTemplate>,
-  agentsConfig: AgentsConfig
+  agentsConfig: AgentsConfig,
+  economyConfig: EconomyConfig,
+  orgs: Organization[]
 ): string {
-  // Calculate food demand: agents who are hungry and have no provisions
-  const foodDemand = agents.filter((a) =>
-    a.status !== 'dead' &&
-    a.needs.hunger > 50 &&
-    (a.inventory['provisions'] ?? 0) === 0
-  ).length;
+  // Use DemandAnalyzer for scalable, config-driven demand calculation
+  const opportunities = getBestBusinessOpportunities(
+    agents,
+    locations,
+    orgs,
+    economyConfig,
+    agentsConfig,
+    locationTemplates
+  );
 
-  // Calculate housing demand: agents who are homeless but can afford housing
-  const bufferWeeks = agentsConfig.housing.bufferWeeks;
-  const avgRent = 20; // Typical apartment rent
-  const housingBuffer = avgRent * bufferWeeks;
-  const housingDemand = agents.filter((a) =>
-    a.status !== 'dead' &&
-    !a.residence &&
-    a.wallet.credits >= housingBuffer
-  ).length;
+  // Select using weighted random (higher demand = higher chance)
+  const selected = selectBusinessOpportunity(opportunities);
 
-  // Calculate leisure demand: agents with high leisure need who can afford drinks
-  const alcoholPrice = 15; // Price of a drink at a pub
-  const leisureDemand = agents.filter((a) =>
-    a.status !== 'dead' &&
-    (a.needs.leisure ?? 0) > agentsConfig.leisure.threshold &&
-    a.wallet.credits >= alcoholPrice
-  ).length;
-
-  // Build list of viable business types with their demand scores
-  // Minimum demand threshold of 3 to be considered viable
-  const minDemand = 3;
-  const candidates: { type: string; score: number }[] = [];
-
-  // Food retail is always viable (fallback)
-  candidates.push({ type: 'retail_shop', score: Math.max(foodDemand, 1) });
-
-  // Housing is viable if enough homeless agents with money
-  if (housingDemand >= minDemand && locationTemplates['apartment']) {
-    candidates.push({ type: 'apartment', score: housingDemand });
+  if (selected) {
+    ActivityLog.info(
+      0, // Phase not available here, use 0
+      'entrepreneurship',
+      `market analysis: ${selected.reason} (score: ${selected.finalScore.toFixed(1)})`,
+      'system',
+      'DemandAnalyzer'
+    );
+    return selected.templateId;
   }
 
-  // Pubs are viable if there's leisure demand
-  // (With dividend-first payment and high starting capital, owners can survive the ramp-up)
-  if (leisureDemand >= minDemand && locationTemplates['pub']) {
-    candidates.push({ type: 'pub', score: leisureDemand });
-  }
-
-  // Factories are viable if there's wholesale supply shortage
-  // Check if any retail locations exist that might need wholesale goods
-  const retailLocations = _locations.filter((loc) => loc.tags.includes('retail'));
-  const wholesaleLocations = _locations.filter((loc) => loc.tags.includes('wholesale'));
-  const wholesaleShortage = retailLocations.length > 0 && wholesaleLocations.length < 2;
-  if (wholesaleShortage && locationTemplates['factory']) {
-    // High priority if there's a wholesale shortage
-    candidates.push({ type: 'factory', score: retailLocations.length * 2 });
-  }
-
-  // Weighted random selection from viable candidates
-  // This allows pubs to sometimes be opened even when food demand is higher
-  const totalScore = candidates.reduce((sum, c) => sum + c.score, 0);
-  let roll = Math.random() * totalScore;
-
-  for (const candidate of candidates) {
-    roll -= candidate.score;
-    if (roll <= 0) {
-      return candidate.type;
-    }
-  }
-
+  // Fallback to retail shop if no opportunities found
   return 'retail_shop';
 }
 
@@ -1065,7 +1060,9 @@ export function tryOpenBusiness(
   buildings: Building[],
   locations: Location[],
   agents: Agent[],
+  orgs: Organization[],
   agentsConfig: AgentsConfig,
+  economyConfig: EconomyConfig,
   phase: number
 ): { agent: Agent; newLocation?: Location; newOrg?: Organization } {
   // 20% chance to try opening a business each phase when eligible
@@ -1073,8 +1070,8 @@ export function tryOpenBusiness(
     return { agent };
   }
 
-  // Choose business type based on market demand
-  const businessType = chooseBestBusiness(agents, locations, locationTemplates, agentsConfig);
+  // Choose business type based on market demand (uses DemandAnalyzer)
+  const businessType = chooseBestBusiness(agents, locations, locationTemplates, agentsConfig, economyConfig, orgs);
   const template = locationTemplates[businessType];
   if (!template) {
     return { agent };
@@ -1102,21 +1099,31 @@ export function tryOpenBusiness(
 
   // Create a micro-org for this business
   const orgId = getNextOrgId();
-  const isApartment = businessType === 'apartment';
-  const isPub = businessType === 'pub';
-  const isFactory = businessType === 'factory';
-  const orgName = isFactory
-    ? `${agent.name.split(' ')[1]} Industries` // Use last name for factory
-    : isApartment
-      ? `${agent.name}'s Rental`
-      : isPub
-        ? `${agent.name}'s Bar`
-        : `${agent.name}'s Shop`;
+  const templateTags = template.tags ?? [];
+  const isProduction = templateTags.includes('production') || templateTags.includes('wholesale');
+  const isResidential = templateTags.includes('residential');
+  const isLeisure = templateTags.includes('leisure');
+  const isLuxury = templateTags.includes('luxury');
+
+  // Generate org name based on business type
+  const lastName = agent.name.split(' ')[1] ?? agent.name;
+  let orgName: string;
+  if (isProduction) {
+    orgName = `${lastName} Industries`;
+  } else if (isResidential) {
+    orgName = `${agent.name}'s Rental`;
+  } else if (isLeisure) {
+    orgName = `${agent.name}'s Bar`;
+  } else if (isLuxury) {
+    orgName = `${agent.name}'s Boutique`;
+  } else {
+    orgName = `${agent.name}'s Shop`;
+  }
 
   // Org gets 70% of credits REMAINING after opening cost (not 70% of total)
   // Minimum capital must cover: owner dividend (75) + some buffer for restocking
-  // Lowered from 400 to 200 to allow more entrepreneurship
-  const minBusinessCapital = isFactory ? 500 : 200;
+  // Factories/production need more capital for operations
+  const minBusinessCapital = isProduction ? 500 : 200;
   const creditsAfterOpeningCost = agent.wallet.credits - openingCost;
   const calculatedCapital = Math.floor(creditsAfterOpeningCost * 0.7);
   const businessCapital = Math.max(calculatedCapital, minBusinessCapital);
@@ -1137,13 +1144,19 @@ export function tryOpenBusiness(
 
   // Create the location owned by the org (placed in building)
   const locationId = getNextLocationId();
-  const locationName = isFactory
-    ? `${agent.name.split(' ')[1]} Factory`
-    : isApartment
-      ? getNextApartmentName()
-      : isPub
-        ? getNextPubName()
-        : getNextShopName();
+  // Generate location name based on business type
+  let locationName: string;
+  if (isProduction) {
+    locationName = `${lastName} Factory`;
+  } else if (isResidential) {
+    locationName = getNextApartmentName();
+  } else if (isLeisure) {
+    locationName = getNextPubName();
+  } else if (isLuxury) {
+    locationName = getNextBoutiqueName();
+  } else {
+    locationName = getNextShopName();
+  }
 
   const newLocation = createLocation(
     locationId,
@@ -1189,8 +1202,12 @@ export function tryRestockFromWholesale(
   const goodsSizes: GoodsSizes = { goods: economyConfig.goods, defaultGoodsSize: economyConfig.defaultGoodsSize };
 
   // Determine what good this shop sells based on its tags
-  // Pubs (leisure tag) sell alcohol, other retail sells provisions
-  const goodType = shop.tags.includes('leisure') ? 'alcohol' : 'provisions';
+  // Pubs (leisure tag) sell alcohol, luxury boutiques sell luxury_goods, others sell provisions
+  const goodType = shop.tags.includes('leisure')
+    ? 'alcohol'
+    : shop.tags.includes('luxury')
+      ? 'luxury_goods'
+      : 'provisions';
 
   const currentStock = getGoodsCount(shop, goodType);
   const restockThreshold = 15; // Restock when below this
@@ -1281,6 +1298,9 @@ export function tryRestockFromWholesale(
     buyerOrg.name
   );
 
+  // Track wholesale sale in metrics
+  trackWholesaleSale(goodType);
+
   // Update locations and orgs arrays
   // Add weeklyRevenue to wholesaler (the seller) - transferInventory doesn't track revenue
   const wholesalerWithRevenue: Location = {
@@ -1327,13 +1347,14 @@ export function processWeeklyEconomy(
     if (!org) continue;
 
     const orgId = org.id; // Capture for type narrowing in filter
+    const orgLeader = org.leader; // Capture for use in closures
     // Find all locations owned by this org
     const orgLocations = updatedLocations.filter((loc) => loc.owner === orgId);
 
     // Pay owner dividend FIRST (owner survival is priority - they need to eat!)
     // This happens before employee salaries so owner always gets paid if org has funds
     const ownerDividend = 75; // Owner takes 75 credits/week to cover food (50) + rent (20) + buffer
-    const leaderIdx = updatedAgents.findIndex((a) => a.id === org.leader);
+    const leaderIdx = updatedAgents.findIndex((a) => a.id === orgLeader);
     if (leaderIdx !== -1 && org.wallet.credits >= ownerDividend) {
       const leader = updatedAgents[leaderIdx];
       if (leader && leader.status !== 'dead') {
@@ -1358,6 +1379,9 @@ export function processWeeklyEconomy(
           leader.id,
           leader.name
         );
+
+        // Track dividend payment in metrics
+        trackDividendPayment(ownerDividend);
       }
     }
 
@@ -1469,6 +1493,9 @@ export function processWeeklyEconomy(
         org.name
       );
 
+      // Track business closing in metrics
+      trackBusinessClosed(org.name);
+
       // Use centralized helper to handle all agent state cleanup atomically
       // Clears employment, location, and travel state for affected agents
       const deletedLocationIds = orgLocations.map((loc) => loc.id);
@@ -1532,6 +1559,9 @@ function processOrgPayroll(
         employee.id,
         employee.name
       );
+
+      // Track wage payment in metrics
+      trackWagePayment(employee.salary);
     } else {
       // Can't pay - employee will quit
       unpaidEmployees.push(employee);

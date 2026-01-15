@@ -629,6 +629,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   const factoryNames = ['Apex Manufacturing', 'Grid Works', 'Synth Industries', 'Vertex Production', 'Helix Factory'];
   const restaurantNames = ['Neon Bites', 'Synth Eats', 'Grid Kitchen', 'Pulse Diner', 'Arc Cafe'];
   const pubNames = ['The Rusty Circuit', 'Neon Tap', 'Binary Bar', 'Voltage Lounge', 'The Grid', 'Chrome & Hops', 'Synth Spirits', 'The Dive'];
+  const boutiqueNames = ['Luxe & Chrome', 'Elite Goods', 'Prestige Shop', 'The Gilded Shelf', 'Opulent', 'Prime Selection', 'Neon Luxe', 'Zenith Style'];
   const publicSpaceNames: Record<string, string[]> = {
     downtown: ['Central Plaza', 'Metro Hub', 'Tower Square', 'Skyline Park'],
     commercial: ['Market Square', 'Commerce Court', 'Trade Plaza', 'Shopping Promenade'],
@@ -641,6 +642,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   let factoryIndex = 0;
   let restaurantIndex = 0;
   let pubIndex = 0;
+  let boutiqueIndex = 0;
   const publicSpaceIndex: Record<string, number> = {};
 
   function nextShopName(): string {
@@ -654,6 +656,9 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   }
   function nextPubName(): string {
     return pubNames[pubIndex++ % pubNames.length] ?? 'Pub';
+  }
+  function nextBoutiqueName(): string {
+    return boutiqueNames[boutiqueIndex++ % boutiqueNames.length] ?? 'Boutique';
   }
   function nextPublicSpaceName(zone: string): string {
     const names = publicSpaceNames[zone] ?? ['Public Space'];
@@ -1073,6 +1078,101 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
       }
 
       organizations.push(pubOrg);
+    }
+  }
+
+  // ==================
+  // 5b. CREATE LUXURY BOUTIQUES (with small business orgs)
+  // ==================
+  const boutiqueTemplate = config.locationTemplates['luxury_boutique'];
+  const boutiqueOrgTemplateId = boutiqueTemplate?.generation?.ownerOrgTemplate ?? 'small_business';
+  const boutiqueOrgTemplate = config.orgTemplates[boutiqueOrgTemplateId];
+
+  if (boutiqueTemplate?.generation?.spawnAtStart && boutiqueTemplate.generation.count && boutiqueOrgTemplate) {
+    const numBoutiques = randomFromRange(boutiqueTemplate.generation.count, rand);
+
+    for (let i = 0; i < numBoutiques; i++) {
+      const ownerIdx = agents.findIndex((a) => a.status === 'available');
+      if (ownerIdx === -1) break;
+
+      const owner = agents[ownerIdx];
+      if (!owner) continue;
+
+      // Credits: location template override > org template default > fallback
+      const orgCredits = boutiqueTemplate.generation.ownerCredits
+        ? randomFromRange(boutiqueTemplate.generation.ownerCredits, rand)
+        : boutiqueOrgTemplate.defaults?.credits
+          ? randomFromRange(boutiqueOrgTemplate.defaults.credits, rand)
+          : randomInt(400, 700, rand);
+
+      const boutiqueOrg = createOrgFromTemplate(
+        `${owner.name}'s Boutique`,
+        boutiqueOrgTemplate,
+        owner.id,
+        orgCredits,
+        0
+      );
+
+      // Set owner as employed if template specifies
+      if (boutiqueOrgTemplate.generation?.leaderBecomesEmployed) {
+        owner.status = 'employed';
+        owner.employer = boutiqueOrg.id;
+      }
+
+      // Create the boutique - try building placement first
+      const buildingPlacement = findBuildingForLocation(
+        buildings,
+        boutiqueTemplate.tags ?? [],
+        buildingOccupancy,
+        undefined,
+        grid,
+        rand
+      );
+
+      if (buildingPlacement) {
+        let boutique = createLocationFromTemplate(
+          nextBoutiqueName(),
+          boutiqueTemplate,
+          0, 0, 0,
+          boutiqueOrg.id,
+          0,
+          buildingPlacement
+        );
+        // Add owner as employee if template specifies (for workforce tracking, not salary)
+        if (boutiqueOrgTemplate.generation?.leaderBecomesEmployed && owner) {
+          boutique = { ...boutique, employees: [owner.id] };
+          owner.employedAt = boutique.id;
+          owner.employer = boutiqueOrg.id;
+          owner.status = 'employed';
+        }
+        locations.push(boutique);
+        boutiqueOrg.locations.push(boutique.id);
+      } else {
+        // Fallback to legacy placement
+        const placement = findValidPlacement(grid, boutiqueTemplate.spawnConstraints, rand);
+        if (placement) {
+          let boutique = createLocationFromTemplate(
+            nextBoutiqueName(),
+            boutiqueTemplate,
+            placement.x,
+            placement.y,
+            placement.floor,
+            boutiqueOrg.id,
+            0
+          );
+          // Add owner as employee if template specifies (for workforce tracking, not salary)
+          if (boutiqueOrgTemplate.generation?.leaderBecomesEmployed && owner) {
+            boutique = { ...boutique, employees: [owner.id] };
+            owner.employedAt = boutique.id;
+            owner.employer = boutiqueOrg.id;
+            owner.status = 'employed';
+          }
+          locations.push(boutique);
+          boutiqueOrg.locations.push(boutique.id);
+        }
+      }
+
+      organizations.push(boutiqueOrg);
     }
   }
 

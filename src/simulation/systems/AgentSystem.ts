@@ -7,6 +7,7 @@ import type { AgentsConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import { processTravel, isTraveling } from './TravelSystem';
 import { setDead } from './AgentStateHelpers';
+import { trackDeath } from '../Metrics';
 
 /**
  * Process a single agent for one phase
@@ -172,6 +173,9 @@ function handleStarvation(agent: Agent, phase: number): Agent {
     agent.id,
     agent.name
   );
+
+  // Track death in metrics
+  trackDeath(agent.name, 'starvation');
 
   return setDead(agent, phase);
 }
