@@ -233,6 +233,53 @@ export interface ProductionConfig {
 }
 
 /**
+ * Behavior condition - matched against agent state
+ */
+export interface BehaviorConditions {
+  needsAbove?: Record<string, number>;      // e.g., { hunger: 25 }
+  needsBelow?: Record<string, number>;
+  inventoryAbove?: Record<string, number>;
+  inventoryBelow?: Record<string, number>;
+  hasCredits?: boolean;
+  hasCreditsAbove?: number;
+  hasEmployment?: boolean;
+  unemployed?: boolean;
+  atWorkplace?: boolean;
+  notAtWorkplace?: boolean;
+  notTraveling?: boolean;
+  homeless?: boolean;
+  hasResidence?: boolean;
+  atPublicSpace?: boolean;
+  notAtPublicSpace?: boolean;
+  isShopOwner?: boolean;
+  shopNeedsStock?: boolean;
+  shopHasStock?: boolean;
+  atLocation?: string;                      // e.g., "employedAt", "residence"
+  or?: BehaviorConditions[];                // OR logic for conditions
+  never?: boolean;                          // Never completes (for continuous tasks)
+}
+
+/**
+ * Behavior definition from behaviors.json
+ */
+export interface BehaviorDefinition {
+  id: string;
+  name: string;
+  priority: 'critical' | 'high' | 'normal' | 'idle';
+  executor: string;                         // Executor function name
+  conditions: BehaviorConditions;           // When this behavior can start
+  completionConditions: BehaviorConditions; // When this behavior is complete
+  params?: Record<string, unknown>;         // Parameters passed to executor
+}
+
+/**
+ * Behavior configuration from data/config/behaviors.json
+ */
+export interface BehaviorConfig {
+  behaviors: BehaviorDefinition[];
+}
+
+/**
  * Location template with balance section and spawn constraints
  */
 export interface LocationTemplate extends EntityTemplate {
@@ -259,6 +306,7 @@ export interface LoadedConfig {
   agents: AgentsConfig;
   city: CityConfig;
   transport: TransportConfig;
+  behaviors: BehaviorConfig;
   templates: {
     orgs: OrgTemplate[];
     agents: AgentTemplate[];
@@ -273,6 +321,10 @@ export interface LoadedConfig {
   orgTemplates: Record<string, OrgTemplate>;
   /** Convenience lookup: buildingTemplates['office_tower'] */
   buildingTemplates: Record<string, BuildingTemplate>;
+  /** Convenience lookup: behaviorsByPriority['critical'] */
+  behaviorsByPriority: Record<string, BehaviorDefinition[]>;
+  /** Convenience lookup: behaviorsById['commuting'] */
+  behaviorsById: Record<string, BehaviorDefinition>;
 }
 
 /**
@@ -306,6 +358,11 @@ export async function loadConfig(): Promise<LoadedConfig> {
   const transport = (await transportResponse.json()) as TransportConfig;
   console.log(`[ConfigLoader] Loaded transport config (${Object.keys(transport.transportModes).length} modes)`);
 
+  // Load behaviors config
+  const behaviorsResponse = await fetch('/data/config/behaviors.json');
+  const behaviors = (await behaviorsResponse.json()) as BehaviorConfig;
+  console.log(`[ConfigLoader] Loaded behaviors config (${behaviors.behaviors.length} behaviors)`);
+
   // Load templates
   const orgTemplates = (await loadTemplates('/data/templates/orgs')) as OrgTemplate[];
   const agentTemplates = (await loadTemplates('/data/templates/agents')) as AgentTemplate[];
@@ -337,6 +394,19 @@ export async function loadConfig(): Promise<LoadedConfig> {
     buildingTemplateMap[template.id] = template;
   }
 
+  // Build behavior lookup maps
+  const behaviorsByPriority: Record<string, BehaviorDefinition[]> = {
+    critical: [],
+    high: [],
+    normal: [],
+    idle: [],
+  };
+  const behaviorsById: Record<string, BehaviorDefinition> = {};
+  for (const behavior of behaviors.behaviors) {
+    behaviorsById[behavior.id] = behavior;
+    behaviorsByPriority[behavior.priority]?.push(behavior);
+  }
+
   console.log(
     `[ConfigLoader] Loaded templates: ${orgTemplates.length} orgs, ${agentTemplates.length} agents, ${locationTemplates.length} locations, ${buildingTemplates.length} buildings`
   );
@@ -347,6 +417,7 @@ export async function loadConfig(): Promise<LoadedConfig> {
     agents,
     city,
     transport,
+    behaviors,
     templates: {
       orgs: orgTemplates,
       agents: agentTemplates,
@@ -357,6 +428,8 @@ export async function loadConfig(): Promise<LoadedConfig> {
     agentTemplates: agentTemplateMap,
     orgTemplates: orgTemplateMap,
     buildingTemplates: buildingTemplateMap,
+    behaviorsByPriority,
+    behaviorsById,
   };
 }
 

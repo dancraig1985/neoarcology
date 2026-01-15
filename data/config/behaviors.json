@@ -1,0 +1,177 @@
+{
+  "behaviors": [
+    {
+      "id": "emergency_hunger",
+      "name": "Emergency Food Search",
+      "priority": "critical",
+      "executor": "emergency_food",
+      "conditions": {
+        "needsAbove": { "hunger": 80 },
+        "inventoryBelow": { "provisions": 1 }
+      },
+      "completionConditions": {
+        "or": [
+          { "inventoryAbove": { "provisions": 0 } },
+          { "needsBelow": { "hunger": 80 } }
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "forced_rest",
+      "name": "Collapse from Exhaustion",
+      "priority": "critical",
+      "executor": "rest",
+      "conditions": {
+        "needsAbove": { "fatigue": 99 },
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "needsBelow": { "fatigue": 70 }
+      },
+      "params": {
+        "restType": "forced"
+      }
+    },
+    {
+      "id": "urgent_rest",
+      "name": "Go Home to Rest",
+      "priority": "high",
+      "executor": "rest",
+      "conditions": {
+        "needsAbove": { "fatigue": 90 },
+        "notTraveling": true,
+        "notAtWorkplace": true
+      },
+      "completionConditions": {
+        "needsBelow": { "fatigue": 70 }
+      },
+      "params": {
+        "restType": "urgent"
+      }
+    },
+    {
+      "id": "commuting",
+      "name": "Commute to Work",
+      "priority": "normal",
+      "executor": "travel",
+      "conditions": {
+        "hasEmployment": true,
+        "notAtWorkplace": true,
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "atWorkplace": true
+      },
+      "params": {
+        "destination": "employedAt"
+      }
+    },
+    {
+      "id": "working",
+      "name": "Working",
+      "priority": "normal",
+      "executor": "work",
+      "conditions": {
+        "hasEmployment": true,
+        "atWorkplace": true
+      },
+      "completionConditions": {
+        "never": true
+      },
+      "params": {}
+    },
+    {
+      "id": "buying_food",
+      "name": "Buy Food",
+      "priority": "normal",
+      "executor": "purchase",
+      "conditions": {
+        "needsAbove": { "hunger": 25 },
+        "inventoryBelow": { "provisions": 1 },
+        "hasCreditsAbove": 9,
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "inventoryAbove": { "provisions": 0 }
+      },
+      "params": {
+        "goodsType": "provisions",
+        "locationTag": "retail"
+      }
+    },
+    {
+      "id": "seeking_leisure",
+      "name": "Seek Entertainment",
+      "priority": "normal",
+      "executor": "leisure",
+      "conditions": {
+        "needsAbove": { "leisure": 50 },
+        "notTraveling": true,
+        "notAtWorkplace": true
+      },
+      "completionConditions": {
+        "needsBelow": { "leisure": 30 }
+      },
+      "params": {}
+    },
+    {
+      "id": "finding_housing",
+      "name": "Look for Apartment",
+      "priority": "normal",
+      "executor": "seek_housing",
+      "conditions": {
+        "homeless": true,
+        "hasCreditsAbove": 80,
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "hasResidence": true
+      },
+      "params": {}
+    },
+    {
+      "id": "starting_business",
+      "name": "Consider Starting Business",
+      "priority": "normal",
+      "executor": "entrepreneur",
+      "conditions": {
+        "unemployed": true,
+        "hasCreditsAbove": 299,
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "hasEmployment": true
+      },
+      "params": {}
+    },
+    {
+      "id": "seeking_job",
+      "name": "Look for Work",
+      "priority": "normal",
+      "executor": "seek_job",
+      "conditions": {
+        "unemployed": true,
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "hasEmployment": true
+      },
+      "params": {}
+    },
+    {
+      "id": "wandering",
+      "name": "Wander to Public Space",
+      "priority": "idle",
+      "executor": "wander",
+      "conditions": {
+        "notAtPublicSpace": true,
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "atPublicSpace": true
+      },
+      "params": {}
+    }
+  ]
+}

@@ -8,7 +8,8 @@ import type { LoadedConfig } from '../config/ConfigLoader';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
 import { processAgentPhase, countLivingAgents, countDeadAgents } from './systems/AgentSystem';
-import { processAgentEconomicDecision, processWeeklyEconomy, fixHomelessAgents } from './systems/EconomySystem';
+import { processWeeklyEconomy, fixHomelessAgents, tryRestockFromWholesale } from './systems/EconomySystem';
+import { processAgentBehavior } from './behaviors/BehaviorProcessor';
 import { processFactoryProduction } from './systems/OrgSystem';
 import { cleanupDeadEmployees } from './systems/LocationSystem';
 import { checkImmigration } from './systems/ImmigrationSystem';
@@ -124,6 +125,19 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     return processFactoryProduction(loc, template?.balance.production, newTime.currentPhase, goodsSizes, updatedAgents);
   });
 
+  // 1b. Automatic restocking: All retail shops restock from wholesale
+  // This is an org-level process, not an agent behavior - runs every phase
+  for (const org of updatedOrgs) {
+    const orgRetailLocations = updatedLocations.filter(
+      (loc) => org.locations.includes(loc.id) && loc.tags.includes('retail')
+    );
+    for (const retailLoc of orgRetailLocations) {
+      const result = tryRestockFromWholesale(org, retailLoc, updatedLocations, updatedOrgs, config.economy, newTime.currentPhase);
+      updatedLocations = result.locations;
+      updatedOrgs = result.orgs;
+    }
+  }
+
   // 2. Process biological needs (hunger, eating, travel)
   updatedAgents = updatedAgents.map((agent) =>
     processAgentPhase(agent, newTime.currentPhase, config.agents, updatedLocations)
@@ -132,21 +146,18 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   // 2b. Clean up dead employees from location employee lists
   updatedLocations = cleanupDeadEmployees(updatedLocations, updatedAgents, newTime.currentPhase);
 
-  // 3. Process economic decisions for each agent (buy food, restock shop, seek job, open business)
+  // 3. Process behavior-based decisions for each agent
   for (let i = 0; i < updatedAgents.length; i++) {
     const agent = updatedAgents[i];
     if (!agent || agent.status === 'dead') continue;
 
-    const result = processAgentEconomicDecision(
+    const result = processAgentBehavior(
       agent,
       updatedAgents,
       updatedLocations,
       updatedOrgs,
       state.buildings,
-      config.economy,
-      config.agents,
-      config.locationTemplates,
-      config.transport,
+      config,
       newTime.currentPhase
     );
 

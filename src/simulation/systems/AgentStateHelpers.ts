@@ -5,7 +5,7 @@
  * All multi-field state changes should go through these helpers.
  */
 
-import type { Agent, Location, Organization, TravelMethod } from '../../types';
+import type { Agent, Location, Organization, TravelMethod, AgentTask, TaskPriority } from '../../types';
 
 // ============================================
 // Employment State Helpers
@@ -122,6 +122,45 @@ export function clearAllLocationState(agent: Agent): Agent {
     travelMethod: undefined,
     travelPhasesRemaining: undefined,
   };
+}
+
+// ============================================
+// Task State Helpers
+// ============================================
+
+/**
+ * Set agent's current task
+ */
+export function setTask(agent: Agent, task: AgentTask): Agent {
+  return { ...agent, currentTask: task };
+}
+
+/**
+ * Clear agent's current task
+ */
+export function clearTask(agent: Agent): Agent {
+  return { ...agent, currentTask: undefined };
+}
+
+/**
+ * Check if agent has a current task
+ */
+export function hasTask(agent: Agent): boolean {
+  return agent.currentTask !== undefined;
+}
+
+/**
+ * Check if an incoming priority can interrupt current priority
+ */
+export function canInterrupt(incomingPriority: TaskPriority, currentPriority: TaskPriority): boolean {
+  const priorityOrder: Record<TaskPriority, number> = {
+    critical: 4,
+    high: 3,
+    normal: 2,
+    idle: 1,
+  };
+
+  return priorityOrder[incomingPriority] > priorityOrder[currentPriority];
 }
 
 // ============================================

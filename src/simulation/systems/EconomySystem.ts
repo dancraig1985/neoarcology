@@ -1059,7 +1059,7 @@ function getNextApartmentName(): string {
   return name ?? "Apartment";
 }
 
-function tryOpenBusiness(
+export function tryOpenBusiness(
   agent: Agent,
   locationTemplates: Record<string, LocationTemplate>,
   buildings: Building[],
@@ -1114,8 +1114,9 @@ function tryOpenBusiness(
         : `${agent.name}'s Shop`;
 
   // Org gets 70% of credits REMAINING after opening cost (not 70% of total)
-  // Minimum capital must cover: employee wages (~180/week for 2 workers) + owner dividend (75) + buffer
-  const minBusinessCapital = isFactory ? 600 : 400;
+  // Minimum capital must cover: owner dividend (75) + some buffer for restocking
+  // Lowered from 400 to 200 to allow more entrepreneurship
+  const minBusinessCapital = isFactory ? 500 : 200;
   const creditsAfterOpeningCost = agent.wallet.credits - openingCost;
   const calculatedCapital = Math.floor(creditsAfterOpeningCost * 0.7);
   const businessCapital = Math.max(calculatedCapital, minBusinessCapital);
@@ -1175,8 +1176,9 @@ function tryOpenBusiness(
 /**
  * Org tries to restock their shop by buying wholesale from another org
  * Uses real supply chain: wholesale location → retail shop (B2B transaction)
+ * Called automatically each phase for all orgs (not an agent behavior)
  */
-function tryRestockFromWholesale(
+export function tryRestockFromWholesale(
   buyerOrg: Organization,
   shop: Location,
   locations: Location[],

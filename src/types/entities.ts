@@ -104,8 +104,8 @@ export interface Agent extends Entity {
   // Housing
   residence?: LocationRef; // Where agent lives (apartment they rent)
 
-  // Current activity
-  currentAction?: Action;
+  // Current task (behavior system)
+  currentTask?: AgentTask;
 
   // Mood
   morale: number; // -100 to +100
@@ -125,7 +125,29 @@ export type AgentStatus =
   | 'dead';       // Deceased, no longer active
 
 /**
- * Action - what an agent is currently doing
+ * Task Priority - determines interrupt behavior
+ * - critical: Always interrupts (emergency hunger, forced rest)
+ * - high: Interrupts normal tasks (urgent rest)
+ * - normal: Completes before re-evaluation (commuting, buying food)
+ * - idle: Runs when no other task (wandering)
+ */
+export type TaskPriority = 'critical' | 'high' | 'normal' | 'idle';
+
+/**
+ * AgentTask - what an agent is currently doing
+ * Type is a string (behavior ID from config), not an enum
+ */
+export interface AgentTask {
+  type: string;              // Behavior ID from behaviors.json
+  priority: TaskPriority;
+  startedPhase: number;
+  targetId?: string;         // Target location/entity
+  targetName?: string;       // For logging/display
+  params?: Record<string, unknown>;  // Task-specific parameters
+}
+
+/**
+ * @deprecated Use AgentTask instead
  */
 export interface Action {
   type: string;

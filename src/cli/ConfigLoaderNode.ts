@@ -12,6 +12,8 @@ import type {
   AgentsConfig,
   CityConfig,
   TransportConfig,
+  BehaviorConfig,
+  BehaviorDefinition,
   OrgTemplate,
   AgentTemplate,
   LocationTemplate,
@@ -67,6 +69,7 @@ export function loadConfigSync(): LoadedConfig {
   const agents = loadJson<AgentsConfig>('data/config/agents.json');
   const city = loadJson<CityConfig>('data/config/city.json');
   const transport = loadJson<TransportConfig>('data/config/transport.json');
+  const behaviors = loadJson<BehaviorConfig>('data/config/behaviors.json');
 
   // Load templates
   const orgTemplates = loadTemplates<OrgTemplate>('data/templates/orgs');
@@ -95,12 +98,26 @@ export function loadConfigSync(): LoadedConfig {
     buildingTemplateMap[template.id] = template;
   }
 
+  // Build behavior lookup maps
+  const behaviorsByPriority: Record<string, BehaviorDefinition[]> = {
+    critical: [],
+    high: [],
+    normal: [],
+    idle: [],
+  };
+  const behaviorsById: Record<string, BehaviorDefinition> = {};
+  for (const behavior of behaviors.behaviors) {
+    behaviorsById[behavior.id] = behavior;
+    behaviorsByPriority[behavior.priority]?.push(behavior);
+  }
+
   return {
     simulation,
     economy,
     agents,
     city,
     transport,
+    behaviors,
     templates: {
       orgs: orgTemplates,
       agents: agentTemplates,
@@ -111,5 +128,7 @@ export function loadConfigSync(): LoadedConfig {
     agentTemplates: agentTemplateMap,
     orgTemplates: orgTemplateMap,
     buildingTemplates: buildingTemplateMap,
+    behaviorsByPriority,
+    behaviorsById,
   };
 }
