@@ -15,6 +15,7 @@ export interface ColumnDef<T> {
   width: number;
   align?: 'left' | 'center' | 'right';
   render?: (item: T) => string;
+  sortValue?: (item: T) => string | number; // Value to sort by (if different from key)
 }
 
 /**
@@ -126,6 +127,7 @@ export const ORG_COLUMNS: ColumnDef<Organization>[] = [
     width: 80,
     align: 'right',
     render: (o) => o.locations.length.toString(),
+    sortValue: (o) => o.locations.length,
   },
   {
     key: 'leaderName',
@@ -167,6 +169,7 @@ export const LOCATION_COLUMNS: ColumnDef<Location>[] = [
     width: 50,
     align: 'right',
     render: (l) => l.employees.length.toString(),
+    sortValue: (l) => l.employees.length,
   },
   {
     key: 'weeklyRevenue',

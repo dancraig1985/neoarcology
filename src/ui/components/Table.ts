@@ -174,10 +174,12 @@ export class Table<T extends { id: string }> extends UIComponent {
       this.data = [...this.originalData];
     } else {
       const { columnKey, direction } = this.sortState;
+      const column = this.columns.find((c) => c.key === columnKey);
 
       this.data = [...this.originalData].sort((a, b) => {
-        const aVal = this.getNestedValue(a, columnKey);
-        const bVal = this.getNestedValue(b, columnKey);
+        // Use sortValue function if provided, otherwise fall back to nested value
+        const aVal = column?.sortValue ? column.sortValue(a) : this.getNestedValue(a, columnKey);
+        const bVal = column?.sortValue ? column.sortValue(b) : this.getNestedValue(b, columnKey);
 
         let cmp = 0;
         if (aVal === undefined || aVal === null) {

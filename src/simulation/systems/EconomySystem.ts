@@ -1282,8 +1282,14 @@ export function tryRestockFromWholesale(
   );
 
   // Update locations and orgs arrays
+  // Add weeklyRevenue to wholesaler (the seller) - transferInventory doesn't track revenue
+  const wholesalerWithRevenue: Location = {
+    ...(updatedWholesaler as Location),
+    weeklyRevenue: (wholesaler.weeklyRevenue ?? 0) + totalCost,
+  };
+
   const updatedLocations = locations.map((loc) => {
-    if (loc.id === wholesaler.id) return updatedWholesaler as Location;
+    if (loc.id === wholesaler.id) return wholesalerWithRevenue;
     if (loc.id === shop.id) return updatedShop as Location;
     return loc;
   });

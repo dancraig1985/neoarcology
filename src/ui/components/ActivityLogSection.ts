@@ -9,7 +9,8 @@ import { COLORS, SPACING, FONTS, CATEGORY_ICONS } from '../UITheme';
 import { ActivityLog, type LogEntry } from '../../simulation/ActivityLog';
 
 const MAX_ENTRIES = 15;
-const ENTRY_HEIGHT = 18;
+const MIN_ENTRY_HEIGHT = 18;
+const LINE_HEIGHT = 14;
 
 export class ActivityLogSection extends UIComponent {
   private entries: LogEntry[] = [];
@@ -17,6 +18,7 @@ export class ActivityLogSection extends UIComponent {
   private scrollOffset = 0;
   private titleText: Text;
   private entityId: string | null = null;
+  private totalContentHeight = 0;
 
   constructor(width: number, height: number) {
     super(width, height);
@@ -92,6 +94,7 @@ export class ActivityLogSection extends UIComponent {
 
   private rebuildEntries(): void {
     this.contentContainer.removeChildren();
+    this.totalContentHeight = 0;
 
     if (this.entries.length === 0) {
       const emptyStyle = new TextStyle({
@@ -107,12 +110,6 @@ export class ActivityLogSection extends UIComponent {
       return;
     }
 
-    const entryStyle = new TextStyle({
-      fontFamily: FONTS.family,
-      fontSize: 11,
-      fill: COLORS.textSecondary,
-    });
-
     const phaseStyle = new TextStyle({
       fontFamily: FONTS.family,
       fontSize: 11,
@@ -120,6 +117,8 @@ export class ActivityLogSection extends UIComponent {
     });
 
     let yOffset = 0;
+    const msgStartX = 60;
+    const maxMsgWidth = this._width - msgStartX - SPACING.sm;
 
     for (const entry of this.entries) {
       // Phase number
@@ -129,33 +128,37 @@ export class ActivityLogSection extends UIComponent {
       this.contentContainer.addChild(phaseText);
 
       // Category icon
+      const iconStyle = new TextStyle({
+        fontFamily: FONTS.family,
+        fontSize: 11,
+        fill: COLORS.textSecondary,
+      });
       const icon = CATEGORY_ICONS[entry.category] ?? '•';
-      const iconText = new Text({ text: icon, style: entryStyle });
+      const iconText = new Text({ text: icon, style: iconStyle });
       iconText.x = 45;
       iconText.y = yOffset;
       this.contentContainer.addChild(iconText);
 
-      // Message (truncated)
+      // Message with word wrap
       const msgStyle = new TextStyle({
-        ...entryStyle,
+        fontFamily: FONTS.family,
+        fontSize: 11,
         fill: this.getEntryColor(entry),
+        wordWrap: true,
+        wordWrapWidth: maxMsgWidth,
+        lineHeight: LINE_HEIGHT,
       });
       const msgText = new Text({ text: entry.message, style: msgStyle });
-      msgText.x = 60;
+      msgText.x = msgStartX;
       msgText.y = yOffset;
-
-      // Truncate if needed
-      const maxWidth = this._width - 70;
-      if (msgText.width > maxWidth) {
-        while (msgText.width > maxWidth && msgText.text.length > 3) {
-          msgText.text = msgText.text.slice(0, -4) + '...';
-        }
-      }
       this.contentContainer.addChild(msgText);
 
-      yOffset += ENTRY_HEIGHT;
+      // Calculate entry height based on wrapped text
+      const entryHeight = Math.max(MIN_ENTRY_HEIGHT, msgText.height + 4);
+      yOffset += entryHeight;
     }
 
+    this.totalContentHeight = yOffset;
     this.scrollOffset = 0;
     this.updateScroll();
   }
@@ -172,9 +175,11 @@ export class ActivityLogSection extends UIComponent {
   }
 
   private onWheel(event: WheelEvent): void {
-    const contentHeight = this.entries.length * ENTRY_HEIGHT;
+    // Stop propagation to prevent parent DetailView from also scrolling
+    event.stopPropagation();
+
     const viewHeight = this._height - FONTS.body - SPACING.md;
-    const maxScroll = Math.max(0, contentHeight - viewHeight);
+    const maxScroll = Math.max(0, this.totalContentHeight - viewHeight);
 
     this.scrollOffset += event.deltaY * 0.5;
     this.scrollOffset = Math.max(0, Math.min(maxScroll, this.scrollOffset));
