@@ -1,0 +1,33 @@
+{
+  "id": "brewery",
+  "name": "Brewery",
+  "description": "A facility that produces alcoholic beverages",
+  "tags": ["wholesale", "production", "industrial"],
+  "spawnConstraints": {
+    "allowedZones": ["industrial"],
+    "floorRange": [0, 3],
+    "preferGroundFloor": true,
+    "minDistanceFromCenter": 6,
+    "maxPerCity": 8
+  },
+  "balance": {
+    "openingCost": 350,
+    "operatingCost": 0,
+    "employeeSlots": 3,
+    "startingInventory": 40,
+    "inventoryCapacity": 150,
+    "inventoryGood": "alcohol",
+    "production": [
+      {
+        "good": "alcohol",
+        "amountPerEmployee": 1,
+        "phasesPerCycle": 2
+      }
+    ]
+  },
+  "generation": {
+    "count": { "min": 3, "max": 4 },
+    "spawnAtStart": true,
+    "ownerOrgTemplate": "corporation"
+  }
+}

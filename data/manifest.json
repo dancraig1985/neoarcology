@@ -1,5 +1,5 @@
 {
-  "generated": "2026-01-14T18:54:29.238Z",
+  "generated": "2026-01-15T14:04:01.111Z",
   "templates": {
     "orgs": [
       "corporation.json",
@@ -10,7 +10,8 @@
     ],
     "locations": [
       "apartment.json",
-      "factory.json",
+      "brewery.json",
+      "provisions_factory.json",
       "pub.json",
       "public_space.json",
       "restaurant.json",

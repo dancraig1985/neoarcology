@@ -58,10 +58,14 @@
       "conditions": {
         "hasEmployment": true,
         "notAtWorkplace": true,
-        "notTraveling": true
+        "notTraveling": true,
+        "needsBelow": { "hunger": 50 }
       },
       "completionConditions": {
-        "atWorkplace": true
+        "or": [
+          { "atWorkplace": true },
+          { "needsAbove": { "hunger": 50 } }
+        ]
       },
       "params": {
         "destination": "employedAt"
@@ -74,10 +78,11 @@
       "executor": "work",
       "conditions": {
         "hasEmployment": true,
-        "atWorkplace": true
+        "atWorkplace": true,
+        "needsBelow": { "hunger": 50 }
       },
       "completionConditions": {
-        "never": true
+        "needsAbove": { "hunger": 50 }
       },
       "params": {}
     },

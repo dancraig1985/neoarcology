@@ -677,19 +677,37 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   }
 
   // ==================
-  // 2. CREATE CORPORATIONS WITH FACTORIES
+  // 2. CREATE CORPORATIONS WITH PRODUCTION FACILITIES
   // ==================
   const corpTemplate = config.orgTemplates['corporation'];
-  const factoryTemplate = config.locationTemplates['factory'];
 
-  if (corpTemplate?.generation?.spawnAtStart && corpTemplate.generation.count) {
-    const numCorps = randomFromRange(corpTemplate.generation.count, rand);
+  // Get all production facility templates that corporations own
+  const productionTemplates = Object.values(config.locationTemplates).filter(
+    (template) => template.generation?.ownerOrgTemplate === 'corporation' && template.generation?.spawnAtStart
+  );
+
+  // Track spawned corporations so we can assign facilities to them
+  const spawnedCorps: Organization[] = [];
+
+  if (corpTemplate?.generation?.spawnAtStart) {
+    // Create corporations based on how many production facilities we need
+    // Each facility needs an owner corporation
+    let totalFacilities = 0;
+    for (const template of productionTemplates) {
+      if (template.generation?.count) {
+        totalFacilities += randomFromRange(template.generation.count, rand);
+      }
+    }
+
+    // Create one corporation per facility (or use corp template count if specified)
+    const numCorps = corpTemplate.generation.count
+      ? Math.min(randomFromRange(corpTemplate.generation.count, rand), totalFacilities)
+      : totalFacilities;
 
     for (let i = 0; i < numCorps; i++) {
       const leader = agents[i];
       if (!leader) continue;
 
-      // Get credits from template
       const credits = corpTemplate.defaults?.credits
         ? randomFromRange(corpTemplate.defaults.credits, rand)
         : randomInt(2000, 5000, rand);
@@ -697,57 +715,73 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
       const corpName = `${pickRandom(lastNames, rand)} Industries`;
       const corp = createOrgFromTemplate(corpName, corpTemplate, leader.id, credits, 0);
 
-      // Set leader as employed
       if (corpTemplate.generation.leaderBecomesEmployed) {
         leader.status = 'employed';
         leader.employer = corp.id;
       }
 
-      // Create factory for corporation (from ownsLocations)
-      if (corpTemplate.generation.ownsLocations?.includes('factory') && factoryTemplate) {
-        // Try to find a building for the factory
-        const buildingPlacement = findBuildingForLocation(
-          buildings,
-          factoryTemplate.tags ?? [],
-          buildingOccupancy,
-          undefined, // No zone filter - use spawn constraints
-          grid,
-          rand
-        );
+      spawnedCorps.push(corp);
+      organizations.push(corp);
+    }
+  }
 
-        if (buildingPlacement) {
-          const factory = createLocationFromTemplate(
+  // Now spawn each type of production facility and assign to corporations
+  let corpIndex = 0;
+  for (const facilityTemplate of productionTemplates) {
+    if (!facilityTemplate.generation?.count) continue;
+
+    const numFacilities = randomFromRange(facilityTemplate.generation.count, rand);
+    const facilityType = facilityTemplate.id;
+
+    for (let i = 0; i < numFacilities; i++) {
+      // Pick a corporation to own this facility (round-robin)
+      const corp = spawnedCorps[corpIndex % spawnedCorps.length];
+      if (!corp) break;
+      corpIndex++;
+
+      // Try to find a building placement
+      const buildingPlacement = findBuildingForLocation(
+        buildings,
+        facilityTemplate.tags ?? [],
+        buildingOccupancy,
+        undefined,
+        grid,
+        rand
+      );
+
+      let facility: Location | null = null;
+
+      if (buildingPlacement) {
+        facility = createLocationFromTemplate(
+          nextFactoryName(),
+          facilityTemplate,
+          0,
+          0,
+          0,
+          corp.id,
+          0,
+          buildingPlacement
+        );
+      } else {
+        // Fallback to legacy placement
+        const placement = findValidPlacement(grid, facilityTemplate.spawnConstraints, rand);
+        if (placement) {
+          facility = createLocationFromTemplate(
             nextFactoryName(),
-            factoryTemplate,
-            0, // x from building
-            0, // y from building
-            0, // floor from building
+            facilityTemplate,
+            placement.x,
+            placement.y,
+            placement.floor,
             corp.id,
-            0,
-            buildingPlacement
+            0
           );
-          locations.push(factory);
-          corp.locations.push(factory.id);
-        } else {
-          // Fallback to legacy placement if no suitable building
-          const placement = findValidPlacement(grid, factoryTemplate.spawnConstraints, rand);
-          if (placement) {
-            const factory = createLocationFromTemplate(
-              nextFactoryName(),
-              factoryTemplate,
-              placement.x,
-              placement.y,
-              placement.floor,
-              corp.id,
-              0
-            );
-            locations.push(factory);
-            corp.locations.push(factory.id);
-          }
         }
       }
 
-      organizations.push(corp);
+      if (facility) {
+        locations.push(facility);
+        corp.locations.push(facility.id);
+      }
     }
   }
 

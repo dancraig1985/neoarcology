@@ -218,8 +218,8 @@ function countTransactionsFromLog(metrics: SimulationMetrics) {
   const entries = ActivityLog.getEntries();
 
   for (const entry of entries) {
-    // Detect retail sales (category: commerce, message: purchased X provisions from Y)
-    if (entry.category === 'commerce' && entry.message.includes('purchased')) {
+    // Detect retail sales (category: purchase, message: bought X provisions for Y credits at Z)
+    if (entry.category === 'purchase' && entry.message.includes('bought') && entry.message.includes('provisions')) {
       recordRetailSale(metrics);
     }
     // Detect wholesale sales (category: wholesale, message: bought X provisions)

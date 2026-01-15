@@ -5,7 +5,7 @@
  * Executors set/clear tasks and return updated state.
  */
 
-import type { Agent, AgentTask } from '../../../types/entities';
+import type { Agent, AgentTask, Location, Organization } from '../../../types/entities';
 import { registerExecutor, type BehaviorContext, type TaskResult } from '../BehaviorRegistry';
 import { isTraveling, startTravel, findNearestLocation, redirectTravel } from '../../systems/TravelSystem';
 import { ActivityLog } from '../../ActivityLog';
@@ -285,6 +285,13 @@ function executePurchaseBehavior(
 
   if (shopsWithStock.length === 0) {
     // No shops have stock - fail task
+    ActivityLog.warning(
+      ctx.phase,
+      'purchase',
+      `no shops have ${goodsType} in stock!`,
+      agent.id,
+      agent.name
+    );
     return {
       agent: clearTask(agent),
       locations: ctx.locations,
@@ -299,6 +306,19 @@ function executePurchaseBehavior(
     : undefined;
 
   if (!currentShop) {
+    // Debug: Check if agent is at ANY location with retail tag
+    const currentLoc = ctx.locations.find(l => l.id === agent.currentLocation);
+    if (currentLoc && currentLoc.tags.includes(locationTag)) {
+      // Agent is at a retail location but it's not in shopsWithStock
+      ActivityLog.warning(
+        ctx.phase,
+        'purchase',
+        `at ${currentLoc.name} but it has no ${goodsType} (stock: ${currentLoc.inventory[goodsType] ?? 0})`,
+        agent.id,
+        agent.name
+      );
+    }
+
     // Travel to nearest shop
     const nearestShop = findNearestLocation(
       agent,
@@ -429,16 +449,18 @@ function executeLeisureBehavior(
     };
   }
 
-  // Check if at leisure location (pub or park)
+  // Check if at leisure location (pub with 'leisure' tag, or public space with 'public' tag)
   const currentLoc = ctx.locations.find(l => l.id === agent.currentLocation);
-  const atLeisureLocation = currentLoc?.tags.includes('pub') || currentLoc?.tags.includes('park');
+  const atPub = currentLoc?.tags.includes('leisure');
+  const atPark = currentLoc?.tags.includes('public');
+  const atLeisureLocation = atPub || atPark;
 
   if (!atLeisureLocation) {
-    // Find nearest pub or park
+    // Find nearest pub or public space
     const leisureLoc = findNearestLocation(
       agent,
       ctx.locations,
-      loc => loc.tags.includes('pub') || loc.tags.includes('park')
+      loc => loc.tags.includes('leisure') || loc.tags.includes('public')
     );
 
     if (leisureLoc) {
@@ -470,17 +492,79 @@ function executeLeisureBehavior(
 
   // At leisure location - reduce leisure need
   let leisureReduction = 0;
+  let updatedLocations = ctx.locations;
+  let updatedOrgs = ctx.orgs;
+  let updatedAgent = agent;
 
-  if (currentLoc?.tags.includes('pub')) {
-    leisureReduction = ctx.agentsConfig.leisure.pubSatisfaction;
-  } else if (currentLoc?.tags.includes('park')) {
+  if (atPub && currentLoc) {
+    // At a pub - try to buy alcohol for full satisfaction
+    const alcoholStock = currentLoc.inventory['alcohol'] ?? 0;
+    const alcoholPrice = ctx.economyConfig.goods['alcohol']?.retailPrice ?? 15;
+
+    if (alcoholStock > 0 && agent.wallet.credits >= alcoholPrice) {
+      // Purchase alcohol - transfer money to pub's org
+      const pubOrg = ctx.orgs.find(org => org.locations.includes(currentLoc.id));
+
+      // Update agent wallet (pay for drink)
+      updatedAgent = {
+        ...agent,
+        wallet: { ...agent.wallet, credits: agent.wallet.credits - alcoholPrice },
+      };
+
+      // Update pub inventory and revenue
+      const updatedPub: Location = {
+        ...currentLoc,
+        inventory: { ...currentLoc.inventory, alcohol: alcoholStock - 1 },
+        weeklyRevenue: currentLoc.weeklyRevenue + alcoholPrice,
+      };
+      updatedLocations = ctx.locations.map(loc =>
+        loc.id === currentLoc.id ? updatedPub : loc
+      );
+
+      // Update pub org wallet (receive payment)
+      if (pubOrg) {
+        const updatedPubOrg: Organization = {
+          ...pubOrg,
+          wallet: { ...pubOrg.wallet, credits: pubOrg.wallet.credits + alcoholPrice },
+        };
+        updatedOrgs = ctx.orgs.map(org =>
+          org.id === pubOrg.id ? updatedPubOrg : org
+        );
+      }
+
+      ActivityLog.info(
+        ctx.phase,
+        'purchase',
+        `bought a drink at ${currentLoc.name} for ${alcoholPrice} credits`,
+        agent.id,
+        agent.name
+      );
+
+      // Full satisfaction when buying alcohol
+      leisureReduction = ctx.agentsConfig.leisure.pubSatisfaction;
+    } else {
+      // No alcohol or can't afford - just hang out (reduced satisfaction)
+      leisureReduction = ctx.agentsConfig.leisure.parkSatisfactionPerPhase;
+
+      if (alcoholStock === 0) {
+        ActivityLog.info(
+          ctx.phase,
+          'leisure',
+          `hanging out at ${currentLoc.name} (no drinks available)`,
+          agent.id,
+          agent.name
+        );
+      }
+    }
+  } else if (atPark) {
+    // At park/public space - slower satisfaction, but free
     leisureReduction = ctx.agentsConfig.leisure.parkSatisfactionPerPhase;
   }
 
-  const newLeisure = Math.max(0, agent.needs.leisure - leisureReduction);
-  const updatedAgent = {
-    ...agent,
-    needs: { ...agent.needs, leisure: newLeisure },
+  const newLeisure = Math.max(0, updatedAgent.needs.leisure - leisureReduction);
+  updatedAgent = {
+    ...updatedAgent,
+    needs: { ...updatedAgent.needs, leisure: newLeisure },
     currentTask: task,
   };
 
@@ -488,8 +572,8 @@ function executeLeisureBehavior(
 
   return {
     agent: complete ? clearTask(updatedAgent) : updatedAgent,
-    locations: ctx.locations,
-    orgs: ctx.orgs,
+    locations: updatedLocations,
+    orgs: updatedOrgs,
     complete,
   };
 }

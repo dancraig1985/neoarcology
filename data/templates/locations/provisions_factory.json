@@ -1,36 +1,31 @@
 {
-  "id": "factory",
-  "name": "Factory",
-  "description": "An industrial manufacturing facility",
+  "id": "provisions_factory",
+  "name": "Food Processing Plant",
+  "description": "A facility that processes and packages food for distribution",
   "tags": ["wholesale", "production", "industrial"],
   "spawnConstraints": {
     "allowedZones": ["industrial"],
     "floorRange": [0, 5],
     "preferGroundFloor": true,
     "minDistanceFromCenter": 8,
-    "maxPerCity": 20
+    "maxPerCity": 10
   },
   "balance": {
-    "openingCost": 500,
+    "openingCost": 400,
     "operatingCost": 0,
-    "employeeSlots": 5,
-    "startingInventory": 100,
-    "inventoryCapacity": 500,
+    "employeeSlots": 3,
+    "startingInventory": 50,
+    "inventoryCapacity": 200,
     "production": [
       {
         "good": "provisions",
-        "amountPerEmployee": 2,
-        "phasesPerCycle": 1
-      },
-      {
-        "good": "alcohol",
         "amountPerEmployee": 1,
-        "phasesPerCycle": 2
+        "phasesPerCycle": 1
       }
     ]
   },
   "generation": {
-    "count": { "min": 6, "max": 8 },
+    "count": { "min": 2, "max": 3 },
     "spawnAtStart": true,
     "ownerOrgTemplate": "corporation"
   }
