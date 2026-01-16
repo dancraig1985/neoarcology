@@ -811,6 +811,42 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
     }
   }
 
+  // Hire initial workers for all factories (fill ~60-80% of slots)
+  // This ensures factories have workforce from day 1, since they're in industrial zones far from housing
+  for (const factory of locations.filter(loc => loc.tags.includes('production'))) {
+    const ownerOrg = organizations.find(org => org.locations.includes(factory.id));
+    if (!ownerOrg) continue;
+
+    // Calculate target staffing (60-80% of slots, minimum 1 if leader isn't working there)
+    const currentStaff = factory.employees.length;
+    const targetStaff = Math.max(
+      currentStaff + 1,
+      Math.floor(factory.employeeSlots * (0.6 + Math.random() * 0.2))
+    );
+    const needWorkers = targetStaff - currentStaff;
+
+    // Hire available agents
+    for (let i = 0; i < needWorkers; i++) {
+      const workerIdx = agents.findIndex(a => a.status === 'available');
+      if (workerIdx === -1) break; // No more available agents
+
+      const worker = agents[workerIdx];
+      if (!worker) continue;
+
+      // Hire the worker
+      const salary = config.economy.salary.skilled.min +
+        Math.floor(Math.random() * (config.economy.salary.skilled.max - config.economy.salary.skilled.min));
+
+      worker.status = 'employed';
+      worker.employer = ownerOrg.id;
+      worker.employedAt = factory.id;
+      worker.salary = salary;
+
+      // Add to factory employees
+      factory.employees = [...factory.employees, worker.id];
+    }
+  }
+
   // ==================
   // 3. CREATE RETAIL SHOPS (with small business orgs)
   // ==================
