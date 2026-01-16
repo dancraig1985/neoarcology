@@ -10,9 +10,11 @@ import { COLORS, SPACING, FONTS, LOG_LEVEL_COLORS, CATEGORY_ICONS } from '../UIT
 import { ActivityLog, type LogEntry } from '../../simulation/ActivityLog';
 
 // Virtual scrolling: render buffer around visible area
-const RENDER_BUFFER = 10; // Extra entries above/below visible area
+const RENDER_BUFFER = 25; // Extra entries above/below visible area (larger = less re-renders)
 const LINE_HEIGHT = FONTS.small + 4;
 const FILTER_BAR_HEIGHT = 24;
+// Approximate character width for monospace font (used for fast truncation)
+const CHAR_WIDTH_ESTIMATE = FONTS.small * 0.6;
 
 // Available filter categories
 const FILTER_CATEGORIES = [
@@ -46,6 +48,15 @@ export class LogPanel extends Panel {
   private allEntries: LogEntry[] = [];
   private renderedRange = { start: 0, end: 0 };
 
+  // Cached TextStyles (creating these is expensive, so we reuse them)
+  private textStyles: Map<number, TextStyle> = new Map();
+  private entityStyle: TextStyle;
+  private entityHoverStyle: TextStyle;
+
+  // Scroll throttling
+  private lastRenderTime = 0;
+  private pendingRender = false;
+
   constructor(width: number, height: number, events?: LogPanelEvents) {
     super(width, height, {
       title: 'ACTIVITY LOG',
@@ -59,6 +70,28 @@ export class LogPanel extends Panel {
     });
 
     this.onEntityClick = events?.onEntityClick;
+
+    // Initialize cached text styles (creating TextStyle is expensive)
+    this.entityStyle = new TextStyle({
+      fontFamily: FONTS.family,
+      fontSize: FONTS.small,
+      fill: COLORS.accentAlt,
+    });
+    this.entityHoverStyle = new TextStyle({
+      fontFamily: FONTS.family,
+      fontSize: FONTS.small,
+      fill: COLORS.text,
+    });
+    // Pre-cache styles for common log level colors
+    for (const color of Object.values(LOG_LEVEL_COLORS)) {
+      if (!this.textStyles.has(color)) {
+        this.textStyles.set(color, new TextStyle({
+          fontFamily: FONTS.family,
+          fontSize: FONTS.small,
+          fill: color,
+        }));
+      }
+    }
 
     // Create filter buttons
     this.filterButtons = new Container();
@@ -251,41 +284,51 @@ export class LogPanel extends Panel {
   }
 
   /**
-   * Create a single log entry row
+   * Get or create a cached TextStyle for a given color
+   */
+  private getTextStyle(color: number): TextStyle {
+    let style = this.textStyles.get(color);
+    if (!style) {
+      style = new TextStyle({
+        fontFamily: FONTS.family,
+        fontSize: FONTS.small,
+        fill: color,
+      });
+      this.textStyles.set(color, style);
+    }
+    return style;
+  }
+
+  /**
+   * Fast text truncation using character count estimate (avoids expensive width measurements)
+   */
+  private truncateText(text: string, maxChars: number): string {
+    if (text.length <= maxChars) return text;
+    return text.slice(0, maxChars - 3) + '...';
+  }
+
+  /**
+   * Create a single log entry row (optimized for performance)
    */
   private createEntryRow(entry: LogEntry): Container {
     const color = LOG_LEVEL_COLORS[entry.level] ?? COLORS.textSecondary;
     const icon = CATEGORY_ICONS[entry.category] ?? '>';
+    const textStyle = this.getTextStyle(color);
 
     const rowContainer = new Container();
 
-    const textStyle = new TextStyle({
-      fontFamily: FONTS.family,
-      fontSize: FONTS.small,
-      fill: color,
-    });
-
     // Phase and icon prefix
-    const prefix = new Text({
-      text: `[${entry.phase}] ${icon} `,
-      style: textStyle,
-    });
+    const prefixText = `[${entry.phase}] ${icon} `;
+    const prefix = new Text({ text: prefixText, style: textStyle });
     rowContainer.addChild(prefix);
 
-    let xOffset = prefix.width;
+    // Estimate xOffset using character count (faster than measuring)
+    let xOffset = prefixText.length * CHAR_WIDTH_ESTIMATE;
 
     // Clickable entity name (if present)
     if (entry.entityName && entry.entityId) {
-      const entityStyle = new TextStyle({
-        fontFamily: FONTS.family,
-        fontSize: FONTS.small,
-        fill: COLORS.accentAlt, // Cyan for clickable
-      });
-
-      const entityText = new Text({
-        text: `[${entry.entityName}]`,
-        style: entityStyle,
-      });
+      const entityLabelText = `[${entry.entityName}]`;
+      const entityText = new Text({ text: entityLabelText, style: this.entityStyle });
       entityText.x = xOffset;
       entityText.eventMode = 'static';
       entityText.cursor = 'pointer';
@@ -294,41 +337,28 @@ export class LogPanel extends Panel {
       const entityId = entry.entityId;
       entityText.on('pointerdown', () => {
         if (this.onEntityClick) {
-          // Determine entity type from ID prefix or category
           const entityType = this.guessEntityType(entry);
           this.onEntityClick(entityId, entityType);
         } else {
-          // Default: filter log to this entity
           this.setEntityFilter(entityId);
         }
       });
 
-      // Hover effect
-      entityText.on('pointerover', () => {
-        entityText.style.fill = COLORS.text;
-      });
-      entityText.on('pointerout', () => {
-        entityText.style.fill = COLORS.accentAlt;
-      });
+      // Hover effect (swap cached styles instead of modifying fill)
+      entityText.on('pointerover', () => { entityText.style = this.entityHoverStyle; });
+      entityText.on('pointerout', () => { entityText.style = this.entityStyle; });
 
       rowContainer.addChild(entityText);
-      xOffset += entityText.width + 4;
+      xOffset += entityLabelText.length * CHAR_WIDTH_ESTIMATE + 4;
     }
 
-    // Message text
-    const messageText = new Text({
-      text: entry.message,
-      style: textStyle,
-    });
+    // Message text with fast truncation
+    const availableWidth = this.getContentWidth() - xOffset - SPACING.md;
+    const maxChars = Math.floor(availableWidth / CHAR_WIDTH_ESTIMATE);
+    const messageContent = this.truncateText(entry.message, maxChars);
+
+    const messageText = new Text({ text: messageContent, style: textStyle });
     messageText.x = xOffset;
-
-    // Truncate if too wide
-    const maxWidth = this.getContentWidth() - xOffset - SPACING.md;
-    if (messageText.width > maxWidth) {
-      while (messageText.width > maxWidth && messageText.text.length > 3) {
-        messageText.text = messageText.text.slice(0, -4) + '...';
-      }
-    }
 
     rowContainer.addChild(messageText);
     return rowContainer;
@@ -378,7 +408,32 @@ export class LogPanel extends Panel {
 
     // Only re-render if scroll changed
     if (this.scrollOffset !== oldOffset) {
+      this.throttledRender();
+    }
+  }
+
+  /**
+   * Throttle rendering to max 60fps during scroll
+   */
+  private throttledRender(): void {
+    const now = performance.now();
+    const elapsed = now - this.lastRenderTime;
+
+    // If enough time has passed, render immediately
+    if (elapsed >= 16) { // ~60fps
+      this.lastRenderTime = now;
       this.renderVisibleEntries();
+      return;
+    }
+
+    // Otherwise, schedule a render if not already pending
+    if (!this.pendingRender) {
+      this.pendingRender = true;
+      requestAnimationFrame(() => {
+        this.pendingRender = false;
+        this.lastRenderTime = performance.now();
+        this.renderVisibleEntries();
+      });
     }
   }
 
