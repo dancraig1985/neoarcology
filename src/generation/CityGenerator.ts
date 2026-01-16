@@ -790,6 +790,27 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
     }
   }
 
+  // Assign corp leaders to work at their first factory (if leaderBecomesEmployed)
+  if (corpTemplate?.generation?.leaderBecomesEmployed) {
+    for (const corp of spawnedCorps) {
+      const leader = agents.find(a => a.id === corp.leader);
+      if (!leader || corp.locations.length === 0) continue;
+
+      // Find the first factory location owned by this corp
+      const firstFactory = locations.find(loc =>
+        corp.locations.includes(loc.id) && loc.tags.includes('production')
+      );
+
+      if (firstFactory) {
+        // Add leader to factory employees
+        firstFactory.employees = [...firstFactory.employees, leader.id];
+        // Set leader's workplace
+        leader.employedAt = firstFactory.id;
+        // Note: leader.employer and leader.status already set above
+      }
+    }
+  }
+
   // ==================
   // 3. CREATE RETAIL SHOPS (with small business orgs)
   // ==================
