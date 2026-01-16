@@ -75,7 +75,7 @@ export interface MetricsSnapshot {
       factory: Record<string, number>;
       retail: Record<string, number>;
       agent: Record<string, number>;
-      org: Record<string, number>;  // B2B goods held by orgs
+      office: Record<string, number>;  // Office/lab inventory (valuable_data, data_storage)
     };
   };
 }
@@ -197,13 +197,18 @@ export function takeSnapshot(state: SimulationState, tick: number): MetricsSnaps
 
   const retailLocations = locations.filter(l => l.tags.includes('retail'));
   const wholesaleLocations = locations.filter(l => l.tags.includes('wholesale') || l.tags.includes('production'));
+  // Office/lab locations that produce valuable_data (not wholesale or retail)
+  const officeLocations = locations.filter(l =>
+    (l.tags.includes('office') || l.tags.includes('laboratory')) &&
+    !l.tags.includes('wholesale') && !l.tags.includes('retail')
+  );
 
   // Aggregate inventory by good type for each category
   const factoryByGood = aggregateInventory(wholesaleLocations.map(l => l.inventory));
   const retailByGood = aggregateInventory(retailLocations.map(l => l.inventory));
   const agentByGood = aggregateInventory(alive.map(a => a.inventory));
-  // Note: orgs don't have inventory directly - B2B goods like data_storage go to org-owned locations
-  const orgByGood: Record<string, number> = {};
+  // Office/lab inventory (valuable_data, data_storage)
+  const officeByGood = aggregateInventory(officeLocations.map(l => l.inventory));
 
   // Legacy: provisions-only counts for backward compatibility
   const factoryInventory = factoryByGood['provisions'] ?? 0;
@@ -241,7 +246,7 @@ export function takeSnapshot(state: SimulationState, tick: number): MetricsSnaps
         factory: factoryByGood,
         retail: retailByGood,
         agent: agentByGood,
-        org: orgByGood,
+        office: officeByGood,
       },
     },
   };

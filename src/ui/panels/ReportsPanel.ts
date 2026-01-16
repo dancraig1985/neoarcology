@@ -109,6 +109,7 @@ export class ReportsPanel extends Panel {
     for (const good of Object.keys(byGood.factory)) allGoods.add(good);
     for (const good of Object.keys(byGood.retail)) allGoods.add(good);
     for (const good of Object.keys(byGood.agent)) allGoods.add(good);
+    for (const good of Object.keys(byGood.office)) allGoods.add(good);
 
     // Display order: provisions first, then alphabetically
     const sortedGoods = Array.from(allGoods).sort((a, b) => {
@@ -122,7 +123,8 @@ export class ReportsPanel extends Panel {
       const factory = byGood.factory[good] ?? 0;
       const retail = byGood.retail[good] ?? 0;
       const agent = byGood.agent[good] ?? 0;
-      const total = factory + retail + agent;
+      const office = byGood.office[good] ?? 0;
+      const total = factory + retail + agent + office;
 
       // Format good name (replace underscores with spaces, capitalize)
       const label = good.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
