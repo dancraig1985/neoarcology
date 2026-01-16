@@ -1,6 +1,7 @@
 /**
- * LogPanel - Activity log display
- * Shows recent simulation events with color-coding and filtering
+ * LogPanel - Activity log display with virtual scrolling
+ * Shows simulation events with color-coding and filtering
+ * Uses virtual scrolling to handle large numbers of entries efficiently
  */
 
 import { Text, TextStyle, Container, Graphics } from 'pixi.js';
@@ -8,7 +9,10 @@ import { Panel } from '../components/Panel';
 import { COLORS, SPACING, FONTS, LOG_LEVEL_COLORS, CATEGORY_ICONS } from '../UITheme';
 import { ActivityLog, type LogEntry } from '../../simulation/ActivityLog';
 
-const MAX_VISIBLE_ENTRIES = 50;
+// Virtual scrolling: render buffer around visible area
+const RENDER_BUFFER = 10; // Extra entries above/below visible area
+const LINE_HEIGHT = FONTS.small + 4;
+const FILTER_BAR_HEIGHT = 24;
 
 // Available filter categories
 const FILTER_CATEGORIES = [
@@ -31,13 +35,16 @@ export interface LogPanelEvents {
 
 export class LogPanel extends Panel {
   private logContainer: Container;
-  private logEntries: Container[] = [];
   private scrollOffset = 0;
   private maskGraphics: Graphics;
   private filterButtons: Container;
   private activeFilter: FilterCategory = 'all';
   private entityFilter?: string; // Filter by specific entity ID
   private onEntityClick?: LogPanelEvents['onEntityClick'];
+
+  // Virtual scrolling state
+  private allEntries: LogEntry[] = [];
+  private renderedRange = { start: 0, end: 0 };
 
   constructor(width: number, height: number, events?: LogPanelEvents) {
     super(width, height, {
@@ -162,9 +169,14 @@ export class LogPanel extends Panel {
       entries = entries.filter((e) => this.matchesCategory(e.category));
     }
 
-    // Take last N entries
-    entries = entries.slice(-MAX_VISIBLE_ENTRIES);
-    this.renderEntries(entries);
+    // Store all entries for virtual scrolling
+    this.allEntries = entries;
+
+    // Auto-scroll to bottom (most recent)
+    this.scrollToBottom();
+
+    // Render visible entries
+    this.renderVisibleEntries();
   }
 
   /**
@@ -177,7 +189,7 @@ export class LogPanel extends Panel {
           category
         );
       case 'production':
-        return ['production'].includes(category);
+        return ['production', 'procurement', 'expansion'].includes(category);
       case 'employment':
         return ['employment', 'hire', 'fire', 'salary', 'payroll', 'business', 'dividend'].includes(
           category
@@ -197,105 +209,129 @@ export class LogPanel extends Panel {
     }
   }
 
-  private renderEntries(entries: LogEntry[]): void {
-    // Clear existing entries
-    this.logContainer.removeChildren();
-    this.logEntries = [];
+  /**
+   * Calculate which entries are visible and render only those
+   */
+  private renderVisibleEntries(): void {
+    const viewHeight = this.getContentHeight() - FILTER_BAR_HEIGHT;
+    const totalEntries = this.allEntries.length;
 
-    let yOffset = 0;
-    const lineHeight = FONTS.small + 4;
-    const filterBarHeight = 24; // Height of filter bar
+    // Calculate visible range based on scroll offset
+    const firstVisible = Math.floor(this.scrollOffset / LINE_HEIGHT);
+    const visibleCount = Math.ceil(viewHeight / LINE_HEIGHT);
 
-    for (const entry of entries) {
-      const color = LOG_LEVEL_COLORS[entry.level] ?? COLORS.textSecondary;
-      const icon = CATEGORY_ICONS[entry.category] ?? '>';
+    // Add buffer for smoother scrolling
+    const start = Math.max(0, firstVisible - RENDER_BUFFER);
+    const end = Math.min(totalEntries, firstVisible + visibleCount + RENDER_BUFFER);
 
-      const rowContainer = new Container();
-      rowContainer.y = yOffset;
-
-      const textStyle = new TextStyle({
-        fontFamily: FONTS.family,
-        fontSize: FONTS.small,
-        fill: color,
-      });
-
-      // Phase and icon prefix
-      const prefix = new Text({
-        text: `[${entry.phase}] ${icon} `,
-        style: textStyle,
-      });
-      rowContainer.addChild(prefix);
-
-      let xOffset = prefix.width;
-
-      // Clickable entity name (if present)
-      if (entry.entityName && entry.entityId) {
-        const entityStyle = new TextStyle({
-          fontFamily: FONTS.family,
-          fontSize: FONTS.small,
-          fill: COLORS.accentAlt, // Cyan for clickable
-        });
-
-        const entityText = new Text({
-          text: `[${entry.entityName}]`,
-          style: entityStyle,
-        });
-        entityText.x = xOffset;
-        entityText.eventMode = 'static';
-        entityText.cursor = 'pointer';
-
-        // Click to filter or navigate
-        const entityId = entry.entityId;
-        entityText.on('pointerdown', () => {
-          if (this.onEntityClick) {
-            // Determine entity type from ID prefix or category
-            const entityType = this.guessEntityType(entry);
-            this.onEntityClick(entityId, entityType);
-          } else {
-            // Default: filter log to this entity
-            this.setEntityFilter(entityId);
-          }
-        });
-
-        // Hover effect
-        entityText.on('pointerover', () => {
-          entityText.style.fill = COLORS.text;
-        });
-        entityText.on('pointerout', () => {
-          entityText.style.fill = COLORS.accentAlt;
-        });
-
-        rowContainer.addChild(entityText);
-        xOffset += entityText.width + 4;
-      }
-
-      // Message text
-      const messageText = new Text({
-        text: entry.message,
-        style: textStyle,
-      });
-      messageText.x = xOffset;
-
-      // Truncate if too wide
-      const maxWidth = this.getContentWidth() - xOffset - SPACING.md;
-      if (messageText.width > maxWidth) {
-        while (messageText.width > maxWidth && messageText.text.length > 3) {
-          messageText.text = messageText.text.slice(0, -4) + '...';
-        }
-      }
-
-      rowContainer.addChild(messageText);
-      this.logContainer.addChild(rowContainer);
-      this.logEntries.push(rowContainer);
-
-      yOffset += lineHeight;
+    // Check if we need to re-render (range changed significantly)
+    if (start === this.renderedRange.start && end === this.renderedRange.end) {
+      // Just update position
+      this.logContainer.y = FILTER_BAR_HEIGHT - this.scrollOffset + (start * LINE_HEIGHT);
+      return;
     }
 
-    // Offset content below filter bar
-    this.logContainer.y = filterBarHeight;
+    // Re-render the visible range
+    this.logContainer.removeChildren();
+    this.renderedRange = { start, end };
 
-    // Auto-scroll to bottom
-    this.scrollToBottom();
+    let yOffset = 0;
+    for (let i = start; i < end; i++) {
+      const entry = this.allEntries[i];
+      if (!entry) continue;
+
+      const rowContainer = this.createEntryRow(entry);
+      rowContainer.y = yOffset;
+      this.logContainer.addChild(rowContainer);
+      yOffset += LINE_HEIGHT;
+    }
+
+    // Position container to account for virtual scrolling offset
+    this.logContainer.y = FILTER_BAR_HEIGHT - this.scrollOffset + (start * LINE_HEIGHT);
+  }
+
+  /**
+   * Create a single log entry row
+   */
+  private createEntryRow(entry: LogEntry): Container {
+    const color = LOG_LEVEL_COLORS[entry.level] ?? COLORS.textSecondary;
+    const icon = CATEGORY_ICONS[entry.category] ?? '>';
+
+    const rowContainer = new Container();
+
+    const textStyle = new TextStyle({
+      fontFamily: FONTS.family,
+      fontSize: FONTS.small,
+      fill: color,
+    });
+
+    // Phase and icon prefix
+    const prefix = new Text({
+      text: `[${entry.phase}] ${icon} `,
+      style: textStyle,
+    });
+    rowContainer.addChild(prefix);
+
+    let xOffset = prefix.width;
+
+    // Clickable entity name (if present)
+    if (entry.entityName && entry.entityId) {
+      const entityStyle = new TextStyle({
+        fontFamily: FONTS.family,
+        fontSize: FONTS.small,
+        fill: COLORS.accentAlt, // Cyan for clickable
+      });
+
+      const entityText = new Text({
+        text: `[${entry.entityName}]`,
+        style: entityStyle,
+      });
+      entityText.x = xOffset;
+      entityText.eventMode = 'static';
+      entityText.cursor = 'pointer';
+
+      // Click to filter or navigate
+      const entityId = entry.entityId;
+      entityText.on('pointerdown', () => {
+        if (this.onEntityClick) {
+          // Determine entity type from ID prefix or category
+          const entityType = this.guessEntityType(entry);
+          this.onEntityClick(entityId, entityType);
+        } else {
+          // Default: filter log to this entity
+          this.setEntityFilter(entityId);
+        }
+      });
+
+      // Hover effect
+      entityText.on('pointerover', () => {
+        entityText.style.fill = COLORS.text;
+      });
+      entityText.on('pointerout', () => {
+        entityText.style.fill = COLORS.accentAlt;
+      });
+
+      rowContainer.addChild(entityText);
+      xOffset += entityText.width + 4;
+    }
+
+    // Message text
+    const messageText = new Text({
+      text: entry.message,
+      style: textStyle,
+    });
+    messageText.x = xOffset;
+
+    // Truncate if too wide
+    const maxWidth = this.getContentWidth() - xOffset - SPACING.md;
+    if (messageText.width > maxWidth) {
+      while (messageText.width > maxWidth && messageText.text.length > 3) {
+        messageText.text = messageText.text.slice(0, -4) + '...';
+      }
+    }
+
+    rowContainer.addChild(messageText);
+    return rowContainer;
   }
 
   /**
@@ -309,7 +345,7 @@ export class LogPanel extends Panel {
       return 'agents';
     }
     // Categories that typically involve orgs
-    if (['dissolution', 'dividend', 'payroll'].includes(entry.category)) {
+    if (['dissolution', 'dividend', 'payroll', 'procurement', 'expansion'].includes(entry.category)) {
       return 'orgs';
     }
     // Categories that typically involve locations
@@ -321,28 +357,29 @@ export class LogPanel extends Panel {
   }
 
   private scrollToBottom(): void {
-    const filterBarHeight = 24;
-    const contentHeight = this.logEntries.length * (FONTS.small + 4);
-    const viewHeight = this.getContentHeight() - filterBarHeight;
+    const viewHeight = this.getContentHeight() - FILTER_BAR_HEIGHT;
+    const totalHeight = this.allEntries.length * LINE_HEIGHT;
 
-    if (contentHeight > viewHeight) {
-      this.scrollOffset = contentHeight - viewHeight;
-      this.logContainer.y = filterBarHeight - this.scrollOffset;
+    if (totalHeight > viewHeight) {
+      this.scrollOffset = totalHeight - viewHeight;
     } else {
       this.scrollOffset = 0;
-      this.logContainer.y = filterBarHeight;
     }
   }
 
   private onWheel(event: WheelEvent): void {
-    const filterBarHeight = 24;
-    const contentHeight = this.logEntries.length * (FONTS.small + 4);
-    const viewHeight = this.getContentHeight() - filterBarHeight;
-    const maxScroll = Math.max(0, contentHeight - viewHeight);
+    const viewHeight = this.getContentHeight() - FILTER_BAR_HEIGHT;
+    const totalHeight = this.allEntries.length * LINE_HEIGHT;
+    const maxScroll = Math.max(0, totalHeight - viewHeight);
 
+    const oldOffset = this.scrollOffset;
     this.scrollOffset += event.deltaY * 0.5;
     this.scrollOffset = Math.max(0, Math.min(maxScroll, this.scrollOffset));
-    this.logContainer.y = filterBarHeight - this.scrollOffset;
+
+    // Only re-render if scroll changed
+    if (this.scrollOffset !== oldOffset) {
+      this.renderVisibleEntries();
+    }
   }
 
   protected layout(): void {
@@ -351,13 +388,12 @@ export class LogPanel extends Panel {
     // Update mask (guard against being called before init)
     if (!this.maskGraphics) return;
     const headerHeight = 28;
-    const filterBarHeight = 24;
     this.maskGraphics.clear();
     this.maskGraphics.rect(
       SPACING.sm,
-      headerHeight + filterBarHeight + SPACING.sm,
+      headerHeight + FILTER_BAR_HEIGHT + SPACING.sm,
       this.getContentWidth(),
-      this.getContentHeight() - filterBarHeight
+      this.getContentHeight() - FILTER_BAR_HEIGHT
     );
     this.maskGraphics.fill({ color: 0xffffff });
   }

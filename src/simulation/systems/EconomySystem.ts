@@ -1002,7 +1002,8 @@ function chooseBestBusiness(
   locationTemplates: Record<string, LocationTemplate>,
   agentsConfig: AgentsConfig,
   economyConfig: EconomyConfig,
-  orgs: Organization[]
+  orgs: Organization[],
+  phase: number
 ): string {
   // Use DemandAnalyzer for scalable, config-driven demand calculation
   const opportunities = getBestBusinessOpportunities(
@@ -1019,7 +1020,7 @@ function chooseBestBusiness(
 
   if (selected) {
     ActivityLog.info(
-      0, // Phase not available here, use 0
+      phase,
       'entrepreneurship',
       `market analysis: ${selected.reason} (score: ${selected.finalScore.toFixed(1)})`,
       'system',
@@ -1071,7 +1072,7 @@ export function tryOpenBusiness(
   }
 
   // Choose business type based on market demand (uses DemandAnalyzer)
-  const businessType = chooseBestBusiness(agents, locations, locationTemplates, agentsConfig, economyConfig, orgs);
+  const businessType = chooseBestBusiness(agents, locations, locationTemplates, agentsConfig, economyConfig, orgs, phase);
   const template = locationTemplates[businessType];
   if (!template) {
     return { agent };
