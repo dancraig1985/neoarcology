@@ -60,25 +60,41 @@ When an org dissolves:
 
 Organizations make decisions independently of their human members. The `OrgBehaviorSystem` processes org-level behaviors each phase.
 
+### Expansion
+
+Wealthy orgs can expand by opening offices or laboratories:
+
+**Expansion Triggers:**
+- Org has 1000+ credits
+- Org has revenue-generating locations (wholesale, retail, or residential)
+- Org doesn't already have an office/lab
+- Random chance per phase (5%)
+
+**What happens:**
+1. Org pays opening cost (600 credits for office)
+2. New office/lab is created in an available building
+3. Office starts without storage - needs to procure data_storage
+4. Once storage is acquired, office produces valuable_data
+
 ### Procurement
 
 Orgs automatically procure resources needed for their operations:
 
 **Data Storage Procurement**
-- If org has offices/labs that need `data_storage` to produce
-- And org has 1000+ credits
-- Then org buys data_storage from server factories
+Triggered when:
+- Org has offices/labs that produce valuable_data
+- Storage is empty OR storage is ≥80% full
 
-This creates B2B demand without requiring human intervention.
+**How it works:**
+1. Org finds a server factory with stock
+2. Org pays wholesale price (50 credits)
+3. data_storage is delivered directly to the office/lab
+4. Office can now produce (or produce more) valuable_data
 
-### Expansion (Future)
-
-Wealthy orgs with consistent profits may:
-- Open additional locations
-- Diversify into new verticals
-- Acquire smaller businesses
-
-Currently deferred but the OrgBehaviorSystem provides the framework.
+**Capacity-based buying:**
+- 1 data_storage = 10 valuable_data capacity
+- Orgs buy more at 80% capacity threshold
+- This creates sustained B2B demand (not just one-time purchases)
 
 ## Owner Dividends
 

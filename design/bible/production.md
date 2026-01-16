@@ -71,14 +71,30 @@ Each facility template defines:
 
 ### Production with Dependencies
 
-Some production requires input goods:
+Some production requires infrastructure goods:
 
-**Offices and Laboratories** produce `valuable_data` but only if the owning org has `data_storage` in inventory. This creates a B2B supply chain:
-1. Server Factory produces data_storage
-2. Corporation buys data_storage from server factory
-3. Corporation's Office/Lab can now produce valuable_data
+**Offices and Laboratories** produce `valuable_data` but require `data_storage` infrastructure at the same location. Storage is **capacity-based**:
 
-If an org runs out of data_storage, its offices stop producing until more is procured.
+```
+1 data_storage = 10 valuable_data capacity (configurable in economy.json)
+```
+
+**How it works:**
+1. Office opens (can start without storage)
+2. Office tries to produce → blocked (no data_storage)
+3. Org buys data_storage from server factory → delivered to office
+4. Office produces valuable_data (capped to available storage)
+5. Storage fills up → production halts when full
+6. Org buys more data_storage (triggered at 80% capacity)
+7. Production resumes
+
+**Key mechanics:**
+- Storage is per-location (not org-wide)
+- Production is capped to available storage (can't overfill)
+- Orgs automatically buy more storage when 80% full
+- Storage delivered directly to office/lab (not to random org location)
+
+This creates sustained B2B demand - server factories have ongoing customers, not just one-time sales.
 
 ### Adding New Production
 

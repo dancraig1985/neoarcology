@@ -38,25 +38,39 @@ Luxury Factory → Luxury Boutique → Wealthy Agent
 
 ### Knowledge Economy Verticals (B2B)
 ```
-Server Factory → Corporate Buyers (Orgs)
+Server Factory → Corporation (buys data_storage)
        │                │
-   produces         purchase for
-   data_storage     office production
-
-Office/Laboratory → (produces valuable_data, requires data_storage)
+   produces        delivered to office
+   data_storage         │
+                        ▼
+               Office/Lab produces valuable_data
+                   (uses data_storage capacity)
 ```
 
-**Business-to-business demand.** Server factories sell to corporations that need data storage for their offices to produce valuable_data.
+**Business-to-business demand with capacity mechanics:**
+- 1 data_storage = 10 valuable_data capacity
+- Orgs buy storage when empty OR when 80%+ full
+- Production capped to available storage (can't overfill)
+- Creates sustained demand - corps keep buying as they produce
+
+**The flow:**
+1. Org expands → opens office (no storage required)
+2. Office tries to produce → blocked (no storage)
+3. Org buys data_storage → delivered to office
+4. Office produces valuable_data → storage fills
+5. At 80% capacity → org buys more storage
+6. Cycle continues...
 
 ### The Pattern
 
 Each vertical follows the same structure:
 1. **Production location** (wholesale tag) - Creates the good
-2. **Retail location** (retail tag) - Sells to consumers
-3. **Consumer behavior** - When/why agents buy
-4. **Restock logic** - Wholesale → retail transfer
+2. **Retail location** (retail tag) - Sells to consumers (or null for B2B)
+3. **Consumer/business behavior** - When/why to buy
+4. **Restock/procurement logic** - How goods flow through the chain
 
-Adding a new vertical (e.g., weapons, luxury goods) requires all four components.
+**B2C verticals** (provisions, alcohol, luxury): Production → Retail → Consumer
+**B2B verticals** (data_storage): Production → Business buyer (no retail step)
 
 ## The Money Circle
 

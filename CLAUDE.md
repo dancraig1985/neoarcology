@@ -38,7 +38,6 @@ Other docs: `design/GAME-DESIGN.md` (high-level design), `design/roadmap/plans/`
 **Simulation Core:**
 - `src/simulation/Simulation.ts` - Main simulation controller
 - `src/simulation/TickEngine.ts` - Time/tick engine
-- `src/simulation/ActivityLog.ts` - Event logging
 
 **Agent Behavior System:**
 - `src/simulation/behaviors/BehaviorProcessor.ts` - Main behavior loop
@@ -51,8 +50,14 @@ Other docs: `design/GAME-DESIGN.md` (high-level design), `design/roadmap/plans/`
 - `src/simulation/systems/AgentStateHelpers.ts` - Centralized state transitions (use this!)
 - `src/simulation/systems/AgentSystem.ts` - Hunger, eating, death
 - `src/simulation/systems/EconomySystem.ts` - Transactions, payroll, business
+- `src/simulation/systems/OrgBehaviorSystem.ts` - Org-level procurement, expansion
+- `src/simulation/systems/DemandAnalyzer.ts` - Market demand analysis for entrepreneurs
 - `src/simulation/systems/TravelSystem.ts` - Distance, travel time
 - `src/simulation/systems/ImmigrationSystem.ts` - Population sustainability
+
+**Metrics & Logging:**
+- `src/simulation/Metrics.ts` - Singleton metrics tracking (use `track*()` functions)
+- `src/simulation/ActivityLog.ts` - Event logging
 
 **Generation & Config:**
 - `src/generation/CityGenerator.ts` - Procedural city generation
@@ -138,11 +143,21 @@ Provisions Factory → Retail Shop/Restaurant → Agent
 Brewery → Pub → Agent
 ```
 
+**Knowledge Economy (B2B):**
+```
+Server Factory → Corporation (buys data_storage)
+                      ↓
+               Office/Lab (produces valuable_data using data_storage capacity)
+```
+- 1 data_storage = 10 valuable_data capacity (configurable in economy.json)
+- Production capped to available storage
+- Orgs buy more storage when 80% full
+
 Each vertical is independent. Adding a new vertical requires:
 1. Production location template (wholesale tag)
-2. Retail location template (retail tag + inventoryGood)
-3. Consumer behavior (when/why agents buy)
-4. Restock logic (wholesale → retail)
+2. Retail location template (retail tag + inventoryGood) - or null for B2B only
+3. Consumer/business behavior (when/why to buy)
+4. Restock logic (wholesale → retail) or procurement logic (B2B)
 
 ## Agent State Management
 
@@ -170,3 +185,25 @@ See the helpers file for full documentation.
 - Forgetting to log to ActivityLog
 - Adding unused template fields (YAGNI violation)
 - Hardcoding template names in CityGenerator (use dynamic lookup via `ownerOrgTemplate`)
+
+## Metrics Instrumentation
+
+Use the singleton pattern in `Metrics.ts` to track simulation events:
+
+```typescript
+import { trackRetailSale, trackB2BSale, trackDeath } from '../Metrics';
+
+// When a transaction happens:
+trackRetailSale('provisions');
+trackB2BSale('data_storage');
+trackDeath(agent.name, 'starvation');
+```
+
+Available tracking functions:
+- `trackRetailSale(good)` / `trackWholesaleSale(good)` / `trackB2BSale(good)`
+- `trackWagePayment(amount)` / `trackDividendPayment(amount)`
+- `trackDeath(name, cause)` / `trackHire()` / `trackFire()`
+- `trackBusinessOpened(name)` / `trackBusinessClosed(name)`
+- `trackImmigrant()`
+
+These are no-ops if metrics aren't active, so safe to call anywhere.
