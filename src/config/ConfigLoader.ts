@@ -74,6 +74,7 @@ export interface EconomyConfig {
     professional: SalaryTier;
   };
   entrepreneurThreshold: number;
+  resaleDiscount: number; // Multiplier for purchasing orphaned locations (0.6 = 60% of original price)
 }
 
 /**

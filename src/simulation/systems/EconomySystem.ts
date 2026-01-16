@@ -17,7 +17,7 @@ import {
 import { transferInventory, getGoodsCount, getAvailableCapacity, type GoodsSizes } from './InventorySystem';
 import { createOrganization, addLocationToOrg } from './OrgSystem';
 import { findNearestLocation, isTraveling, startTravel, redirectTravel } from './TravelSystem';
-import { setLocation, clearEmployment, onOrgDissolvedWithLocations } from './AgentStateHelpers';
+import { setLocation, clearEmployment, onOrgDissolvedWithLocations, onOrgDissolvedOrphanLocations } from './AgentStateHelpers';
 import { needsRest, processRest } from './AgentSystem';
 import { getBestBusinessOpportunities, selectBusinessOpportunity } from './DemandAnalyzer';
 import {
@@ -1341,7 +1341,6 @@ export function processWeeklyEconomy(
   let updatedLocations = [...locations];
   let updatedOrgs = [...orgs];
   const orgsToRemove: string[] = [];
-  const locationsToRemove: string[] = [];
 
   for (let orgIdx = 0; orgIdx < updatedOrgs.length; orgIdx++) {
     let org = updatedOrgs[orgIdx];
@@ -1470,15 +1469,55 @@ export function processWeeklyEconomy(
     // Check for org dissolution conditions:
     // 1. Bankruptcy (credits < 0)
     // 2. Insolvency (can't afford minimum operations - less than 50 credits)
-    // 3. Leader death
+    // 3. Leader death (with no employees to take over)
     const leaderForCheck = updatedAgents.find((a) => a.id === org.leader);
     const leaderDead = !leaderForCheck || leaderForCheck.status === 'dead';
     const isBankrupt = org.wallet.credits < 0;
     const isInsolvent = false; // Disabled: let businesses survive on thin margins
 
+    // If leader died, try auto-succession first
+    if (leaderDead && !isBankrupt) {
+      // Find all employees across org's locations
+      const orgEmployeeIds = new Set<string>();
+      for (const loc of orgLocations) {
+        for (const empId of loc.employees) {
+          orgEmployeeIds.add(empId);
+        }
+      }
+
+      // Find living employees, sorted by hire date (earliest first = senior)
+      const livingEmployees = updatedAgents
+        .filter((a) => orgEmployeeIds.has(a.id) && a.status !== 'dead')
+        .sort((a, b) => (a.created ?? 0) - (b.created ?? 0));
+
+      if (livingEmployees.length > 0) {
+        // Auto-succession: promote senior employee to leader
+        const newLeader = livingEmployees[0];
+        if (newLeader) {
+          org = {
+            ...org,
+            leader: newLeader.id,
+          };
+
+          ActivityLog.info(
+            phase,
+            'succession',
+            `${newLeader.name} became new leader of ${org.name} (previous leader died)`,
+            newLeader.id,
+            newLeader.name
+          );
+
+          // Update org in array and continue (don't dissolve)
+          updatedOrgs[orgIdx] = org;
+          continue;
+        }
+      }
+    }
+
+    // Determine dissolution reason (if any)
     let dissolutionReason = '';
     if (leaderDead) {
-      dissolutionReason = 'owner died';
+      dissolutionReason = 'leader died';
     } else if (isBankrupt) {
       dissolutionReason = 'bankrupt';
     } else if (isInsolvent) {
@@ -1497,14 +1536,26 @@ export function processWeeklyEconomy(
       // Track business closing in metrics
       trackBusinessClosed(org.name);
 
-      // Use centralized helper to handle all agent state cleanup atomically
-      // Clears employment, location, and travel state for affected agents
-      const deletedLocationIds = orgLocations.map((loc) => loc.id);
-      updatedAgents = onOrgDissolvedWithLocations(org.id, deletedLocationIds, updatedAgents);
+      // Orphan locations instead of deleting them
+      // Employees lose jobs, but residents stay (stop paying rent)
+      const orphanResult = onOrgDissolvedOrphanLocations(
+        org.id,
+        updatedLocations,
+        updatedAgents,
+        phase
+      );
+      updatedAgents = orphanResult.agents;
+      updatedLocations = orphanResult.locations;
 
-      // Mark locations for removal
-      for (const location of orgLocations) {
-        locationsToRemove.push(location.id);
+      // Log orphaned locations
+      for (const loc of orgLocations) {
+        ActivityLog.warning(
+          phase,
+          'orphaned',
+          `${loc.name} is now orphaned and for sale`,
+          loc.id,
+          loc.name
+        );
       }
 
       orgsToRemove.push(org.id);
@@ -1514,9 +1565,8 @@ export function processWeeklyEconomy(
     updatedOrgs[orgIdx] = org;
   }
 
-  // Remove dissolved orgs and their locations
+  // Remove dissolved orgs (locations are now orphaned, not deleted)
   updatedOrgs = updatedOrgs.filter((org) => !orgsToRemove.includes(org.id));
-  updatedLocations = updatedLocations.filter((loc) => !locationsToRemove.includes(loc.id));
 
   return { agents: updatedAgents, locations: updatedLocations, orgs: updatedOrgs };
 }

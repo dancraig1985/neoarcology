@@ -185,6 +185,21 @@
       "params": {}
     },
     {
+      "id": "purchasing_orphaned_location",
+      "name": "Purchase Orphaned Business",
+      "priority": "normal",
+      "executor": "purchase_orphaned",
+      "conditions": {
+        "unemployed": true,
+        "hasCreditsAbove": 149,
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "hasEmployment": true
+      },
+      "params": {}
+    },
+    {
       "id": "seeking_job",
       "name": "Look for Work",
       "priority": "normal",

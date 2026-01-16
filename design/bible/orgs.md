@@ -45,16 +45,32 @@ While running:
 - The org pays operating costs weekly
 - The owner receives a dividend weekly
 
+### Succession
+
+When an organization's leader dies, the business doesn't automatically fail. The **senior employee** (longest tenure) is promoted to become the new leader:
+
+1. Leader dies
+2. System finds the employee with the earliest hire date
+3. That employee becomes the new leader
+4. Business continues operating
+
+This allows businesses to survive leadership changes and creates more stable economic infrastructure.
+
+**If no employees exist** when the leader dies, the organization dissolves.
+
 ### Death
+
 An organization dissolves when:
-- **Owner dies** - No leader means no business
+- **Leader dies with no employees** - No one to take over
 - **Bankruptcy** - Wallet goes negative
 - **Insolvency** - Not enough money to operate (can't pay bills or restock)
 
 When an org dissolves:
 - All employees are released (become unemployed)
-- All locations are removed
-- Any remaining money is lost
+- All locations become **orphaned** (not deleted)
+- Orphaned locations are marked for sale at a discount
+- Residents stay in orphaned apartments (but stop paying rent)
+- Any remaining org money is lost
 
 ## Org Behaviors (OrgBehaviorSystem)
 

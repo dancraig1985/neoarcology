@@ -291,6 +291,70 @@ export function onOrgDissolvedWithLocations(
   });
 }
 
+/**
+ * Handle org dissolution by orphaning locations instead of deleting them
+ * - Locations become ownerless and available for purchase
+ * - Employees lose their jobs
+ * - Residents stay (but stop paying rent since no owner)
+ * Returns updated agents and locations
+ */
+export function onOrgDissolvedOrphanLocations(
+  orgId: string,
+  locations: Location[],
+  agents: Agent[],
+  phase: number
+): { agents: Agent[]; locations: Location[] } {
+  // Find all locations owned by this org
+  const orgLocationIds = locations
+    .filter((loc) => loc.owner === orgId)
+    .map((loc) => loc.id);
+
+  // Orphan the locations (set owner to undefined, mark for sale)
+  const updatedLocations = locations.map((loc) => {
+    if (loc.owner !== orgId) return loc;
+
+    // Record previous ownership
+    const previousOwners = [...(loc.previousOwners ?? [])];
+    previousOwners.push({
+      ownerId: orgId,
+      from: loc.created,
+      to: phase,
+    });
+
+    return {
+      ...loc,
+      owner: undefined,
+      ownerType: 'none' as const,
+      previousOwners,
+      forSale: true,
+      // Clear employees array since they no longer work here
+      employees: [],
+    };
+  });
+
+  // Update agents: clear employment but keep residents
+  const updatedAgents = agents.map((agent) => {
+    if (agent.status === 'dead') return agent;
+
+    let updated = agent;
+
+    // Clear employment if employed by dissolved org
+    const employedByOrg = agent.employer === orgId;
+    const employedAtOrgLocation = orgLocationIds.includes(agent.employedAt ?? '');
+
+    if (employedByOrg || employedAtOrgLocation) {
+      updated = clearEmployment(updated);
+    }
+
+    // NOTE: We intentionally do NOT clear residence
+    // Tenants stay in orphaned apartments (they just stop paying rent)
+
+    return updated;
+  });
+
+  return { agents: updatedAgents, locations: updatedLocations };
+}
+
 // ============================================
 // State Validation (Debug Mode)
 // ============================================

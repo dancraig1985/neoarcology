@@ -10,6 +10,7 @@ import { registerExecutor, type BehaviorContext, type TaskResult } from '../Beha
 import { isTraveling, startTravel, findNearestLocation, redirectTravel } from '../../systems/TravelSystem';
 import { ActivityLog } from '../../ActivityLog';
 import { trackRetailSale, trackBusinessOpened } from '../../Metrics';
+import { createOrganization } from '../../systems/OrgSystem';
 
 // ============================================
 // Task State Helpers
@@ -1246,6 +1247,166 @@ function executeConsumeLuxuryBehavior(
 }
 
 // ============================================
+// Purchase Orphaned Location Executor
+// ============================================
+
+/**
+ * Purchase orphaned location executor - buy locations that have no owner
+ * Used by: purchasing_location
+ */
+function executePurchaseOrphanedLocationBehavior(
+  agent: Agent,
+  _task: AgentTask,
+  ctx: BehaviorContext
+): TaskResult {
+  // If already employed, task is complete
+  if (agent.employedAt) {
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // Find orphaned locations for sale
+  const orphanedLocations = ctx.locations.filter(
+    (loc) => loc.owner === undefined && loc.forSale === true
+  );
+
+  if (orphanedLocations.length === 0) {
+    // No orphaned locations available
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // Calculate resale discount
+  const resaleDiscount = ctx.economyConfig.resaleDiscount ?? 0.6;
+
+  // Helper to get base price from template's openingCost
+  const getBasePrice = (loc: Location): number => {
+    const template = ctx.locationTemplates[loc.template];
+    return template?.balance?.openingCost ?? 100; // Default to 100 if no template
+  };
+
+  // Find an affordable location using template openingCost
+  const affordableLocations = orphanedLocations.filter((loc) => {
+    const basePrice = getBasePrice(loc);
+    const resalePrice = Math.floor(basePrice * resaleDiscount);
+    return agent.wallet.credits >= resalePrice + 50; // Need some buffer after purchase
+  });
+
+  if (affordableLocations.length === 0) {
+    // Can't afford any orphaned locations
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // Random chance to actually purchase (like entrepreneur behavior)
+  if (Math.random() > 0.1) {
+    // 10% chance per phase to purchase
+    return {
+      agent,
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: false,
+    };
+  }
+
+  // Pick the first affordable location (could be random or by preference)
+  const targetLocation = affordableLocations[0];
+  if (!targetLocation) {
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // Calculate purchase price using template openingCost
+  const basePrice = getBasePrice(targetLocation);
+  const purchasePrice = Math.floor(basePrice * resaleDiscount);
+
+  // Create a new organization for this agent
+  const orgId = `org-purchase-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  const orgName = `${agent.name}'s ${targetLocation.template === 'apartment' ? 'Properties' : 'Business'}`;
+
+  // Agent pays the purchase price (goes to "the market" - money disappears)
+  const updatedAgent: Agent = {
+    ...agent,
+    wallet: {
+      ...agent.wallet,
+      credits: agent.wallet.credits - purchasePrice,
+    },
+    employer: orgId,
+    employedAt: targetLocation.id,
+    status: 'employed',
+  };
+
+  // Create the new org with remaining agent credits as seed capital
+  const seedCapital = Math.floor(updatedAgent.wallet.credits * 0.5); // Transfer half remaining credits to business
+  const newOrg = createOrganization(
+    orgId,
+    orgName,
+    agent.id,
+    agent.name,
+    seedCapital,
+    ctx.phase
+  );
+
+  // Update agent wallet after transferring to org
+  updatedAgent.wallet.credits -= seedCapital;
+
+  // Add location to org
+  newOrg.locations.push(targetLocation.id);
+
+  // Update the location: new owner, no longer for sale, add buyer as employee
+  const updatedLocation: Location = {
+    ...targetLocation,
+    owner: orgId,
+    ownerType: 'org',
+    forSale: false,
+    employees: [agent.id], // Buyer works at their new business
+    previousOwners: [
+      ...(targetLocation.previousOwners ?? []),
+      // Previous "orphaned" period already recorded when orphaned
+    ],
+  };
+
+  // Update locations array
+  const updatedLocations = ctx.locations.map((loc) =>
+    loc.id === targetLocation.id ? updatedLocation : loc
+  );
+
+  ActivityLog.info(
+    ctx.phase,
+    'purchase',
+    `purchased orphaned ${targetLocation.name} for ${purchasePrice} credits`,
+    agent.id,
+    agent.name
+  );
+
+  trackBusinessOpened(orgName);
+
+  return {
+    agent: clearTask(updatedAgent),
+    locations: updatedLocations,
+    orgs: ctx.orgs,
+    newOrg,
+    complete: true,
+  };
+}
+
+// ============================================
 // Register All Executors
 // ============================================
 
@@ -1262,6 +1423,7 @@ export function registerAllExecutors(): void {
   registerExecutor('wander', executeWanderBehavior);
   registerExecutor('entrepreneur', executeEntrepreneurBehavior);
   registerExecutor('consume_luxury', executeConsumeLuxuryBehavior);
+  registerExecutor('purchase_orphaned', executePurchaseOrphanedLocationBehavior);
 }
 
 // Auto-register on import

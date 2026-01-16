@@ -241,6 +241,7 @@ export interface Location extends Entity {
   owner?: AgentRef | OrgRef;
   ownerType: 'agent' | 'org' | 'none';
   previousOwners: { ownerId: EntityRef; from: number; to: number }[];
+  forSale?: boolean; // True when location is orphaned and available for purchase
 
   // Employment
   employees: AgentRef[];

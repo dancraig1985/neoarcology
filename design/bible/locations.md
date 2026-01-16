@@ -124,3 +124,38 @@ Shop owners must actively restock their inventory:
 - Pay wholesale prices
 
 A shop owner who forgets to restock (or can't afford to) will watch customers walk away hungry.
+
+## Orphaned Locations
+
+When an organization dissolves, its locations become **orphaned** rather than being deleted. This preserves the economic infrastructure and allows recovery.
+
+### What Happens to Orphaned Locations
+
+- `owner` becomes undefined
+- `ownerType` becomes `'none'`
+- `forSale` is set to `true`
+- Employees are released (no longer employed there)
+- Residents **stay** in orphaned apartments (but stop paying rent since there's no landlord)
+- Production halts (no employees)
+- Sales stop (no owner to receive revenue)
+
+### Purchasing Orphaned Locations
+
+Unemployed agents with sufficient credits can purchase orphaned locations:
+
+1. Agent finds an orphaned location (`forSale: true`)
+2. Agent pays the **resale price** (60% of original opening cost by default)
+3. A new organization is created with the agent as leader
+4. The location becomes owned by the new org
+5. The agent becomes employed at their new business
+
+**Resale Price**: Configured via `economy.resaleDiscount` (default 0.6 = 60%). An apartment with 100 credit opening cost sells for 60 credits orphaned.
+
+### Behavior Priority
+
+The behavior order for unemployed agents is:
+1. Start new business (if wealthy: 300+ credits)
+2. **Purchase orphaned location** (if 150+ credits and orphaned locations exist)
+3. Seek regular employment
+
+This means agents will prefer buying existing infrastructure over starting from scratch when affordable orphaned locations are available.
