@@ -15,8 +15,8 @@
     "operatingCost": 0,
     "employeeSlots": 3,
     "salaryTier": "skilled",
-    "startingInventory": 40,
-    "inventoryCapacity": 150,
+    "startingInventory": 0,
+    "inventoryCapacity": 2.5,
     "inventoryGood": "alcohol",
     "production": [
       {

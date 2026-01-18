@@ -15,8 +15,8 @@
     "operatingCost": 0,
     "employeeSlots": 4,
     "salaryTier": "skilled",
-    "startingInventory": 10,
-    "inventoryCapacity": 100,
+    "startingInventory": 0,
+    "inventoryCapacity": 8.0,
     "inventoryGood": "data_storage",
     "production": [
       {

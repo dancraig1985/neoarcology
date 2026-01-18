@@ -15,8 +15,8 @@
     "operatingCost": 0,
     "employeeSlots": 3,
     "salaryTier": "skilled",
-    "startingInventory": 10,
-    "inventoryCapacity": 50,
+    "startingInventory": 0,
+    "inventoryCapacity": 6.0,
     "inventoryGood": "luxury_goods",
     "production": [
       {
