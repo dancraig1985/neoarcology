@@ -1,49 +1,124 @@
-# PLAN-029: Orders System (B2B Commerce Formalization)
+# PLAN-029: Orders System (Unified Commerce Model)
 
 **Status:** planned
 **Priority:** P2 (medium)
 **Dependencies:** PLAN-028
 
 ## Goal
-Formalize B2B commerce by replacing ad-hoc restocking with an orders system that drives production based on demand backlogs.
+Unify all business transactions under a single Order entity type, replacing ad-hoc restocking with formal orders and merging DeliveryRequest into Order as a specific order type.
+
+## Conceptual Model
+
+**Order = Universal business transaction**
+- OrderType: 'goods' (retail→wholesale), 'logistics' (delivery service), (future: 'services', 'construction')
+- Goods orders drive production: Buyer places order → Seller produces → Ready → Creates logistics order → Delivery → Completed
+- Logistics orders (formerly DeliveryRequest): Requester orders delivery → Logistics company assigns driver → Driver executes → Completed
 
 ## Objectives
-- [ ] Create Order entity type (Order.ts) with lifecycle states
-- [ ] Add orders array to WorldState in state.ts
-- [ ] Implement order placement in EconomySystem.ts (retail shops place orders to wholesalers)
-- [ ] Implement order backlog system for wholesalers/factories
-- [ ] Update ProductionSystem.ts - prioritize production for order fulfillment over speculative production
-- [ ] Integrate logistics: orders trigger delivery requests
-- [ ] Add order placement behaviors to behaviors.json
-- [ ] MIGRATION STRATEGY: Implement orders alongside existing ad-hoc restocking (parallel systems)
-- [ ] Run sim for 1000+ ticks with both systems active, compare effectiveness
-- [ ] Gradually reduce ad-hoc restocking frequency, increase order usage
-- [ ] Final test: disable ad-hoc restocking entirely, verify economy functions
-- [ ] Monitor: order backlogs grow/shrink reasonably, delivery times acceptable
-- [ ] Update design bible: economy.md (orders system, backlog-driven production), orgs.md (wholesale model)
+
+### Phase 1: Entity Refactor
+- [ ] Create unified Order entity type in types/entities.ts
+- [ ] Add `orderType: 'goods' | 'logistics'` discriminator
+- [ ] Migrate DeliveryRequest → Order with type='logistics'
+- [ ] Update all references: DeliverySystem, VehicleSystem, deliver_goods executor
+- [ ] Test: Existing deliveries still work after refactor
+
+### Phase 2: Goods Orders (Retail→Wholesale)
+- [ ] Implement order placement: retail shops place goods orders to wholesalers
+- [ ] Add order backlog tracking for wholesalers/factories
+- [ ] Update ProductionSystem: prioritize order fulfillment over speculative production
+- [ ] When order ready: auto-create logistics order for delivery
+- [ ] Keep emergency instant restocking for critical hunger (hunger > 80)
+
+### Phase 3: Migration & Testing
+- [ ] Run parallel systems: new orders + old ad-hoc restocking (1000+ ticks)
+- [ ] Compare: order-based vs instant restocking reliability
+- [ ] Gradually reduce ad-hoc frequency if orders work well
+- [ ] Monitor: order backlogs reasonable, delivery times acceptable, no starvation spikes
+
+### Phase 4: UI Integration
+- [ ] Add "Orders" tab to Nav (src/ui/components/Nav.tsx)
+- [ ] Create OrdersTable component (similar to AgentsTable, OrgsTable)
+- [ ] Display columns: Type, Buyer, Seller, Good, Quantity, Status, Created, Fulfilled
+- [ ] Add filter by orderType and status
+- [ ] Click to view order details panel
+
+### Phase 5: Documentation
+- [ ] Update economy.md: unified orders system, backlog-driven production
+- [ ] Update orgs.md: wholesale order processing
+- [ ] Update production.md: order-driven production scheduling
+- [ ] Add orders.md: full order lifecycle documentation
 
 ## Critical Files
-**Configuration:**
-- `data/config/economy.json`
-- `data/config/behaviors.json`
 
-**Code:**
-- `src/types/Order.ts` (NEW)
-- `src/simulation/state.ts`
-- `src/simulation/systems/EconomySystem.ts` (MAJOR REFACTOR)
-- `src/simulation/systems/ProductionSystem.ts`
-- `src/simulation/systems/OrgBehaviorSystem.ts`
+**Refactor:**
+- `src/types/entities.ts` (Order type, merge DeliveryRequest)
+- `src/simulation/systems/DeliverySystem.ts` (rename/refactor to OrderSystem?)
+- `src/simulation/systems/VehicleSystem.ts` (update to use Order)
+- `src/simulation/behaviors/executors/index.ts` (deliver_goods executor)
+
+**New Commerce Logic:**
+- `src/simulation/systems/EconomySystem.ts` (order placement)
+- `src/simulation/systems/ProductionSystem.ts` (order-driven production)
+- `src/simulation/systems/OrgBehaviorSystem.ts` (order processing)
+
+**UI:**
+- `src/ui/components/Nav.tsx` (add Orders tab)
+- `src/ui/components/OrdersTable.tsx` (NEW)
+- `src/ui/components/OrderDetailsPanel.tsx` (NEW)
 
 **Documentation:**
-- `design/bible/economy.md` (major section)
+- `design/bible/economy.md`
 - `design/bible/orgs.md`
 - `design/bible/production.md`
+- `design/bible/orders.md` (NEW)
 
-## Notes
-VERY HIGH RISK: New entity type, state model changes, wholesale commerce refactor. Order lifecycle: Placement → Production → Ready → In-Transit → Delivered. Careful migration: keep both systems during testing, phase out old one gradually. May need UI components to visualize order queues (scope risk).
+## State Structure
+
+```typescript
+interface Order {
+  id: string;
+  orderType: 'goods' | 'logistics';
+  buyer: EntityRef;           // Org placing order
+  seller: EntityRef;          // Org fulfilling order
+  status: 'placed' | 'in_production' | 'ready' | 'in_transit' | 'delivered' | 'cancelled';
+  created: number;            // Phase
+  fulfilled?: number;         // Phase when completed
+
+  // For goods orders
+  good?: string;              // 'provisions', 'alcohol', etc.
+  quantity?: number;
+  totalPrice?: number;
+  pickupLocation?: LocationRef;
+  deliveryLocation?: LocationRef;
+
+  // For logistics orders (formerly DeliveryRequest)
+  cargo?: Inventory;          // Goods being transported
+  fromLocation?: LocationRef;
+  toLocation?: LocationRef;
+  payment?: number;           // Delivery fee
+  assignedDriver?: AgentRef;
+  assignedVehicle?: VehicleRef;
+}
+```
 
 ## Risks
-- State model complexity (orders array, lifecycle management)
-- Performance (hundreds of orders per tick?)
-- Breaking existing economy if bugs exist
-- Testing complexity without order queue visualization
+
+**Medium-High Risk:**
+- DeliveryRequest migration could break existing delivery system
+- New order placement logic might destabilize economy
+- UI performance if displaying thousands of orders (need pagination/virtualization)
+
+**Mitigation:**
+- Phase 1 is pure refactor (no behavior change) - test immediately
+- Phase 2 runs parallel to existing system - gradual transition
+- Phase 4 UI can be implemented independently, won't affect sim stability
+
+## Success Criteria
+
+- [ ] All existing deliveries work after DeliveryRequest→Order migration
+- [ ] Retail shops successfully place and receive goods orders
+- [ ] Production responds to order backlogs (not just capacity)
+- [ ] Economy remains stable over 2000+ tick runs
+- [ ] Orders UI displays all order types and allows filtering/inspection
+- [ ] No increase in starvation rate compared to baseline
