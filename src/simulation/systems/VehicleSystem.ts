@@ -46,7 +46,7 @@ export function createVehicle(
 export function claimVehicle(
   vehicle: Vehicle,
   agent: Agent,
-  buildings: Building[],
+  _buildings: Building[],
   phase: number
 ): { vehicle: Vehicle; success: boolean } {
   // Check if vehicle is already claimed
@@ -123,7 +123,7 @@ export function loadCargo(
   }
 
   // Calculate how much space is used in vehicle cargo
-  const cargoSpaceUsed = Object.entries(vehicle.cargo).reduce((sum, [cargoGood, cargoAmount]) => {
+  const cargoSpaceUsed = Object.entries(vehicle.cargo).reduce((sum, [, cargoAmount]) => {
     // For MVP, assume all goods have same size (will integrate with economy.json goods sizes later)
     return sum + cargoAmount * goodSize;
   }, 0);
@@ -179,7 +179,7 @@ export function unloadCargo(
   }
 
   // Calculate location available space
-  const locationSpaceUsed = Object.entries(locationInventory).reduce((sum, [locGood, locAmount]) => {
+  const locationSpaceUsed = Object.entries(locationInventory).reduce((sum, [, locAmount]) => {
     return sum + locAmount * goodSize;
   }, 0);
 

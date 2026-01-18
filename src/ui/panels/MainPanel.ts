@@ -12,13 +12,15 @@ import {
   AGENT_COLUMNS,
   ORG_COLUMNS,
   LOCATION_COLUMNS,
+  VEHICLE_COLUMNS,
   AGENT_DETAILS,
   ORG_DETAILS,
   LOCATION_DETAILS,
+  VEHICLE_DETAILS,
 } from '../UIConfig';
 import type { EntityType } from './NavPanel';
 import type { SimulationState } from '../../simulation/Simulation';
-import type { Agent, Organization, Location } from '../../types';
+import type { Agent, Organization, Location, Vehicle } from '../../types';
 import { ActivityLog } from '../../simulation/ActivityLog';
 import { computeAgentActivity } from '../../simulation/helpers/ActivityHelper';
 
@@ -43,11 +45,13 @@ export class MainPanel extends Panel {
   private agentTable: Table<AgentWithNames>;
   private orgTable: Table<OrgWithLeaderName>;
   private locationTable: Table<Location>;
+  private vehicleTable: Table<Vehicle>;
 
   // Detail views for each entity type
   private agentDetail: DetailView;
   private orgDetail: DetailView;
   private locationDetail: DetailView;
+  private vehicleDetail: DetailView;
 
   private selectedEntityId?: string;
 
@@ -91,10 +95,16 @@ export class MainPanel extends Panel {
       onRowClick: (loc) => this.handleRowClick('locations', loc),
     });
 
+    this.vehicleTable = new Table<Vehicle>(tableWidth, contentHeight, {
+      columns: VEHICLE_COLUMNS,
+      onRowClick: (vehicle) => this.handleRowClick('vehicles', vehicle),
+    });
+
     // Create detail views
     this.agentDetail = new DetailView(DETAIL_WIDTH, contentHeight, AGENT_DETAILS);
     this.orgDetail = new DetailView(DETAIL_WIDTH, contentHeight, ORG_DETAILS);
     this.locationDetail = new DetailView(DETAIL_WIDTH, contentHeight, LOCATION_DETAILS);
+    this.vehicleDetail = new DetailView(DETAIL_WIDTH, contentHeight, VEHICLE_DETAILS);
 
     // Add agent table and detail by default
     this.tableContainer.addChild(this.agentTable);
@@ -159,15 +169,18 @@ export class MainPanel extends Panel {
     this.updateDetailView();
   }
 
-  private getCurrentTable(): Table<AgentWithNames> | Table<OrgWithLeaderName> | Table<Location> {
+  private getCurrentTable(): Table<AgentWithNames> | Table<OrgWithLeaderName> | Table<Location> | Table<Vehicle> {
     switch (this.currentEntityType) {
       case 'agents':
         return this.agentTable;
       case 'orgs':
         return this.orgTable;
       case 'locations':
-      default:
         return this.locationTable;
+      case 'vehicles':
+        return this.vehicleTable;
+      default:
+        return this.agentTable;
     }
   }
 
@@ -178,8 +191,11 @@ export class MainPanel extends Panel {
       case 'orgs':
         return this.orgDetail;
       case 'locations':
-      default:
         return this.locationDetail;
+      case 'vehicles':
+        return this.vehicleDetail;
+      default:
+        return this.agentDetail;
     }
   }
 
@@ -235,6 +251,9 @@ export class MainPanel extends Panel {
         break;
       case 'locations':
         this.locationTable.setData(this.currentState.locations);
+        break;
+      case 'vehicles':
+        this.vehicleTable.setData(this.currentState.vehicles);
         break;
     }
   }
@@ -295,12 +314,19 @@ export class MainPanel extends Panel {
         }
         break;
       }
+      case 'vehicles': {
+        const vehicle = this.currentState.vehicles.find((v) => v.id === this.selectedEntityId);
+        if (vehicle) {
+          this.vehicleDetail.setData(vehicle.name, vehicle, vehicle.id);
+        }
+        break;
+      }
     }
   }
 
   private handleRowClick(
     _entityType: EntityType,
-    entity: Agent | Organization | Location
+    entity: Agent | Organization | Location | Vehicle
   ): void {
     this.selectedEntityId = entity.id;
     this.updateDetailView();

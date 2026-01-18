@@ -3,7 +3,7 @@
  * This is the extensibility point - add new entity types/columns here
  */
 
-import type { Agent, Organization, Location } from '../types';
+import type { Agent, Organization, Location, Vehicle } from '../types';
 import type { DetailSection } from './components/DetailView';
 
 /**
@@ -177,6 +177,49 @@ export const LOCATION_COLUMNS: ColumnDef<Location>[] = [
     width: 70,
     align: 'right',
     render: (l) => l.weeklyRevenue.toString(),
+  },
+];
+
+/**
+ * Vehicle table columns
+ */
+export const VEHICLE_COLUMNS: ColumnDef<Vehicle>[] = [
+  {
+    key: 'name',
+    label: 'Vehicle',
+    width: 150,
+  },
+  {
+    key: 'template',
+    label: 'Type',
+    width: 100,
+  },
+  {
+    key: 'operator',
+    label: 'Operator',
+    width: 120,
+    render: (v) => v.operator ?? 'Parked',
+  },
+  {
+    key: 'building',
+    label: 'Location',
+    width: 120,
+  },
+  {
+    key: 'cargo',
+    label: 'Cargo',
+    width: 80,
+    align: 'right',
+    render: (v) => {
+      const total = Object.values(v.cargo).reduce((sum, amt) => sum + amt, 0);
+      return total.toString();
+    },
+  },
+  {
+    key: 'cargoCapacity',
+    label: 'Capacity',
+    width: 80,
+    align: 'right',
   },
 ];
 
@@ -429,6 +472,55 @@ export const LOCATION_DETAILS: DetailSection[] = [
           return '-';
         },
       },
+    ],
+  },
+];
+
+/**
+ * Vehicle detail sections
+ */
+export const VEHICLE_DETAILS: DetailSection[] = [
+  {
+    title: 'Identity',
+    fields: [
+      { key: 'id', label: 'ID' },
+      { key: 'name', label: 'Name' },
+      { key: 'template', label: 'Type' },
+      { key: 'created', label: 'Spawned (phase)' },
+    ],
+  },
+  {
+    title: 'Ownership',
+    fields: [
+      { key: 'owner', label: 'Owner ID' },
+      {
+        key: 'operator',
+        label: 'Operator',
+        render: (v) => (v as Vehicle).operator ?? 'Parked (no operator)',
+      },
+    ],
+  },
+  {
+    title: 'Location',
+    fields: [
+      { key: 'building', label: 'Parked At (Building ID)' },
+    ],
+  },
+  {
+    title: 'Cargo',
+    fields: [
+      {
+        key: 'cargo',
+        label: 'Current Cargo',
+        render: (v) => {
+          const cargo = (v as Vehicle).cargo;
+          const items = Object.entries(cargo)
+            .filter(([, amt]) => amt > 0)
+            .map(([good, amt]) => `${good}: ${amt}`);
+          return items.length > 0 ? items.join(', ') : 'Empty';
+        },
+      },
+      { key: 'cargoCapacity', label: 'Capacity' },
     ],
   },
 ];
