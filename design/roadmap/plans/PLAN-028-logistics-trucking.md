@@ -1,8 +1,8 @@
-# PLAN-027: Logistics & Trucking Organizations
+# PLAN-028: Logistics & Trucking Organizations
 
 **Status:** planned
 **Priority:** P1 (high)
-**Dependencies:** PLAN-026
+**Dependencies:** PLAN-027
 
 ## Goal
 Replace instant goods teleportation with realistic delivery mechanics via logistics companies and trucking.

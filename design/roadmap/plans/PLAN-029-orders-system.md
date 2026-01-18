@@ -1,8 +1,8 @@
-# PLAN-028: Orders System (B2B Commerce Formalization)
+# PLAN-029: Orders System (B2B Commerce Formalization)
 
 **Status:** planned
 **Priority:** P2 (medium)
-**Dependencies:** PLAN-027
+**Dependencies:** PLAN-028
 
 ## Goal
 Formalize B2B commerce by replacing ad-hoc restocking with an orders system that drives production based on demand backlogs.
