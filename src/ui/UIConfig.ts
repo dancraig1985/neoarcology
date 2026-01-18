@@ -3,7 +3,7 @@
  * This is the extensibility point - add new entity types/columns here
  */
 
-import type { Agent, Organization, Location, Vehicle } from '../types';
+import type { Agent, Organization, Location, Vehicle, Order } from '../types';
 import type { DetailSection } from './components/DetailView';
 
 /**
@@ -231,6 +231,81 @@ export const VEHICLE_COLUMNS: ColumnDef<Vehicle>[] = [
       const total = Object.values(v.cargo).reduce((sum, amt) => sum + amt, 0);
       return total.toString();
     },
+  },
+];
+
+/**
+ * Order table columns
+ */
+export const ORDER_COLUMNS: ColumnDef<Order>[] = [
+  {
+    key: 'id',
+    label: 'Order ID',
+    width: 120,
+  },
+  {
+    key: 'orderType',
+    label: 'Type',
+    width: 80,
+    render: (o) => o.orderType === 'goods' ? 'Goods' : 'Logistics',
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    width: 100,
+    render: (o) => o.status,
+  },
+  {
+    key: 'buyer',
+    label: 'Buyer',
+    width: 120,
+  },
+  {
+    key: 'seller',
+    label: 'Seller',
+    width: 120,
+    render: (o) => o.seller || 'Unassigned',
+  },
+  {
+    key: 'good',
+    label: 'Good/Cargo',
+    width: 120,
+    render: (o) => {
+      if (o.orderType === 'goods') {
+        return `${o.quantity} ${o.good}`;
+      } else if (o.cargo) {
+        // Logistics order - show cargo summary
+        const items = Object.entries(o.cargo).map(([good, amt]) => `${amt} ${good}`);
+        return items.join(', ') || '-';
+      }
+      return '-';
+    },
+  },
+  {
+    key: 'totalPrice',
+    label: 'Price',
+    width: 80,
+    align: 'right',
+    render: (o) => {
+      if (o.orderType === 'goods') {
+        return o.totalPrice?.toString() ?? '-';
+      } else {
+        return o.payment?.toString() ?? '-';
+      }
+    },
+  },
+  {
+    key: 'created',
+    label: 'Created',
+    width: 80,
+    align: 'right',
+  },
+  {
+    key: 'fulfilled',
+    label: 'Completed',
+    width: 80,
+    align: 'right',
+    render: (o) => o.fulfilled?.toString() ?? '-',
   },
 ];
 
@@ -571,6 +646,107 @@ export const VEHICLE_DETAILS: DetailSection[] = [
         },
       },
       { key: 'cargoCapacity', label: 'Capacity' },
+    ],
+  },
+];
+
+/**
+ * Order detail sections
+ */
+export const ORDER_DETAILS: DetailSection[] = [
+  {
+    title: 'Order Info',
+    fields: [
+      { key: 'id', label: 'ID' },
+      {
+        key: 'orderType',
+        label: 'Type',
+        render: (o) => (o as Order).orderType === 'goods' ? 'Goods Order' : 'Logistics Order',
+      },
+      { key: 'status', label: 'Status' },
+      { key: 'created', label: 'Created (phase)' },
+      {
+        key: 'fulfilled',
+        label: 'Completed (phase)',
+        render: (o) => (o as Order).fulfilled?.toString() ?? 'Not completed',
+      },
+    ],
+  },
+  {
+    title: 'Parties',
+    fields: [
+      { key: 'buyer', label: 'Buyer Org ID' },
+      {
+        key: 'seller',
+        label: 'Seller Org ID',
+        render: (o) => (o as Order).seller || 'Unassigned',
+      },
+    ],
+  },
+  {
+    title: 'Details',
+    fields: [
+      {
+        key: 'goods',
+        label: 'Goods/Cargo',
+        render: (o) => {
+          const order = o as Order;
+          if (order.orderType === 'goods') {
+            return `${order.quantity} ${order.good}`;
+          } else if (order.cargo) {
+            const items = Object.entries(order.cargo).map(([good, amt]) => `${good}: ${amt}`);
+            return items.join(', ') || 'None';
+          }
+          return '-';
+        },
+      },
+      {
+        key: 'price',
+        label: 'Price/Payment',
+        render: (o) => {
+          const order = o as Order;
+          if (order.orderType === 'goods') {
+            return order.totalPrice?.toString() ?? '-';
+          } else {
+            return order.payment?.toString() ?? '-';
+          }
+        },
+      },
+      {
+        key: 'locations',
+        label: 'Pickup → Delivery',
+        render: (o) => {
+          const order = o as Order;
+          const from = order.pickupLocation || order.fromLocation || '?';
+          const to = order.deliveryLocation || order.toLocation || '?';
+          return `${from} → ${to}`;
+        },
+      },
+    ],
+  },
+  {
+    title: 'Logistics (if applicable)',
+    fields: [
+      {
+        key: 'assignedDriver',
+        label: 'Driver',
+        render: (o) => (o as Order).assignedDriver ?? 'Not assigned',
+      },
+      {
+        key: 'assignedVehicle',
+        label: 'Vehicle',
+        render: (o) => (o as Order).assignedVehicle ?? 'Not assigned',
+      },
+      {
+        key: 'urgency',
+        label: 'Urgency',
+        render: (o) => (o as Order).urgency ?? '-',
+      },
+      {
+        key: 'parentOrderId',
+        label: 'Parent Goods Order',
+        render: (o) => (o as Order).parentOrderId ?? 'None (standalone)',
+      },
     ],
   },
 ];

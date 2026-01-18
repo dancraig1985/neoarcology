@@ -2,7 +2,7 @@
  * EconomySystem - Handles agent economic decisions and weekly processing
  */
 
-import type { Agent, Location, Organization, Building, Vehicle, DeliveryRequest } from '../../types';
+import type { Agent, Location, Organization, Building, Vehicle, DeliveryRequest, Order } from '../../types';
 import type { EconomyConfig, AgentsConfig, LocationTemplate, TransportConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import {
@@ -1390,6 +1390,347 @@ export function tryRestockFromWholesale(
   });
 
   return { locations: updatedLocations, orgs: updatedOrgs };
+}
+
+/**
+ * Goods Order System - B2B Commerce
+ * Replaces instant restocking with formal orders
+ */
+
+let goodsOrderIdCounter = 0;
+
+function getNextGoodsOrderId(): string {
+  return `goods_order_${goodsOrderIdCounter++}`;
+}
+
+/**
+ * Place a goods order from retail shop to wholesaler
+ * Creates an Order entity with orderType='goods'
+ */
+export function placeGoodsOrder(
+  buyerOrg: Organization,
+  shop: Location,
+  goodType: string,
+  quantity: number,
+  wholesaler: Location,
+  sellerOrg: Organization,
+  economyConfig: EconomyConfig,
+  phase: number
+): Order {
+  const wholesalePrice = economyConfig.goods[goodType]?.wholesalePrice ?? 5;
+  const totalPrice = quantity * wholesalePrice;
+
+  const order: Order = {
+    id: getNextGoodsOrderId(),
+    orderType: 'goods',
+    created: phase,
+    buyer: buyerOrg.id,
+    seller: sellerOrg.id,
+    status: 'pending',
+
+    // Goods order specific fields
+    good: goodType,
+    quantity,
+    totalPrice,
+    pickupLocation: wholesaler.id,
+    deliveryLocation: shop.id,
+  };
+
+  ActivityLog.info(
+    phase,
+    'order',
+    `${buyerOrg.name} placed order for ${quantity} ${goodType} from ${sellerOrg.name} (${totalPrice} credits)`,
+    buyerOrg.id,
+    buyerOrg.name
+  );
+
+  return order;
+}
+
+/**
+ * Try to place a goods order for a retail shop that needs restocking
+ * Returns the new order if placed, or null if no order needed/possible
+ */
+export function tryPlaceGoodsOrder(
+  buyerOrg: Organization,
+  shop: Location,
+  locations: Location[],
+  orgs: Organization[],
+  existingOrders: Order[],
+  economyConfig: EconomyConfig,
+  phase: number
+): Order | null {
+  const goodsSizes: GoodsSizes = { goods: economyConfig.goods, defaultGoodsSize: economyConfig.defaultGoodsSize };
+
+  // Determine what good this shop sells
+  const goodType = shop.tags.includes('leisure')
+    ? 'alcohol'
+    : shop.tags.includes('luxury')
+      ? 'luxury_goods'
+      : 'provisions';
+
+  const currentStock = getGoodsCount(shop, goodType);
+  const restockThreshold = 15;
+
+  // Only order if inventory is low
+  if (currentStock >= restockThreshold) {
+    return null;
+  }
+
+  // Check if there's already a pending order for this shop
+  const hasPendingOrder = existingOrders.some(
+    (order) =>
+      order.orderType === 'goods' &&
+      order.deliveryLocation === shop.id &&
+      order.good === goodType &&
+      (order.status === 'pending' || order.status === 'in_production' || order.status === 'ready' || order.status === 'in_transit')
+  );
+
+  if (hasPendingOrder) {
+    return null; // Don't place duplicate orders
+  }
+
+  // Find wholesale locations with the needed good type
+  // Filter to only locations that can produce this good (have production config for it)
+  const wholesaleLocations = locations.filter(
+    (loc) => loc.tags.includes('wholesale') &&
+             !buyerOrg.locations.includes(loc.id) // Don't order from yourself
+  );
+
+  if (wholesaleLocations.length === 0) {
+    return null;
+  }
+
+  // Pick a random wholesaler
+  const wholesaler = wholesaleLocations[Math.floor(Math.random() * wholesaleLocations.length)];
+  if (!wholesaler) {
+    return null;
+  }
+
+  // Find the org that owns this wholesale location
+  const sellerOrg = orgs.find((org) => org.locations.includes(wholesaler.id));
+  if (!sellerOrg) {
+    return null;
+  }
+
+  // Calculate order quantity (same logic as instant restock)
+  const shopCapacity = getAvailableCapacity(shop, goodsSizes);
+  const goodSize = economyConfig.goods[goodType]?.size ?? economyConfig.defaultGoodsSize;
+  const maxItemsThatFit = Math.floor(shopCapacity / goodSize);
+  const desiredAmount = Math.min(30, maxItemsThatFit);
+  const wholesalePrice = economyConfig.goods[goodType]?.wholesalePrice ?? 5;
+  const affordableAmount = Math.floor(buyerOrg.wallet.credits / wholesalePrice);
+  const orderQuantity = Math.min(desiredAmount, affordableAmount);
+
+  if (orderQuantity <= 0) {
+    return null;
+  }
+
+  // Place the order
+  return placeGoodsOrder(
+    buyerOrg,
+    shop,
+    goodType,
+    orderQuantity,
+    wholesaler,
+    sellerOrg,
+    economyConfig,
+    phase
+  );
+}
+
+/**
+ * Process goods orders - check if wholesaler has produced the goods
+ * When ready, mark order as ready and create a logistics delivery order
+ * Returns updated orders array and any new logistics orders created
+ */
+export function processGoodsOrders(
+  orders: Order[],
+  locations: Location[],
+  orgs: Organization[],
+  economyConfig: EconomyConfig,
+  phase: number
+): { orders: Order[]; newLogisticsOrders: Order[] } {
+  const updatedOrders: Order[] = [];
+  const newLogisticsOrders: Order[] = [];
+
+  for (const order of orders) {
+    // Only process goods orders that are pending
+    if (order.orderType !== 'goods' || order.status !== 'pending') {
+      updatedOrders.push(order);
+      continue;
+    }
+
+    // Check if wholesaler (pickup location) has enough inventory
+    const pickupLoc = locations.find(loc => loc.id === order.pickupLocation);
+    const deliveryLoc = locations.find(loc => loc.id === order.deliveryLocation);
+
+    if (!pickupLoc || !deliveryLoc) {
+      // Locations don't exist - cancel order
+      updatedOrders.push({
+        ...order,
+        status: 'cancelled',
+        fulfilled: phase,
+      });
+      continue;
+    }
+
+    const goodType = order.good ?? 'provisions';
+    const quantity = order.quantity ?? 0;
+    const pickupStock = getGoodsCount(pickupLoc, goodType);
+
+    if (pickupStock >= quantity) {
+      // Order is ready! Mark it and create a logistics order for delivery
+      const updatedOrder: Order = {
+        ...order,
+        status: 'ready',
+      };
+
+      // Create logistics order (delivery request) for this goods order
+      // Import will be needed from DeliverySystem
+      const cargo: Record<string, number> = { [goodType]: quantity };
+
+      // Calculate delivery payment (same logic as warehouse transfers)
+      const distance = Math.abs((pickupLoc.x ?? 0) - (deliveryLoc.x ?? 0)) +
+                      Math.abs((pickupLoc.y ?? 0) - (deliveryLoc.y ?? 0));
+      const totalGoods = quantity;
+      const payment = totalGoods * 1 + distance * 0.5;
+      const deliveryPayment = Math.max(10, Math.floor(payment));
+
+      const logisticsOrder: Order = {
+        id: `logistics_for_${order.id}`,
+        orderType: 'logistics',
+        created: phase,
+        buyer: order.buyer, // Retail shop's org pays for delivery
+        seller: '', // Logistics company will be assigned
+        status: 'pending',
+        parentOrderId: order.id, // Link back to goods order
+        fromLocation: pickupLoc.id,
+        toLocation: deliveryLoc.id,
+        cargo,
+        payment: deliveryPayment,
+        urgency: 'medium',
+      };
+
+      ActivityLog.info(
+        phase,
+        'order',
+        `goods order ${order.id} ready - created logistics order for delivery`,
+        order.buyer,
+        'Order System'
+      );
+
+      updatedOrders.push(updatedOrder);
+      newLogisticsOrders.push(logisticsOrder);
+    } else {
+      // Not ready yet, keep pending
+      updatedOrders.push(order);
+    }
+  }
+
+  return { orders: updatedOrders, newLogisticsOrders };
+}
+
+/**
+ * Complete a goods order - transfer credits from buyer to seller
+ * Called when the logistics delivery for a goods order completes
+ */
+export function completeGoodsOrder(
+  logisticsOrder: Order,
+  allOrders: Order[],
+  orgs: Organization[],
+  phase: number
+): { orders: Order[]; orgs: Organization[] } {
+  // Find the parent goods order
+  const goodsOrderId = logisticsOrder.parentOrderId;
+  if (!goodsOrderId) {
+    // This logistics order isn't linked to a goods order, nothing to do
+    return { orders: allOrders, orgs };
+  }
+
+  const goodsOrder = allOrders.find(o => o.id === goodsOrderId);
+  if (!goodsOrder || goodsOrder.orderType !== 'goods') {
+    // Parent order not found or wrong type
+    return { orders: allOrders, orgs };
+  }
+
+  // Find buyer and seller orgs
+  const buyerOrg = orgs.find(o => o.id === goodsOrder.buyer);
+  const sellerOrg = orgs.find(o => o.id === goodsOrder.seller);
+
+  if (!buyerOrg || !sellerOrg) {
+    // Orgs no longer exist - mark order as failed
+    const updatedOrders = allOrders.map(o =>
+      o.id === goodsOrder.id
+        ? { ...o, status: 'failed' as const, fulfilled: phase }
+        : o
+    );
+    return { orders: updatedOrders, orgs };
+  }
+
+  const totalPrice = goodsOrder.totalPrice ?? 0;
+
+  // Check if buyer can afford (should be affordable since they placed the order, but verify)
+  if (buyerOrg.wallet.credits < totalPrice) {
+    // Can't afford - mark as failed
+    ActivityLog.warning(
+      phase,
+      'order',
+      `goods order ${goodsOrder.id} failed - buyer cannot afford (${buyerOrg.wallet.credits}/${totalPrice} credits)`,
+      buyerOrg.id,
+      buyerOrg.name
+    );
+
+    const updatedOrders = allOrders.map(o =>
+      o.id === goodsOrder.id
+        ? { ...o, status: 'failed' as const, fulfilled: phase }
+        : o
+    );
+    return { orders: updatedOrders, orgs };
+  }
+
+  // Transfer credits from buyer to seller
+  const updatedBuyerOrg: Organization = {
+    ...buyerOrg,
+    wallet: {
+      ...buyerOrg.wallet,
+      credits: buyerOrg.wallet.credits - totalPrice,
+    },
+  };
+
+  const updatedSellerOrg: Organization = {
+    ...sellerOrg,
+    wallet: {
+      ...sellerOrg.wallet,
+      credits: sellerOrg.wallet.credits + totalPrice,
+    },
+  };
+
+  // Mark goods order as delivered
+  const updatedOrders = allOrders.map(o =>
+    o.id === goodsOrder.id
+      ? { ...o, status: 'delivered' as const, fulfilled: phase }
+      : o
+  );
+
+  const updatedOrgs = orgs.map(o => {
+    if (o.id === buyerOrg.id) return updatedBuyerOrg;
+    if (o.id === sellerOrg.id) return updatedSellerOrg;
+    return o;
+  });
+
+  ActivityLog.info(
+    phase,
+    'order',
+    `goods order ${goodsOrder.id} completed - ${buyerOrg.name} paid ${totalPrice} credits to ${sellerOrg.name}`,
+    buyerOrg.id,
+    buyerOrg.name
+  );
+
+  // Track wholesale sale in metrics
+  trackWholesaleSale(goodsOrder.good ?? 'provisions');
+
+  return { orders: updatedOrders, orgs: updatedOrgs };
 }
 
 /**

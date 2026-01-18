@@ -3,12 +3,12 @@
  * Ties together tick engine, agents, and systems
  */
 
-import type { Agent, Location, Organization, Building, Vehicle, DeliveryRequest } from '../types';
+import type { Agent, Location, Organization, Building, Vehicle, Order, DeliveryRequest } from '../types';
 import type { LoadedConfig } from '../config/ConfigLoader';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
 import { processAgentPhase, countLivingAgents, countDeadAgents } from './systems/AgentSystem';
-import { processWeeklyEconomy, fixHomelessAgents, tryRestockFromWholesale } from './systems/EconomySystem';
+import { processWeeklyEconomy, fixHomelessAgents, tryRestockFromWholesale, tryPlaceGoodsOrder, processGoodsOrders } from './systems/EconomySystem';
 import { processAgentBehavior } from './behaviors/BehaviorProcessor';
 import { processFactoryProduction } from './systems/OrgSystem';
 import { processOrgBehaviors } from './systems/OrgBehaviorSystem';
@@ -25,7 +25,7 @@ export interface SimulationState {
   locations: Location[];
   organizations: Organization[];
   vehicles: Vehicle[];
-  deliveryRequests: DeliveryRequest[];
+  deliveryRequests: DeliveryRequest[]; // All orders (goods and logistics) - DeliveryRequest is type alias for Order
   grid: import('../generation/types').CityGrid | null;
   isRunning: boolean;
   ticksPerSecond: number;
@@ -147,6 +147,29 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     }
   }
 
+  // 1c. Goods Order Placement: Retail shops place orders for restocking (parallel system)
+  // Creates Order entities with orderType='goods' for B2B commerce
+  let newGoodsOrders: Order[] = [];
+  for (const org of updatedOrgs) {
+    const orgRetailLocations = updatedLocations.filter(
+      (loc) => org.locations.includes(loc.id) && loc.tags.includes('retail')
+    );
+    for (const retailLoc of orgRetailLocations) {
+      const order = tryPlaceGoodsOrder(
+        org,
+        retailLoc,
+        updatedLocations,
+        updatedOrgs,
+        state.deliveryRequests, // Check existing orders to avoid duplicates
+        config.economy,
+        newTime.currentPhase
+      );
+      if (order) {
+        newGoodsOrders.push(order);
+      }
+    }
+  }
+
   // 2. Process biological needs (hunger, eating, travel)
   updatedAgents = updatedAgents.map((agent) =>
     processAgentPhase(agent, newTime.currentPhase, config.agents, updatedLocations)
@@ -211,6 +234,21 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
 
   // Collect new delivery requests from org behaviors (warehouse transfers)
   updatedDeliveryRequests = [...updatedDeliveryRequests, ...orgBehaviorResult.deliveryRequests];
+
+  // Add new goods orders (B2B commerce orders from retail shops)
+  updatedDeliveryRequests = [...updatedDeliveryRequests, ...newGoodsOrders];
+
+  // Process goods orders: check if ready and create logistics orders for delivery
+  const goodsOrderResult = processGoodsOrders(
+    updatedDeliveryRequests,
+    updatedLocations,
+    updatedOrgs,
+    config.economy,
+    newTime.currentPhase
+  );
+  updatedDeliveryRequests = goodsOrderResult.orders;
+  // Add new logistics orders created from ready goods orders
+  updatedDeliveryRequests = [...updatedDeliveryRequests, ...goodsOrderResult.newLogisticsOrders];
 
   // 4. Process weekly economy (payroll, operating costs) - STAGGERED across week
   // Each org processes on their weeklyPhaseOffset (spread across 56 phases)

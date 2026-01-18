@@ -1131,7 +1131,7 @@ function executeWanderBehavior(
 // Entrepreneur Executor
 // ============================================
 
-import { tryOpenBusiness } from '../../systems/EconomySystem';
+import { tryOpenBusiness, completeGoodsOrder } from '../../systems/EconomySystem';
 
 /**
  * Entrepreneur executor - handles business creation
@@ -1543,8 +1543,8 @@ function executeDeliverGoodsBehavior(
   }
 
   // Validate locations and vehicle exist
-  const fromLocation = ctx.locations.find(loc => loc.id === deliveryRequest!.from);
-  const toLocation = ctx.locations.find(loc => loc.id === deliveryRequest!.to);
+  const fromLocation = ctx.locations.find(loc => loc.id === deliveryRequest!.fromLocation);
+  const toLocation = ctx.locations.find(loc => loc.id === deliveryRequest!.toLocation);
 
   if (!fromLocation || !toLocation) {
     // Locations don't exist - fail delivery
@@ -1786,7 +1786,7 @@ function executeDeliverGoodsBehavior(
     let updatedLocation = fromLocation;
 
     // Load each good type into vehicle
-    for (const [good, amount] of Object.entries(deliveryRequest!.goods)) {
+    for (const [good, amount] of Object.entries(deliveryRequest!.cargo ?? {})) {
       const goodConfig = ctx.economyConfig.goods[good];
       const goodSize = goodConfig?.size ?? ctx.economyConfig.defaultGoodsSize;
 
@@ -1980,7 +1980,7 @@ function executeDeliverGoodsBehavior(
     let updatedLocation = toLocation;
 
     // Unload each good type from vehicle
-    for (const [good, amount] of Object.entries(deliveryRequest!.goods)) {
+    for (const [good, amount] of Object.entries(deliveryRequest!.cargo ?? {})) {
       const goodConfig = ctx.economyConfig.goods[good];
       const goodSize = goodConfig?.size ?? ctx.economyConfig.defaultGoodsSize;
 
@@ -2012,13 +2012,28 @@ function executeDeliverGoodsBehavior(
       loc.id === toLocation.id ? updatedLocation : loc
     );
 
-    const updatedOrgs = ctx.orgs.map(org =>
+    let updatedOrgsAfterDelivery = ctx.orgs.map(org =>
       org.id === logisticsCompany.id ? deliveryResult.company : org
     );
 
-    const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+    let updatedDeliveryRequestsAfterDelivery = (ctx.deliveryRequests ?? []).map(req =>
       req.id === deliveryRequest!.id ? deliveryResult.request : req
     );
+
+    // If this logistics order is linked to a goods order, complete the goods order too
+    if (deliveryRequest!.parentOrderId) {
+      const goodsResult = completeGoodsOrder(
+        deliveryRequest!,
+        updatedDeliveryRequestsAfterDelivery,
+        updatedOrgsAfterDelivery,
+        ctx.phase
+      );
+      updatedOrgsAfterDelivery = goodsResult.orgs;
+      updatedDeliveryRequestsAfterDelivery = goodsResult.orders;
+    }
+
+    const updatedOrgs = updatedOrgsAfterDelivery;
+    const updatedDeliveryRequests = updatedDeliveryRequestsAfterDelivery;
 
     // Task complete - vehicle is parked at delivery building
     return {

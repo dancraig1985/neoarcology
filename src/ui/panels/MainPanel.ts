@@ -13,14 +13,16 @@ import {
   ORG_COLUMNS,
   LOCATION_COLUMNS,
   VEHICLE_COLUMNS,
+  ORDER_COLUMNS,
   AGENT_DETAILS,
   ORG_DETAILS,
   LOCATION_DETAILS,
   VEHICLE_DETAILS,
+  ORDER_DETAILS,
 } from '../UIConfig';
 import type { EntityType } from './NavPanel';
 import type { SimulationState } from '../../simulation/Simulation';
-import type { Agent, Organization, Location, Vehicle } from '../../types';
+import type { Agent, Organization, Location, Vehicle, Order } from '../../types';
 import { ActivityLog } from '../../simulation/ActivityLog';
 import { computeAgentActivity } from '../../simulation/helpers/ActivityHelper';
 
@@ -46,12 +48,14 @@ export class MainPanel extends Panel {
   private orgTable: Table<OrgWithLeaderName>;
   private locationTable: Table<Location>;
   private vehicleTable: Table<Vehicle>;
+  private orderTable: Table<Order>;
 
   // Detail views for each entity type
   private agentDetail: DetailView;
   private orgDetail: DetailView;
   private locationDetail: DetailView;
   private vehicleDetail: DetailView;
+  private orderDetail: DetailView;
 
   private selectedEntityId?: string;
 
@@ -100,11 +104,17 @@ export class MainPanel extends Panel {
       onRowClick: (vehicle) => this.handleRowClick('vehicles', vehicle),
     });
 
+    this.orderTable = new Table<Order>(tableWidth, contentHeight, {
+      columns: ORDER_COLUMNS,
+      onRowClick: (order) => this.handleRowClick('orders', order),
+    });
+
     // Create detail views
     this.agentDetail = new DetailView(DETAIL_WIDTH, contentHeight, AGENT_DETAILS);
     this.orgDetail = new DetailView(DETAIL_WIDTH, contentHeight, ORG_DETAILS);
     this.locationDetail = new DetailView(DETAIL_WIDTH, contentHeight, LOCATION_DETAILS);
     this.vehicleDetail = new DetailView(DETAIL_WIDTH, contentHeight, VEHICLE_DETAILS);
+    this.orderDetail = new DetailView(DETAIL_WIDTH, contentHeight, ORDER_DETAILS);
 
     // Add agent table and detail by default
     this.tableContainer.addChild(this.agentTable);
@@ -169,7 +179,7 @@ export class MainPanel extends Panel {
     this.updateDetailView();
   }
 
-  private getCurrentTable(): Table<AgentWithNames> | Table<OrgWithLeaderName> | Table<Location> | Table<Vehicle> {
+  private getCurrentTable(): Table<AgentWithNames> | Table<OrgWithLeaderName> | Table<Location> | Table<Vehicle> | Table<Order> {
     switch (this.currentEntityType) {
       case 'agents':
         return this.agentTable;
@@ -179,6 +189,8 @@ export class MainPanel extends Panel {
         return this.locationTable;
       case 'vehicles':
         return this.vehicleTable;
+      case 'orders':
+        return this.orderTable;
       default:
         return this.agentTable;
     }
@@ -194,6 +206,8 @@ export class MainPanel extends Panel {
         return this.locationDetail;
       case 'vehicles':
         return this.vehicleDetail;
+      case 'orders':
+        return this.orderDetail;
       default:
         return this.agentDetail;
     }
@@ -254,6 +268,10 @@ export class MainPanel extends Panel {
         break;
       case 'vehicles':
         this.vehicleTable.setData(this.currentState.vehicles);
+        break;
+      case 'orders':
+        // deliveryRequests now holds all orders (goods + logistics)
+        this.orderTable.setData(this.currentState.deliveryRequests);
         break;
     }
   }
@@ -321,12 +339,20 @@ export class MainPanel extends Panel {
         }
         break;
       }
+      case 'orders': {
+        const order = this.currentState.deliveryRequests.find((o) => o.id === this.selectedEntityId);
+        if (order) {
+          const title = `Order: ${order.id}`;
+          this.orderDetail.setData(title, order, order.id);
+        }
+        break;
+      }
     }
   }
 
   private handleRowClick(
     _entityType: EntityType,
-    entity: Agent | Organization | Location | Vehicle
+    entity: Agent | Organization | Location | Vehicle | Order
   ): void {
     this.selectedEntityId = entity.id;
     this.updateDetailView();

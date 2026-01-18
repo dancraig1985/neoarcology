@@ -3,13 +3,13 @@
  * PLAN-028: Replaces instant goods teleportation with realistic trucking
  */
 
-import type { DeliveryRequest, Agent, Vehicle, Location, Organization } from '../../types';
+import type { Order, DeliveryRequest, Agent, Vehicle, Location, Organization } from '../../types';
 import { ActivityLog } from '../ActivityLog';
 
 let deliveryIdCounter = 0;
 
 /**
- * Create a new delivery request
+ * Create a new delivery request (logistics order)
  */
 export function createDeliveryRequest(
   from: Location,
@@ -19,7 +19,7 @@ export function createDeliveryRequest(
   urgency: 'low' | 'medium' | 'high',
   phase: number
 ): DeliveryRequest {
-  const id = `delivery_${deliveryIdCounter++}`;
+  const id = `order_${deliveryIdCounter++}`;
 
   ActivityLog.info(
     phase,
@@ -29,15 +29,21 @@ export function createDeliveryRequest(
     from.name
   );
 
+  // Create an Order with orderType='logistics'
+  // buyer = requesting org, seller = logistics company (assigned later)
   return {
     id,
+    orderType: 'logistics',
     created: phase,
-    from: from.id,
-    to: to.id,
-    goods,
+    buyer: from.owner ?? 'system',
+    seller: '', // Assigned when logistics company picks up the order
+    status: 'pending',
+    // Logistics-specific fields
+    fromLocation: from.id,
+    toLocation: to.id,
+    cargo: goods,
     payment,
     urgency,
-    status: 'pending',
   };
 }
 
@@ -60,6 +66,7 @@ export function assignDeliveryToDriver(
 
   return {
     ...request,
+    seller: driver.employer ?? '', // Logistics company fulfilling the order
     status: 'assigned',
     assignedDriver: driver.id,
     assignedVehicle: vehicle.id,
@@ -95,7 +102,7 @@ export function completeDelivery(
   ActivityLog.info(
     phase,
     'delivery',
-    `completed delivery (earned ${request.payment} credits)`,
+    `completed delivery (earned ${request.payment ?? 0} credits)`,
     request.assignedDriver,
     'Driver'
   );
@@ -105,7 +112,7 @@ export function completeDelivery(
     ...logisticsCompany,
     wallet: {
       ...logisticsCompany.wallet,
-      credits: logisticsCompany.wallet.credits + request.payment,
+      credits: logisticsCompany.wallet.credits + (request.payment ?? 0),
     },
   };
 
@@ -113,7 +120,7 @@ export function completeDelivery(
     request: {
       ...request,
       status: 'delivered',
-      deliveredAt: phase,
+      fulfilled: phase,
     },
     company: updatedCompany,
   };
@@ -140,7 +147,7 @@ export function failDelivery(
   return {
     ...request,
     status: 'failed',
-    deliveredAt: phase,
+    fulfilled: phase,
   };
 }
 
@@ -229,7 +236,7 @@ export function cleanupOldDeliveries(
       return true; // Keep active deliveries
     }
     // Remove completed/failed deliveries older than maxAge
-    const age = currentPhase - (req.deliveredAt ?? req.created);
+    const age = currentPhase - (req.fulfilled ?? req.created);
     return age < maxAge;
   });
 }

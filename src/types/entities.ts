@@ -426,20 +426,43 @@ export interface CashStash {
 }
 
 /**
- * DeliveryRequest - Request for goods delivery between locations
- * Created by factories/warehouses, fulfilled by logistics companies
+ * Order - Universal business transaction
+ * Replaces DeliveryRequest with a unified model for all commerce
+ *
+ * Order Types:
+ * - 'logistics': Delivery service (formerly DeliveryRequest)
+ * - 'goods': B2B wholesale order (retail → wholesale)
  */
-export interface DeliveryRequest {
+export interface Order {
   id: string;
-  created: number; // Phase when request was created
-  from: LocationRef; // Pickup location
-  to: LocationRef; // Delivery destination
-  goods: Record<string, number>; // What to deliver (e.g., { provisions: 50 })
-  payment: number; // Credits paid to logistics company
-  urgency: 'low' | 'medium' | 'high';
-  status: 'pending' | 'assigned' | 'in_transit' | 'delivered' | 'failed';
+  orderType: 'logistics' | 'goods';
+  created: number; // Phase when order was placed
+  buyer: EntityRef; // Org placing/requesting the order
+  seller: EntityRef; // Org fulfilling the order
+  status: 'pending' | 'assigned' | 'in_production' | 'ready' | 'in_transit' | 'delivered' | 'cancelled' | 'failed';
+  fulfilled?: number; // Phase when completed/delivered
+  parentOrderId?: string; // For logistics orders created from goods orders
+
+  // For goods orders (B2B wholesale)
+  good?: string; // 'provisions', 'alcohol', etc.
+  quantity?: number;
+  totalPrice?: number;
+  pickupLocation?: LocationRef; // Where seller will have goods ready
+  deliveryLocation?: LocationRef; // Where buyer wants delivery
+
+  // For logistics orders (delivery service)
+  fromLocation?: LocationRef; // Pickup location
+  toLocation?: LocationRef; // Delivery destination
+  cargo?: Record<string, number>; // Goods being transported
+  payment?: number; // Delivery fee paid to logistics company
+  urgency?: 'low' | 'medium' | 'high';
   assignedDriver?: AgentRef; // Which trucker is handling this
   assignedVehicle?: VehicleRef; // Which truck is being used
-  assignedAt?: number; // When assigned
-  deliveredAt?: number; // When completed
+  assignedAt?: number; // When driver assigned
 }
+
+/**
+ * @deprecated Use Order with orderType='logistics' instead
+ * Kept temporarily for backward compatibility during migration
+ */
+export type DeliveryRequest = Order;
