@@ -893,6 +893,55 @@ function tryExpandToWarehouse(
     return { org };
   }
 
+  // FIRST: Check resale market for orphaned warehouses (60% discount)
+  const resaleDiscount = 0.6; // Standard resale discount
+  const orphanedWarehouses = allLocations.filter(
+    loc => loc.forSale === true && loc.tags.includes('storage')
+  );
+
+  if (orphanedWarehouses.length > 0) {
+    const resalePrice = Math.floor(openingCost * resaleDiscount); // 480 credits for 800 opening cost
+
+    if (org.wallet.credits >= resalePrice + 300) {
+      // Can afford to purchase orphaned warehouse
+      const targetWarehouse = orphanedWarehouses[0]; // Pick first available
+
+      // Purchase the orphaned warehouse
+      const updatedOrg = addLocationToOrg(
+        {
+          ...org,
+          wallet: { ...org.wallet, credits: org.wallet.credits - resalePrice },
+        },
+        targetWarehouse.id
+      );
+
+      // Update warehouse: new owner, no longer for sale
+      const updatedWarehouse: Location = {
+        ...targetWarehouse,
+        owner: org.id,
+        ownerType: 'org',
+        forSale: false,
+        previousOwners: [
+          ...(targetWarehouse.previousOwners ?? []),
+          // Previous "orphaned" period already recorded
+        ],
+      };
+
+      ActivityLog.info(
+        phase,
+        'purchase',
+        `purchased orphaned ${targetWarehouse.name} for ${resalePrice} credits (60% discount) - provides bulk storage for factory overflow`,
+        org.id,
+        org.name
+      );
+
+      trackBusinessOpened(`${org.name}'s ${targetWarehouse.name}`);
+
+      return { org: updatedOrg, newLocation: updatedWarehouse };
+    }
+  }
+
+  // No affordable orphaned warehouses - open a new one
   // Find a building for the warehouse
   const buildingPlacement = findBuildingForLocation(
     buildings,
