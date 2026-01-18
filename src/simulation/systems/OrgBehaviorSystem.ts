@@ -105,10 +105,32 @@ export function processOrgBehaviors(
     // Get this org's locations
     const orgLocations = updatedLocations.filter(loc => org.locations.includes(loc.id));
 
-    // 1. Try to procure data_storage if needed
-    const procureResult = tryProcureDataStorage(
+    // 0. Try to transfer input goods internally within org
+    const transferResult = tryTransferInputGoods(
       org,
       orgLocations,
+      updatedLocations,
+      locationTemplates,
+      economyConfig,
+      phase
+    );
+    updatedLocations = transferResult.locations;
+
+    // 1. Try to sell valuable_data for revenue (temporary B2B market)
+    const dataRevenueResult = trySelllValuableData(
+      org,
+      orgLocations,
+      updatedLocations,
+      updatedOrgs,
+      phase
+    );
+    updatedLocations = dataRevenueResult.locations;
+    updatedOrgs = dataRevenueResult.orgs;
+
+    // 2. Try to procure data_storage if needed
+    const procureResult = tryProcureDataStorage(
+      updatedOrgs.find(o => o.id === org.id) ?? org,
+      updatedLocations.filter(loc => org.locations.includes(loc.id)),
       updatedLocations,
       updatedOrgs,
       economyConfig,
@@ -117,24 +139,46 @@ export function processOrgBehaviors(
     updatedLocations = procureResult.locations;
     updatedOrgs = procureResult.orgs;
 
-    // 2. Try to expand to office if profitable and has storage
-    const expandResult = tryExpandToOffice(
-      updatedOrgs.find(o => o.id === org.id) ?? org,
-      updatedLocations.filter(loc => org.locations.includes(loc.id)),
-      buildings,
-      updatedLocations,
-      locationTemplates,
-      phase,
-      config
-    );
-
-    if (expandResult.newLocation) {
-      newLocations.push(expandResult.newLocation);
-      updatedLocations = [...updatedLocations, expandResult.newLocation];
-      // Update the org in our list
-      updatedOrgs = updatedOrgs.map(o =>
-        o.id === org.id ? expandResult.org : o
+    // 3. Try to expand to office if profitable and has storage (corporations only)
+    if (org.tags.includes('corporation')) {
+      const expandResult = tryExpandToOffice(
+        updatedOrgs.find(o => o.id === org.id) ?? org,
+        updatedLocations.filter(loc => org.locations.includes(loc.id)),
+        buildings,
+        updatedLocations,
+        locationTemplates,
+        phase,
+        config
       );
+
+      if (expandResult.newLocation) {
+        newLocations.push(expandResult.newLocation);
+        updatedLocations = [...updatedLocations, expandResult.newLocation];
+        // Update the org in our list
+        updatedOrgs = updatedOrgs.map(o =>
+          o.id === org.id ? expandResult.org : o
+        );
+      }
+
+      // 4. Try to expand to prototype factory if very wealthy and has valuable_data production
+      const prototypeExpandResult = tryExpandToPrototypeFactory(
+        updatedOrgs.find(o => o.id === org.id) ?? org,
+        updatedLocations.filter(loc => org.locations.includes(loc.id)),
+        buildings,
+        updatedLocations,
+        locationTemplates,
+        phase,
+        config
+      );
+
+      if (prototypeExpandResult.newLocation) {
+        newLocations.push(prototypeExpandResult.newLocation);
+        updatedLocations = [...updatedLocations, prototypeExpandResult.newLocation];
+        // Update the org in our list
+        updatedOrgs = updatedOrgs.map(o =>
+          o.id === org.id ? prototypeExpandResult.org : o
+        );
+      }
     }
   }
 
@@ -143,6 +187,187 @@ export function processOrgBehaviors(
     locations: updatedLocations,
     newLocations,
   };
+}
+
+/**
+ * Try to transfer input goods internally within the org
+ * If a location needs input goods for production, transfer from other org-owned locations
+ */
+function tryTransferInputGoods(
+  org: Organization,
+  orgLocations: Location[],
+  allLocations: Location[],
+  locationTemplates: Record<string, LocationTemplate>,
+  economyConfig: EconomyConfig,
+  phase: number
+): { locations: Location[] } {
+  let updatedLocations = [...allLocations];
+
+  // Find locations that have production configs with inputGoods
+  for (const location of orgLocations) {
+    const template = locationTemplates[location.template];
+    if (!template?.balance?.production) continue;
+
+    for (const productionConfig of template.balance.production) {
+      if (!productionConfig.inputGoods) continue;
+
+      // This location needs input goods - check each one
+      for (const [inputGood, requiredAmount] of Object.entries(productionConfig.inputGoods)) {
+        const currentAmount = location.inventory[inputGood] ?? 0;
+
+        // If we already have enough, skip
+        if (currentAmount >= requiredAmount) continue;
+
+        const needed = requiredAmount - currentAmount;
+
+        // Find other org-owned locations that have this good
+        const sourceLocations = orgLocations.filter(loc =>
+          loc.id !== location.id && (loc.inventory[inputGood] ?? 0) > 0
+        );
+
+        if (sourceLocations.length === 0) {
+          ActivityLog.info(
+            phase,
+            'transfer',
+            `needs ${needed} ${inputGood} for ${productionConfig.good} production, but no org locations have stock`,
+            org.id,
+            org.name
+          );
+          continue;
+        }
+
+        // Transfer from the location with the most stock
+        const sourceLocation = sourceLocations.reduce((best, loc) =>
+          (loc.inventory[inputGood] ?? 0) > (best.inventory[inputGood] ?? 0) ? loc : best
+        );
+
+        const availableAmount = sourceLocation.inventory[inputGood] ?? 0;
+        const transferAmount = Math.min(needed, availableAmount);
+
+        // Perform internal transfer (no credits exchanged)
+        const goodsSizes: GoodsSizes = {
+          goods: economyConfig.goods,
+          defaultGoodsSize: economyConfig.defaultGoodsSize,
+        };
+
+        const transferResult = transferInventory(
+          sourceLocation,
+          location,
+          inputGood,
+          transferAmount,
+          goodsSizes
+        );
+
+        // Update locations in our list
+        updatedLocations = updatedLocations.map(loc => {
+          if (loc.id === sourceLocation.id) return transferResult.from;
+          if (loc.id === location.id) return transferResult.to;
+          return loc;
+        });
+
+        ActivityLog.info(
+          phase,
+          'transfer',
+          `transferred ${transferAmount} ${inputGood} from ${sourceLocation.name} to ${location.name} for ${productionConfig.good} production`,
+          org.id,
+          org.name
+        );
+      }
+    }
+  }
+
+  return { locations: updatedLocations };
+}
+
+/**
+ * Try to sell valuable_data for revenue (temporary B2B market simulation)
+ * Triggered weekly when org has valuable_data in inventory
+ * Limits sales to 5 units/week to ensure surplus for prototype production
+ */
+function trySelllValuableData(
+  org: Organization,
+  orgLocations: Location[],
+  allLocations: Location[],
+  allOrgs: Organization[],
+  phase: number
+): { locations: Location[]; orgs: Organization[] } {
+  // Only process weekly (phase 56, 112, 168, etc.)
+  if (phase % 56 !== 0 || phase === 0) {
+    return { locations: allLocations, orgs: allOrgs };
+  }
+
+  // Check if org has any valuable_data across all locations
+  const totalValuableData = orgLocations.reduce(
+    (sum, loc) => sum + (loc.inventory['valuable_data'] ?? 0),
+    0
+  );
+
+  // Reserve 100 valuable_data for prototype production (don't sell strategic reserves)
+  const reserveAmount = 100;
+  const availableForSale = Math.max(0, totalValuableData - reserveAmount);
+
+  if (availableForSale === 0) {
+    return { locations: allLocations, orgs: allOrgs };
+  }
+
+  // Sell up to 5 units per week at 200 credits each
+  // (temporary B2B market - models selling research/consulting services)
+  const unitsToSell = Math.min(5, availableForSale);
+  const pricePerUnit = 200;
+  const totalRevenue = unitsToSell * pricePerUnit;
+
+  // Find location(s) with valuable_data and deduct from inventory
+  let remainingToSell = unitsToSell;
+  let updatedLocations = [...allLocations];
+
+  for (const location of orgLocations) {
+    if (remainingToSell === 0) break;
+
+    const availableData = location.inventory['valuable_data'] ?? 0;
+    if (availableData === 0) continue;
+
+    const soldFromThisLocation = Math.min(remainingToSell, availableData);
+
+    // Remove sold data from this location
+    const updatedLocation = {
+      ...location,
+      inventory: {
+        ...location.inventory,
+        valuable_data: availableData - soldFromThisLocation
+      }
+    };
+
+    updatedLocations = updatedLocations.map(loc =>
+      loc.id === location.id ? updatedLocation : loc
+    );
+
+    remainingToSell -= soldFromThisLocation;
+  }
+
+  // Add revenue to org wallet
+  const updatedOrg: Organization = {
+    ...org,
+    wallet: { ...org.wallet, credits: org.wallet.credits + totalRevenue },
+  };
+
+  const updatedOrgs = allOrgs.map(o =>
+    o.id === org.id ? updatedOrg : o
+  );
+
+  ActivityLog.info(
+    phase,
+    'revenue',
+    `sold ${unitsToSell} valuable_data for ${totalRevenue} credits (data services revenue)`,
+    org.id,
+    org.name
+  );
+
+  // Track B2B sale in metrics
+  for (let i = 0; i < unitsToSell; i++) {
+    trackB2BSale('valuable_data');
+  }
+
+  return { locations: updatedLocations, orgs: updatedOrgs };
 }
 
 /**
@@ -414,6 +639,116 @@ function tryExpandToOffice(
     phase,
     'expansion',
     `opened ${locationName} (${templateName}) for ${openingCost} credits - needs data_storage to begin R&D`,
+    org.id,
+    org.name
+  );
+
+  // Track business opening in metrics
+  trackBusinessOpened(locationName);
+
+  return { org: updatedOrg, newLocation };
+}
+
+/**
+ * Try to expand org by opening a prototype factory (second-stage expansion)
+ * Triggered when org is very wealthy, already has office/lab producing valuable_data
+ */
+function tryExpandToPrototypeFactory(
+  org: Organization,
+  orgLocations: Location[],
+  buildings: Building[],
+  allLocations: Location[],
+  locationTemplates: Record<string, LocationTemplate>,
+  phase: number,
+  config: OrgBehaviorConfig
+): { org: Organization; newLocation?: Location } {
+  // Check if org already has a prototype factory
+  const hasPrototypeFactory = orgLocations.some(
+    loc => loc.template === 'prototype_factory'
+  );
+
+  if (hasPrototypeFactory) {
+    return { org };
+  }
+
+  // Check if org has office or laboratory (produces valuable_data)
+  const hasOffice = orgLocations.some(
+    loc => loc.tags.includes('office') || loc.tags.includes('laboratory')
+  );
+
+  if (!hasOffice) {
+    return { org };
+  }
+
+  // Check if org has valuable_data in inventory (proves production is working)
+  const totalValuableData = orgLocations.reduce(
+    (sum, loc) => sum + (loc.inventory['valuable_data'] ?? 0),
+    0
+  );
+
+  if (totalValuableData < 100) {
+    // Need at least 1 production cycle's worth of input
+    return { org };
+  }
+
+  // Get prototype factory template
+  const template = locationTemplates['prototype_factory'];
+
+  if (!template) {
+    return { org };
+  }
+
+  const openingCost = template.balance?.openingCost ?? 1500;
+
+  // Check if org is wealthy enough (opening cost + small buffer)
+  if (org.wallet.credits < openingCost + 500) {
+    return { org };
+  }
+
+  // Very low random chance to expand (rare, expensive end-game content)
+  // 0.01 = 1% chance per phase when eligible
+  if (Math.random() > 0.01) {
+    return { org };
+  }
+
+  // Find a building for the prototype factory
+  const buildingPlacement = findBuildingForLocation(
+    buildings,
+    template.tags ?? [],
+    allLocations
+  );
+
+  if (!buildingPlacement) {
+    return { org };
+  }
+
+  // Create the location
+  const locationId = getNextLocationId();
+  const locationName = 'Prototyping Facility';
+
+  const newLocation = createLocation(
+    locationId,
+    locationName,
+    template,
+    org.id,
+    org.name,
+    phase,
+    buildingPlacement
+  );
+
+  // Link location to org
+  const updatedOrg = addLocationToOrg(
+    {
+      ...org,
+      wallet: { ...org.wallet, credits: org.wallet.credits - openingCost },
+    },
+    locationId
+  );
+
+  ActivityLog.info(
+    phase,
+    'expansion',
+    `opened ${locationName} for ${openingCost} credits - will consume valuable_data to produce high-tech prototypes`,
     org.id,
     org.name
   );

@@ -58,6 +58,15 @@
         "retailTemplate": null
       }
     },
+    "high_tech_prototypes": {
+      "size": 1.0,
+      "wholesalePrice": 10000,
+      "vertical": {
+        "demandType": "business",
+        "productionTemplate": "prototype_factory",
+        "retailTemplate": null
+      }
+    },
     "small_arms": { "size": 1, "retailPrice": 100, "wholesalePrice": 70 },
     "heavy_weapons": { "size": 2, "retailPrice": 500, "wholesalePrice": 350 },
     "narcotics": { "size": 0.1, "retailPrice": 50, "wholesalePrice": 30 },

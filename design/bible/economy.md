@@ -61,6 +61,32 @@ Server Factory → Corporation (buys data_storage)
 5. At 80% capacity → org buys more storage
 6. Cycle continues...
 
+### High-Tech Prototypes Vertical (End-Game B2B)
+```
+Prototype Factory → High-Tech Prototypes
+       (ultra-rare, ultra-valuable)
+```
+
+**End-game content with extreme scarcity:**
+- Opening cost: 5000 credits (12.5x more expensive than standard factories)
+- Production cycle: 448 phases (2 months at 8 phases/day)
+- Output: 1 prototype per cycle with 10 professional-tier workers
+- Wholesale price: 10000 credits per prototype
+- **Does not spawn at city generation** - only built by wealthy entrepreneurs/orgs later in simulation
+
+**Why it's rare:**
+1. Extremely expensive to build (entrepreneurship threshold: 500 credits, facility: 5000 credits)
+2. High operating costs (10 professional salaries)
+3. Very slow production (2 months per prototype)
+4. No demand signal (demandCondition not implemented yet)
+5. Only ultra-wealthy orgs can afford to open and sustain operations
+
+**Future enhancements:**
+- Consume 100+ valuable_data per prototype (closes knowledge economy loop)
+- Secure vault storage requirements
+- Target for heists/corporate espionage
+- Black market trading
+
 ### The Pattern
 
 Each vertical follows the same structure:

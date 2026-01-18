@@ -5,16 +5,16 @@
 
 import type { SimulationConfig } from '../config/ConfigLoader';
 
-export type PhaseOfDay = 'dawn' | 'day' | 'dusk' | 'night';
+export type PhaseOfDay = 'dawn' | 'morning' | 'midday' | 'afternoon' | 'dusk' | 'evening' | 'night' | 'midnight';
 
 export interface TimeState {
   currentPhase: number; // Total phases elapsed
-  phaseOfDay: PhaseOfDay; // dawn, day, dusk, night
+  phaseOfDay: PhaseOfDay; // dawn, morning, midday, afternoon, dusk, evening, night, midnight
   day: number; // Current day (1-based)
   week: number; // Current week (1-based)
 }
 
-const PHASE_NAMES: PhaseOfDay[] = ['dawn', 'day', 'dusk', 'night'];
+const PHASE_NAMES: PhaseOfDay[] = ['dawn', 'morning', 'midday', 'afternoon', 'dusk', 'evening', 'night', 'midnight'];
 
 /**
  * Create initial time state

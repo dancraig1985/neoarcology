@@ -1,9 +1,9 @@
 {
   "time": {
-    "phasesPerDay": 4,
-    "phasesPerWeek": 28,
-    "phasesPerMonth": 112,
-    "phasesPerYear": 1344
+    "phasesPerDay": 8,
+    "phasesPerWeek": 56,
+    "phasesPerMonth": 224,
+    "phasesPerYear": 2688
   },
   "population": {
     "target": 200,

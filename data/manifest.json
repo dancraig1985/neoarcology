@@ -1,5 +1,5 @@
 {
-  "generated": "2026-01-16T10:34:15.121Z",
+  "generated": "2026-01-17T11:54:01.625Z",
   "templates": {
     "orgs": [
       "corporation.json",
@@ -15,6 +15,7 @@
       "luxury_boutique.json",
       "luxury_factory.json",
       "office.json",
+      "prototype_factory.json",
       "provisions_factory.json",
       "pub.json",
       "public_space.json",

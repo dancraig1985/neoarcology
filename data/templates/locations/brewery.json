@@ -22,7 +22,7 @@
       {
         "good": "alcohol",
         "amountPerEmployee": 1,
-        "phasesPerCycle": 2
+        "phasesPerCycle": 4
       }
     ]
   },

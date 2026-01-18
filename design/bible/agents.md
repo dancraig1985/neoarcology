@@ -16,7 +16,7 @@ Agents get hungrier over time. When hunger reaches a threshold, they need to eat
 ### Fatigue
 Agents get tired over time. Unlike hunger, fatigue doesn't kill - it forces rest.
 
-- **Fatigue accumulates** continuously (~3.57% per phase, 100% per week)
+- **Fatigue accumulates** continuously (~1.785% per phase, 100% per week)
 - **Resting resets fatigue** based on where the agent rests (see Rest Quality below)
 - **At 100% fatigue** the agent must rest wherever they are (worst outcome)
 
@@ -30,7 +30,7 @@ Agents **proactively seek rest** before hitting 100%:
 ### Leisure
 Agents accumulate a leisure need over time. Unlike hunger, low leisure doesn't kill - it's a quality of life metric.
 
-- **Leisure need accumulates** at 0.5/phase
+- **Leisure need accumulates** at 0.25/phase
 - **At 50%+**, agents seek entertainment (pub or park)
 - **At a pub**: Agent buys alcohol (if available), gets full satisfaction
 - **At a park**: Free but slower satisfaction

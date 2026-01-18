@@ -13,8 +13,8 @@
   "balance": {
     "openingCost": 600,
     "operatingCost": 0,
-    "employeeSlots": 8,
-    "salaryTier": "professional",
+    "employeeSlots": 3,
+    "salaryTier": "skilled",
     "startingInventory": 0,
     "inventoryCapacity": 50,
     "inventoryGood": "valuable_data",
@@ -22,7 +22,7 @@
       {
         "good": "valuable_data",
         "amountPerEmployee": 1,
-        "phasesPerCycle": 8,
+        "phasesPerCycle": 16,
         "requiresStorage": true
       }
     ]

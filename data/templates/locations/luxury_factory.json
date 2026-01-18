@@ -22,7 +22,7 @@
       {
         "good": "luxury_goods",
         "amountPerEmployee": 1,
-        "phasesPerCycle": 8
+        "phasesPerCycle": 16
       }
     ]
   },

@@ -208,6 +208,32 @@ export function processFactoryProduction(
       }
     }
 
+    // Check if production requires input goods (e.g., valuable_data for prototypes)
+    if (config.inputGoods) {
+      let missingInputs = false;
+      const inputsList: string[] = [];
+
+      for (const [inputGood, requiredAmount] of Object.entries(config.inputGoods)) {
+        const currentAmount = updatedLocation.inventory[inputGood] ?? 0;
+        inputsList.push(`${inputGood}: ${currentAmount}/${requiredAmount}`);
+
+        if (currentAmount < requiredAmount) {
+          missingInputs = true;
+        }
+      }
+
+      if (missingInputs) {
+        ActivityLog.warning(
+          phase,
+          'production',
+          `cannot produce ${config.good} - insufficient input goods (${inputsList.join(', ')})`,
+          location.id,
+          location.name
+        );
+        continue;
+      }
+    }
+
     const capacity = getAvailableCapacity(updatedLocation, goodsSizes);
 
     if (capacity <= 0) {
@@ -237,15 +263,39 @@ export function processFactoryProduction(
     updatedLocation = holder as Location;
 
     if (added > 0) {
+      // Consume input goods after successful production
+      if (config.inputGoods) {
+        for (const [inputGood, requiredAmount] of Object.entries(config.inputGoods)) {
+          const currentAmount = updatedLocation.inventory[inputGood] ?? 0;
+          updatedLocation = {
+            ...updatedLocation,
+            inventory: {
+              ...updatedLocation.inventory,
+              [inputGood]: Math.max(0, currentAmount - requiredAmount)
+            }
+          };
+        }
+      }
+
       const cycleDesc = config.phasesPerCycle === 1 ? '' :
                         config.phasesPerCycle === 4 ? ' (daily)' :
                         config.phasesPerCycle === 28 ? ' (weekly)' :
                         ` (every ${config.phasesPerCycle} phases)`;
       const spaceUsed = getInventorySpaceUsed(updatedLocation, goodsSizes);
+
+      // Build input consumption message if applicable
+      let inputMsg = '';
+      if (config.inputGoods) {
+        const consumed = Object.entries(config.inputGoods)
+          .map(([good, amount]) => `${amount} ${good}`)
+          .join(', ');
+        inputMsg = `, consumed ${consumed}`;
+      }
+
       ActivityLog.info(
         phase,
         'production',
-        `${presentEmployeeCount} workers produced ${added} ${config.good}${cycleDesc} (space: ${spaceUsed.toFixed(1)}/${updatedLocation.inventoryCapacity})`,
+        `${presentEmployeeCount} workers produced ${added} ${config.good}${cycleDesc}${inputMsg} (space: ${spaceUsed.toFixed(1)}/${updatedLocation.inventoryCapacity})`,
         location.id,
         location.name
       );

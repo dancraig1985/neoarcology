@@ -22,7 +22,7 @@
       {
         "good": "data_storage",
         "amountPerEmployee": 1,
-        "phasesPerCycle": 4
+        "phasesPerCycle": 8
       }
     ]
   },

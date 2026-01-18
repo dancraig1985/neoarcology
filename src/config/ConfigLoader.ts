@@ -258,6 +258,7 @@ export interface ProductionConfig {
   amountPerEmployee: number; // How much each worker produces per cycle
   phasesPerCycle: number;    // Production interval: 1 = every phase, 4 = daily, 28 = weekly
   requiresStorage?: boolean; // If true, org needs data_storage in inventory to produce (for valuable_data)
+  inputGoods?: Record<string, number>; // Goods consumed per production cycle (e.g., {"valuable_data": 100})
 }
 
 /**

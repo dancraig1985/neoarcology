@@ -1,12 +1,12 @@
 {
   "hunger": {
-    "perPhase": 0.89,
+    "perPhase": 0.445,
     "threshold": 25,
     "max": 100,
     "provisionsPerMeal": 1
   },
   "fatigue": {
-    "perPhase": 3.57,
+    "perPhase": 1.785,
     "seekRestThreshold": 70,
     "urgentRestThreshold": 90,
     "forceRestThreshold": 100,
@@ -15,11 +15,11 @@
     "forcedRestReset": 60
   },
   "leisure": {
-    "perPhase": 0.5,
+    "perPhase": 0.25,
     "threshold": 50,
     "max": 100,
     "pubSatisfaction": 40,
-    "parkSatisfactionPerPhase": 2,
+    "parkSatisfactionPerPhase": 1,
     "luxurySatisfaction": 70
   },
   "housing": {

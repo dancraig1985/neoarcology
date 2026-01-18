@@ -76,7 +76,7 @@ if (values.quiet) {
 // Configuration
 const totalTicks = parseInt(values.ticks ?? '1000', 10);
 const seed = values.seed ? parseInt(values.seed, 10) : undefined;
-const phasesPerWeek = 28;
+const phasesPerWeek = 56;
 
 /**
  * Main simulation runner

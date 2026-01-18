@@ -6,7 +6,7 @@ A cyberpunk city simulation that runs autonomously.
 
 - **Stack**: TypeScript, Pixi.js, Zustand, Electron
 - **Architecture**: Simulation-first (world runs autonomously)
-- **Time Units**: Phase → Day (4) → Week (28) → Month (112) → Year (1344)
+- **Time Units**: Phase → Day (8) → Week (56) → Month (224) → Year (2688)
 
 ## Core Concepts
 

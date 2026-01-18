@@ -1,0 +1,36 @@
+{
+  "id": "prototype_factory",
+  "name": "Prototyping Facility",
+  "description": "A facility that produces high-tech prototypes",
+  "tags": ["wholesale", "production", "industrial"],
+  "spawnConstraints": {
+    "allowedZones": ["industrial"],
+    "floorRange": [0, 5],
+    "preferGroundFloor": true,
+    "minDistanceFromCenter": 8,
+    "maxPerCity": 10
+  },
+  "balance": {
+    "openingCost": 1500,
+    "operatingCost": 0,
+    "employeeSlots": 10,
+    "salaryTier": "professional",
+    "startingInventory": 0,
+    "inventoryCapacity": 20,
+    "production": [
+      {
+        "good": "high_tech_prototypes",
+        "amountPerEmployee": 0.1,
+        "phasesPerCycle": 448,
+        "inputGoods": {
+          "valuable_data": 100
+        }
+      }
+    ]
+  },
+  "generation": {
+    "count": { "min": 0, "max": 0 },
+    "spawnAtStart": false,
+    "ownerOrgTemplate": "corporation"
+  }
+}
