@@ -1,0 +1,26 @@
+{
+  "id": "warehouse",
+  "name": "Storage Warehouse",
+  "description": "A large facility for storing bulk goods and inventory",
+  "tags": ["wholesale", "storage", "industrial", "production"],
+  "spawnConstraints": {
+    "allowedZones": ["industrial"],
+    "floorRange": [0, 3],
+    "preferGroundFloor": true,
+    "minDistanceFromCenter": 5,
+    "maxPerCity": 15
+  },
+  "balance": {
+    "openingCost": 800,
+    "operatingCost": 0,
+    "employeeSlots": 2,
+    "salaryTier": "unskilled",
+    "startingInventory": 0,
+    "inventoryCapacity": 1000
+  },
+  "generation": {
+    "count": { "min": 2, "max": 4 },
+    "spawnAtStart": true,
+    "ownerOrgTemplate": "corporation"
+  }
+}

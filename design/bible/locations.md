@@ -30,6 +30,29 @@ Locations are classified by **tags**, not rigid types:
 Tagged with `wholesale` and `production`. These create goods:
 - `provisions_factory` - Produces food (provisions)
 - `brewery` - Produces alcohol
+- `server_factory` - Produces data_storage (B2B infrastructure)
+- `luxury_factory` - Produces luxury_goods
+- `office` - Produces valuable_data (knowledge economy)
+- `laboratory` - Produces valuable_data (faster than offices)
+- `prototype_factory` - Produces high_tech_prototypes (consumes valuable_data)
+
+### Storage Locations
+Tagged with `wholesale` and `storage`. These store bulk goods for distribution:
+- `warehouse` - Large-capacity storage for tangible goods (1000+ capacity)
+  - Owned by corporations
+  - Receives surplus from factories when they exceed 80% capacity
+  - Supplies wholesale goods to retail shops
+  - 5-10x larger inventory than factories
+  - Stores provisions, alcohol, luxury_goods, high_tech_prototypes, data_storage
+  - Does NOT store valuable_data (intangible digital asset)
+
+**Warehouse Flow:**
+```
+Factory produces goods → Factory reaches 80% capacity
+  → Org transfers surplus to warehouse (internal, no credits)
+    → Warehouse holds bulk inventory
+      → Retail shop restocks from warehouse (pays wholesale price)
+```
 
 ### Retail Locations
 Tagged with `retail`. These sell to consumers:

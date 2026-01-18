@@ -116,6 +116,17 @@ export function processOrgBehaviors(
     );
     updatedLocations = transferResult.locations;
 
+    // 0.5. Try to transfer surplus goods from factories to warehouses
+    const warehouseTransferResult = tryTransferToWarehouse(
+      org,
+      updatedLocations.filter(loc => org.locations.includes(loc.id)),
+      updatedLocations,
+      locationTemplates,
+      economyConfig,
+      phase
+    );
+    updatedLocations = warehouseTransferResult.locations;
+
     // 1. Try to sell valuable_data for revenue (temporary B2B market)
     const dataRevenueResult = trySelllValuableData(
       org,
@@ -269,6 +280,140 @@ function tryTransferInputGoods(
           phase,
           'transfer',
           `transferred ${transferAmount} ${inputGood} from ${sourceLocation.name} to ${location.name} for ${productionConfig.good} production`,
+          org.id,
+          org.name
+        );
+      }
+    }
+  }
+
+  return { locations: updatedLocations };
+}
+
+/**
+ * Try to transfer surplus goods from factories to warehouses
+ * Triggered when factory inventory exceeds 80% capacity
+ * Moves tangible goods to warehouse storage for later wholesale distribution
+ */
+function tryTransferToWarehouse(
+  org: Organization,
+  orgLocations: Location[],
+  allLocations: Location[],
+  locationTemplates: Record<string, LocationTemplate>,
+  economyConfig: EconomyConfig,
+  phase: number
+): { locations: Location[] } {
+  let updatedLocations = [...allLocations];
+
+  // Find org-owned warehouses (storage facilities)
+  const warehouses = orgLocations.filter(loc => loc.tags.includes('storage'));
+
+  // Skip if org has no warehouses
+  if (warehouses.length === 0) {
+    return { locations: updatedLocations };
+  }
+
+  // Find production facilities (factories) with high inventory
+  const productionFacilities = orgLocations.filter(loc => {
+    const template = locationTemplates[loc.template];
+    if (!template?.balance?.production) return false;
+
+    // Check if factory inventory is >80% capacity
+    const capacity = template.balance.inventoryCapacity ?? 100;
+    const currentInventory = Object.values(loc.inventory).reduce((sum, amount) => sum + amount, 0);
+    const capacityUsedPercent = (currentInventory / capacity) * 100;
+
+    return capacityUsedPercent > 80;
+  });
+
+  // No transfers needed
+  if (productionFacilities.length === 0) {
+    return { locations: updatedLocations };
+  }
+
+  // For each factory with high inventory, transfer surplus to warehouse
+  for (const factory of productionFacilities) {
+    const template = locationTemplates[factory.template];
+    const capacity = template?.balance?.inventoryCapacity ?? 100;
+
+    // Find warehouse with most available space
+    const warehouse = warehouses.reduce((best, wh) => {
+      const whTemplate = locationTemplates[wh.template];
+      const whCapacity = whTemplate?.balance?.inventoryCapacity ?? 1000;
+      const whUsed = Object.values(wh.inventory).reduce((sum, amount) => sum + amount, 0);
+      const whAvailable = whCapacity - whUsed;
+
+      const bestTemplate = locationTemplates[best.template];
+      const bestCapacity = bestTemplate?.balance?.inventoryCapacity ?? 1000;
+      const bestUsed = Object.values(best.inventory).reduce((sum, amount) => sum + amount, 0);
+      const bestAvailable = bestCapacity - bestUsed;
+
+      return whAvailable > bestAvailable ? wh : best;
+    });
+
+    // Check if warehouse has space
+    const whTemplate = locationTemplates[warehouse.template];
+    const whCapacity = whTemplate?.balance?.inventoryCapacity ?? 1000;
+    const whUsed = Object.values(warehouse.inventory).reduce((sum, amount) => sum + amount, 0);
+    const whAvailable = whCapacity - whUsed;
+
+    if (whAvailable === 0) {
+      ActivityLog.warning(
+        phase,
+        'transfer',
+        `factory ${factory.name} needs to transfer surplus but warehouse ${warehouse.name} is full`,
+        org.id,
+        org.name
+      );
+      continue;
+    }
+
+    // Identify goods to transfer (tangible goods only, preserve valuable_data for internal use)
+    const tangibleGoods = ['provisions', 'alcohol', 'luxury_goods', 'high_tech_prototypes', 'data_storage'];
+    const goodsToTransfer: Array<{ good: string; amount: number }> = [];
+
+    for (const good of tangibleGoods) {
+      const amount = factory.inventory[good] ?? 0;
+      if (amount > 0) {
+        // Transfer up to 50% of factory stock (leave some buffer for immediate sales)
+        const transferAmount = Math.floor(amount * 0.5);
+        if (transferAmount > 0) {
+          goodsToTransfer.push({ good, amount: Math.min(transferAmount, whAvailable) });
+        }
+      }
+    }
+
+    if (goodsToTransfer.length === 0) {
+      continue;
+    }
+
+    // Perform transfers
+    const goodsSizes: GoodsSizes = {
+      goods: economyConfig.goods,
+      defaultGoodsSize: economyConfig.defaultGoodsSize,
+    };
+
+    for (const { good, amount } of goodsToTransfer) {
+      const transferResult = transferInventory(
+        updatedLocations.find(loc => loc.id === factory.id) ?? factory,
+        updatedLocations.find(loc => loc.id === warehouse.id) ?? warehouse,
+        good,
+        amount,
+        goodsSizes
+      );
+
+      if (transferResult.transferred > 0) {
+        // Update locations in our list
+        updatedLocations = updatedLocations.map(loc => {
+          if (loc.id === factory.id) return transferResult.from as Location;
+          if (loc.id === warehouse.id) return transferResult.to as Location;
+          return loc;
+        });
+
+        ActivityLog.info(
+          phase,
+          'transfer',
+          `transferred ${transferResult.transferred} ${good} from ${factory.name} to ${warehouse.name} (factory overflow management)`,
           org.id,
           org.name
         );

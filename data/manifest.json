@@ -1,5 +1,5 @@
 {
-  "generated": "2026-01-17T11:54:01.625Z",
+  "generated": "2026-01-18T09:31:26.138Z",
   "templates": {
     "orgs": [
       "corporation.json",
@@ -22,7 +22,8 @@
       "restaurant.json",
       "retail_shop.json",
       "server_factory.json",
-      "shelter.json"
+      "shelter.json",
+      "warehouse.json"
     ],
     "buildings": [
       "arcology.json",
