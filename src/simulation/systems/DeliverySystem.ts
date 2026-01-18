@@ -1,0 +1,235 @@
+/**
+ * DeliverySystem - Manages delivery requests and logistics operations
+ * PLAN-028: Replaces instant goods teleportation with realistic trucking
+ */
+
+import type { DeliveryRequest, Agent, Vehicle, Location, Organization } from '../../types';
+import { ActivityLog } from '../ActivityLog';
+
+let deliveryIdCounter = 0;
+
+/**
+ * Create a new delivery request
+ */
+export function createDeliveryRequest(
+  from: Location,
+  to: Location,
+  goods: Record<string, number>,
+  payment: number,
+  urgency: 'low' | 'medium' | 'high',
+  phase: number
+): DeliveryRequest {
+  const id = `delivery_${deliveryIdCounter++}`;
+
+  ActivityLog.info(
+    phase,
+    'delivery',
+    `created delivery request: ${Object.entries(goods).map(([g, amt]) => `${amt} ${g}`).join(', ')} from ${from.name} to ${to.name} (payment: ${payment} credits)`,
+    from.owner ?? 'system',
+    from.name
+  );
+
+  return {
+    id,
+    created: phase,
+    from: from.id,
+    to: to.id,
+    goods,
+    payment,
+    urgency,
+    status: 'pending',
+  };
+}
+
+/**
+ * Assign a delivery request to a driver and vehicle
+ */
+export function assignDeliveryToDriver(
+  request: DeliveryRequest,
+  driver: Agent,
+  vehicle: Vehicle,
+  phase: number
+): DeliveryRequest {
+  ActivityLog.info(
+    phase,
+    'delivery',
+    `assigned to ${driver.name} with ${vehicle.name}`,
+    driver.id,
+    driver.name
+  );
+
+  return {
+    ...request,
+    status: 'assigned',
+    assignedDriver: driver.id,
+    assignedVehicle: vehicle.id,
+    assignedAt: phase,
+  };
+}
+
+/**
+ * Mark delivery as in transit (driver picked up goods and is traveling)
+ */
+export function startDelivery(
+  request: DeliveryRequest,
+  phase: number
+): DeliveryRequest {
+  return {
+    ...request,
+    status: 'in_transit',
+  };
+}
+
+/**
+ * Complete a delivery (goods delivered successfully)
+ */
+export function completeDelivery(
+  request: DeliveryRequest,
+  logisticsCompany: Organization,
+  phase: number
+): { request: DeliveryRequest; company: Organization } {
+  if (!request.assignedDriver) {
+    return { request, company: logisticsCompany };
+  }
+
+  ActivityLog.info(
+    phase,
+    'delivery',
+    `completed delivery (earned ${request.payment} credits)`,
+    request.assignedDriver,
+    'Driver'
+  );
+
+  // Pay logistics company
+  const updatedCompany = {
+    ...logisticsCompany,
+    wallet: {
+      ...logisticsCompany.wallet,
+      credits: logisticsCompany.wallet.credits + request.payment,
+    },
+  };
+
+  return {
+    request: {
+      ...request,
+      status: 'delivered',
+      deliveredAt: phase,
+    },
+    company: updatedCompany,
+  };
+}
+
+/**
+ * Mark delivery as failed (driver couldn't complete it)
+ */
+export function failDelivery(
+  request: DeliveryRequest,
+  reason: string,
+  phase: number
+): DeliveryRequest {
+  if (request.assignedDriver) {
+    ActivityLog.warning(
+      phase,
+      'delivery',
+      `failed: ${reason}`,
+      request.assignedDriver,
+      'Driver'
+    );
+  }
+
+  return {
+    ...request,
+    status: 'failed',
+    deliveredAt: phase,
+  };
+}
+
+/**
+ * Find available logistics companies (have drivers and vehicles)
+ */
+export function getAvailableLogisticsCompanies(
+  orgs: Organization[],
+  agents: Agent[],
+  vehicles: Vehicle[]
+): Organization[] {
+  return orgs.filter((org) => {
+    // Must be a logistics company
+    if (!org.tags.includes('logistics')) return false;
+
+    // Must have at least one available driver
+    const drivers = agents.filter(
+      (a) => a.employer === org.id && a.status === 'employed' && !a.currentTask
+    );
+    if (drivers.length === 0) return false;
+
+    // Must have at least one available vehicle
+    const availableVehicles = vehicles.filter(
+      (v) => v.owner === org.id && !v.operator
+    );
+    if (availableVehicles.length === 0) return false;
+
+    return true;
+  });
+}
+
+/**
+ * Find an available driver from a logistics company
+ */
+export function findAvailableDriver(
+  company: Organization,
+  agents: Agent[]
+): Agent | null {
+  const drivers = agents.filter(
+    (a) =>
+      a.employer === company.id &&
+      a.status === 'employed' &&
+      !a.currentTask // Not currently doing anything
+  );
+
+  return drivers.length > 0 ? drivers[0]! : null;
+}
+
+/**
+ * Find an available vehicle from a logistics company
+ */
+export function findAvailableVehicle(
+  company: Organization,
+  vehicles: Vehicle[]
+): Vehicle | null {
+  const availableVehicles = vehicles.filter(
+    (v) => v.owner === company.id && !v.operator
+  );
+
+  return availableVehicles.length > 0 ? availableVehicles[0]! : null;
+}
+
+/**
+ * Calculate delivery payment based on distance and goods quantity
+ */
+export function calculateDeliveryPayment(
+  goods: Record<string, number>,
+  distance: number
+): number {
+  const totalGoods = Object.values(goods).reduce((sum, amt) => sum + amt, 0);
+  // Base rate: 1 credit per good + 0.5 credits per distance unit
+  const payment = totalGoods * 1 + distance * 0.5;
+  return Math.max(10, Math.floor(payment)); // Minimum 10 credits
+}
+
+/**
+ * Remove completed/failed deliveries older than a certain age
+ */
+export function cleanupOldDeliveries(
+  requests: DeliveryRequest[],
+  currentPhase: number,
+  maxAge: number = 560 // Keep for ~10 weeks at 8 phases/day
+): DeliveryRequest[] {
+  return requests.filter((req) => {
+    if (req.status === 'pending' || req.status === 'assigned' || req.status === 'in_transit') {
+      return true; // Keep active deliveries
+    }
+    // Remove completed/failed deliveries older than maxAge
+    const age = currentPhase - (req.deliveredAt ?? req.created);
+    return age < maxAge;
+  });
+}

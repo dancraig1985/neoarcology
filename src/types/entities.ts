@@ -92,10 +92,17 @@ export interface Agent extends Entity {
   // Personal finances
   wallet: Wallet;
 
-  // Physical location - agent is either at a location OR in transit
-  currentLocation?: LocationRef; // Where agent IS (undefined = in transit)
+  // Physical location - agent is either at a location OR in transit OR in a vehicle
+  currentLocation?: LocationRef; // Where agent IS (undefined = in transit or in vehicle)
 
-  // Travel state (only set while traveling)
+  // Vehicle state (when riding as driver or passenger)
+  inVehicle?: VehicleRef; // Set when agent is inside a vehicle
+  // When inVehicle is set:
+  // - Agent's location = vehicle's location (single source of truth)
+  // - Agent doesn't travel independently
+  // - Vehicle handles movement
+
+  // Travel state (only set while traveling on foot/transit, NOT when in vehicle)
   travelingFrom?: LocationRef; // Origin of current travel
   travelingTo?: LocationRef; // Destination
   travelMethod?: TravelMethod; // How they're traveling
@@ -114,7 +121,7 @@ export interface Agent extends Entity {
   personalGoals: PersonalGoal[];
 }
 
-export type TravelMethod = 'walk' | 'transit';
+export type TravelMethod = 'walk' | 'transit' | 'truck';
 
 /**
  * Agent Status
@@ -366,17 +373,31 @@ export interface MissionOutcome {
 }
 
 /**
- * Vehicle - MVP for logistics (cargo trucks)
- * Simplified from original design for PLAN-027
+ * Vehicle - Robust system for logistics and personal transport
+ * Vehicles travel between buildings (not locations)
+ * Agents board vehicles and travel with them
  */
 export interface Vehicle {
   id: string;
   name: string;
-  template: string;  // 'cargo_truck'
+  template: string;  // 'cargo_truck', 'motorcycle', 'sedan', 'aerial', etc.
   created: number;   // Phase when spawned
-  owner: OrgRef;     // Which org owns this vehicle
-  operator?: AgentRef;  // Who's currently driving (undefined = parked)
-  building: BuildingRef;  // Which building parking lot it's at
+  owner: OrgRef | AgentRef;  // Org (fleet) or agent (personal vehicle)
+
+  // Occupancy - who's inside the vehicle
+  operator?: AgentRef;  // Driver (undefined = parked/autonomous)
+  passengers: AgentRef[];  // Riders, guards, passengers
+
+  // Building-level location (vehicles operate at building level, not location level)
+  currentBuilding?: BuildingRef;  // Where parked (undefined = in transit between buildings)
+
+  // Travel state - vehicles travel like agents
+  travelingFromBuilding?: BuildingRef;
+  travelingToBuilding?: BuildingRef;
+  travelMethod?: string;  // Transport mode (truck, aerial, etc.)
+  travelPhasesRemaining?: number;  // Phases until arrival
+
+  // Cargo (for trucks/transport vehicles)
   cargo: Inventory;  // Goods being transported
   cargoCapacity: number;  // Max cargo space (in size units, not item count)
 }

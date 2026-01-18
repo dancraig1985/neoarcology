@@ -3,7 +3,7 @@
  * Maps executor names to executor functions
  */
 
-import type { Agent, Location, Organization, Building, AgentTask } from '../../types/entities';
+import type { Agent, Location, Organization, Building, AgentTask, Vehicle, DeliveryRequest } from '../../types/entities';
 import type {
   BehaviorDefinition,
   EconomyConfig,
@@ -20,6 +20,8 @@ export interface BehaviorContext {
   locations: Location[];
   orgs: Organization[];
   buildings: Building[];
+  vehicles?: Vehicle[];
+  deliveryRequests?: DeliveryRequest[];
   economyConfig: EconomyConfig;
   agentsConfig: AgentsConfig;
   transportConfig: TransportConfig;
@@ -37,6 +39,8 @@ export interface TaskResult {
   complete: boolean;
   newLocation?: Location;
   newOrg?: Organization;
+  vehicles?: Vehicle[];
+  deliveryRequests?: DeliveryRequest[];
 }
 
 /**

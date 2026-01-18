@@ -72,6 +72,21 @@
       }
     },
     {
+      "id": "delivering_goods",
+      "name": "Delivering Goods",
+      "priority": "normal",
+      "executor": "deliver_goods",
+      "conditions": {
+        "hasEmployment": true,
+        "atWorkplace": true,
+        "needsBelow": { "hunger": 50 }
+      },
+      "completionConditions": {
+        "needsAbove": { "hunger": 50 }
+      },
+      "params": {}
+    },
+    {
       "id": "working",
       "name": "Working",
       "priority": "normal",

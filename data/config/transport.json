@@ -41,6 +41,15 @@
         { "maxDistance": 999, "phases": 1 }
       ]
     },
+    "truck": {
+      "name": "Cargo Truck",
+      "description": "Large truck for goods delivery - faster than transit",
+      "available": true,
+      "distanceThresholds": [
+        { "maxDistance": 20, "phases": 0 },
+        { "maxDistance": 999, "phases": 1 }
+      ]
+    },
     "aerial": {
       "name": "Aerial Transport",
       "description": "VTOL, helicopter - fastest but expensive",

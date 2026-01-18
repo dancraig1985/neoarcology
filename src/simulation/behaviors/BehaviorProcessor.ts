@@ -5,7 +5,7 @@
  * data-driven behavior system.
  */
 
-import type { Agent, Location, Organization, Building, TaskPriority } from '../../types/entities';
+import type { Agent, Location, Organization, Building, TaskPriority, Vehicle, DeliveryRequest } from '../../types/entities';
 import type { LoadedConfig } from '../../config/ConfigLoader';
 import { processTravel, isTraveling } from '../systems/TravelSystem';
 import { evaluateConditions, isTaskComplete, type EvaluationContext } from './ConditionEvaluator';
@@ -21,6 +21,8 @@ export interface BehaviorProcessResult {
   agent: Agent;
   locations: Location[];
   orgs: Organization[];
+  vehicles: Vehicle[];
+  deliveryRequests: DeliveryRequest[];
   newLocation?: Location;
   newOrg?: Organization;
 }
@@ -64,17 +66,21 @@ export function processAgentBehavior(
   locations: Location[],
   orgs: Organization[],
   buildings: Building[],
+  vehicles: Vehicle[],
+  deliveryRequests: DeliveryRequest[],
   config: LoadedConfig,
   phase: number
 ): BehaviorProcessResult {
   // Skip dead agents
   if (agent.status === 'dead') {
-    return { agent, locations, orgs };
+    return { agent, locations, orgs, vehicles, deliveryRequests };
   }
 
   let currentAgent = agent;
   let currentLocations = locations;
   let currentOrgs = orgs;
+  let currentVehicles = vehicles;
+  let currentDeliveryRequests = deliveryRequests;
 
   // Build contexts (needed for critical behavior checks even while traveling)
   const evalCtx: EvaluationContext = {
@@ -82,17 +88,19 @@ export function processAgentBehavior(
     orgs: currentOrgs,
   };
 
-  const behaviorCtx: BehaviorContext = {
+  const getBehaviorCtx = (): BehaviorContext => ({
     agents: allAgents,
     locations: currentLocations,
     orgs: currentOrgs,
     buildings,
+    vehicles: currentVehicles,
+    deliveryRequests: currentDeliveryRequests,
     economyConfig: config.economy,
     agentsConfig: config.agents,
     transportConfig: config.transport,
     locationTemplates: config.locationTemplates,
     phase,
-  };
+  });
 
   // 1. Process travel tick (if traveling)
   if (isTraveling(currentAgent)) {
@@ -103,11 +111,15 @@ export function processAgentBehavior(
         // Clear any existing task and execute critical behavior
         // This may redirect travel or handle emergency while in-transit
         currentAgent = clearTask(currentAgent);
-        const result = executeBehavior(currentAgent, behavior, behaviorCtx);
+        const result = executeBehavior(currentAgent, behavior, getBehaviorCtx());
+        currentVehicles = result.vehicles ?? currentVehicles;
+        currentDeliveryRequests = result.deliveryRequests ?? currentDeliveryRequests;
         return {
           agent: result.agent,
           locations: result.locations,
           orgs: result.orgs,
+          vehicles: currentVehicles,
+          deliveryRequests: currentDeliveryRequests,
           newLocation: result.newLocation,
           newOrg: result.newOrg,
         };
@@ -119,7 +131,7 @@ export function processAgentBehavior(
 
     // If still traveling after tick, we're done for this phase
     if (isTraveling(currentAgent)) {
-      return { agent: currentAgent, locations: currentLocations, orgs: currentOrgs };
+      return { agent: currentAgent, locations: currentLocations, orgs: currentOrgs, vehicles: currentVehicles, deliveryRequests: currentDeliveryRequests };
     }
   }
 
@@ -129,11 +141,15 @@ export function processAgentBehavior(
     if (evaluateConditions(currentAgent, behavior.conditions, evalCtx)) {
       // Clear any existing task and execute critical behavior
       currentAgent = clearTask(currentAgent);
-      const result = executeBehavior(currentAgent, behavior, behaviorCtx);
+      const result = executeBehavior(currentAgent, behavior, getBehaviorCtx());
+      currentVehicles = result.vehicles ?? currentVehicles;
+      currentDeliveryRequests = result.deliveryRequests ?? currentDeliveryRequests;
       return {
         agent: result.agent,
         locations: result.locations,
         orgs: result.orgs,
+        vehicles: currentVehicles,
+        deliveryRequests: currentDeliveryRequests,
         newLocation: result.newLocation,
         newOrg: result.newOrg,
       };
@@ -155,11 +171,15 @@ export function processAgentBehavior(
         ) {
           // Interrupt current task
           currentAgent = clearTask(currentAgent);
-          const result = executeBehavior(currentAgent, behavior, behaviorCtx);
+          const result = executeBehavior(currentAgent, behavior, getBehaviorCtx());
+          currentVehicles = result.vehicles ?? currentVehicles;
+          currentDeliveryRequests = result.deliveryRequests ?? currentDeliveryRequests;
           return {
             agent: result.agent,
             locations: result.locations,
             orgs: result.orgs,
+            vehicles: currentVehicles,
+            deliveryRequests: currentDeliveryRequests,
             newLocation: result.newLocation,
             newOrg: result.newOrg,
           };
@@ -173,11 +193,15 @@ export function processAgentBehavior(
       // Fall through to find new task
     } else if (currentBehavior) {
       // Continue executing current task
-      const result = executeCurrentTask(currentAgent, behaviorCtx, config.behaviorsById);
+      const result = executeCurrentTask(currentAgent, getBehaviorCtx(), config.behaviorsById);
+      currentVehicles = result.vehicles ?? currentVehicles;
+      currentDeliveryRequests = result.deliveryRequests ?? currentDeliveryRequests;
       return {
         agent: result.agent,
         locations: result.locations,
         orgs: result.orgs,
+        vehicles: currentVehicles,
+        deliveryRequests: currentDeliveryRequests,
         newLocation: result.newLocation,
         newOrg: result.newOrg,
       };
@@ -196,11 +220,15 @@ export function processAgentBehavior(
     for (const behavior of behaviors) {
       if (evaluateConditions(currentAgent, behavior.conditions, evalCtx)) {
         // Start this behavior
-        const result = executeBehavior(currentAgent, behavior, behaviorCtx);
+        const result = executeBehavior(currentAgent, behavior, getBehaviorCtx());
+        currentVehicles = result.vehicles ?? currentVehicles;
+        currentDeliveryRequests = result.deliveryRequests ?? currentDeliveryRequests;
         return {
           agent: result.agent,
           locations: result.locations,
           orgs: result.orgs,
+          vehicles: currentVehicles,
+          deliveryRequests: currentDeliveryRequests,
           newLocation: result.newLocation,
           newOrg: result.newOrg,
         };
@@ -209,5 +237,5 @@ export function processAgentBehavior(
   }
 
   // No behavior applies - agent is idle
-  return { agent: currentAgent, locations: currentLocations, orgs: currentOrgs };
+  return { agent: currentAgent, locations: currentLocations, orgs: currentOrgs, vehicles: currentVehicles, deliveryRequests: currentDeliveryRequests };
 }

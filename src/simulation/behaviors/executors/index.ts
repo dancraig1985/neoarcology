@@ -5,12 +5,20 @@
  * Executors set/clear tasks and return updated state.
  */
 
-import type { Agent, AgentTask, Location, Organization } from '../../../types/entities';
+import type { Agent, AgentTask, Location, Organization, Vehicle, DeliveryRequest } from '../../../types/entities';
 import { registerExecutor, type BehaviorContext, type TaskResult } from '../BehaviorRegistry';
 import { isTraveling, startTravel, findNearestLocation, redirectTravel } from '../../systems/TravelSystem';
 import { ActivityLog } from '../../ActivityLog';
 import { trackRetailSale, trackBusinessOpened } from '../../Metrics';
 import { createOrganization } from '../../systems/OrgSystem';
+import {
+  loadCargo,
+  unloadCargo,
+  boardVehicle,
+  exitVehicle,
+  startVehicleTravel
+} from '../../systems/VehicleSystem';
+import { assignDeliveryToDriver, startDelivery, completeDelivery, failDelivery, findAvailableVehicle } from '../../systems/DeliverySystem';
 
 // ============================================
 // Task State Helpers
@@ -1407,6 +1415,532 @@ function executePurchaseOrphanedLocationBehavior(
 }
 
 // ============================================
+// Deliver Goods Executor
+// ============================================
+
+/**
+ * Deliver goods executor - handles trucking deliveries
+ * Uses robust vehicle system with board/exit mechanics and building-level travel
+ * Used by: deliver_goods
+ *
+ * Workflow:
+ * 1. Find and assign a delivery request to this driver
+ * 2. Board an available vehicle (as operator)
+ * 3. Drive vehicle to pickup building
+ * 4. Exit vehicle, enter location, load goods into vehicle
+ * 5. Board vehicle again
+ * 6. Drive vehicle to delivery building
+ * 7. Exit vehicle, enter location, unload goods
+ * 8. Complete delivery (pay logistics company)
+ * 9. Exit vehicle (parked at destination)
+ */
+function executeDeliverGoodsBehavior(
+  agent: Agent,
+  task: AgentTask,
+  ctx: BehaviorContext
+): TaskResult {
+  // Find the logistics company this agent works for
+  const logisticsCompany = ctx.orgs.find(org => org.id === agent.employer);
+
+  if (!logisticsCompany || !logisticsCompany.tags.includes('logistics')) {
+    // Agent doesn't work for logistics company - can't deliver
+    ActivityLog.warning(
+      ctx.phase,
+      'delivery',
+      `cannot deliver goods - not employed by logistics company`,
+      agent.id,
+      agent.name
+    );
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // Get delivery state from task params
+  const deliveryId = task.params?.deliveryId as string | undefined;
+  const deliveryPhase = (task.params?.deliveryPhase as string) ?? 'assigning';
+
+  let deliveryRequest: DeliveryRequest | undefined;
+
+  // Phase 1: Assign delivery if not already assigned
+  if (!deliveryId || deliveryPhase === 'assigning') {
+    // Find a pending delivery request to assign
+    const pendingDeliveries = (ctx.deliveryRequests ?? []).filter(
+      req => req.status === 'pending'
+    );
+
+    if (pendingDeliveries.length === 0) {
+      // No deliveries available - task complete
+      return {
+        agent: clearTask(agent),
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: true,
+      };
+    }
+
+    // Assign first pending delivery to this driver
+    deliveryRequest = pendingDeliveries[0]!;
+    const availableVehicle = findAvailableVehicle(logisticsCompany, ctx.vehicles ?? []);
+
+    if (!availableVehicle) {
+      // No vehicles available - wait
+      return {
+        agent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Assign delivery
+    const assignedDelivery = assignDeliveryToDriver(deliveryRequest, agent, availableVehicle, ctx.phase);
+    const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+      req.id === deliveryRequest!.id ? assignedDelivery : req
+    );
+
+    // Update task with delivery ID and next phase
+    const updatedTask: AgentTask = {
+      ...task,
+      params: {
+        ...task.params,
+        deliveryId: assignedDelivery.id,
+        deliveryPhase: 'boarding'
+      },
+    };
+
+    return {
+      agent: setTask(agent, updatedTask),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      deliveryRequests: updatedDeliveryRequests,
+      complete: false,
+    };
+  }
+
+  // Get the assigned delivery request
+  deliveryRequest = ctx.deliveryRequests?.find(req => req.id === deliveryId);
+
+  // If delivery no longer exists or is already completed/failed, task is done
+  if (!deliveryRequest || deliveryRequest.status === 'delivered' || deliveryRequest.status === 'failed') {
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // Validate locations and vehicle exist
+  const fromLocation = ctx.locations.find(loc => loc.id === deliveryRequest!.from);
+  const toLocation = ctx.locations.find(loc => loc.id === deliveryRequest!.to);
+
+  if (!fromLocation || !toLocation) {
+    // Locations don't exist - fail delivery
+    const failedDelivery = failDelivery(deliveryRequest!, 'location not found', ctx.phase);
+    const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+      req.id === deliveryRequest!.id ? failedDelivery : req
+    );
+
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      deliveryRequests: updatedDeliveryRequests,
+      complete: true,
+    };
+  }
+
+  // Get assigned vehicle
+  const assignedVehicle = (ctx.vehicles ?? []).find(v => v.id === deliveryRequest!.assignedVehicle);
+
+  if (!assignedVehicle) {
+    // Vehicle doesn't exist - fail delivery
+    const failedDelivery = failDelivery(deliveryRequest!, 'vehicle not found', ctx.phase);
+    const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+      req.id === deliveryRequest!.id ? failedDelivery : req
+    );
+
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      deliveryRequests: updatedDeliveryRequests,
+      complete: true,
+    };
+  }
+
+  // Get pickup and delivery buildings
+  const fromBuilding = ctx.buildings.find(b => b.id === fromLocation.building);
+  const toBuilding = ctx.buildings.find(b => b.id === toLocation.building);
+
+  if (!fromBuilding || !toBuilding) {
+    // Buildings don't exist - fail delivery
+    const failedDelivery = failDelivery(deliveryRequest!, 'building not found', ctx.phase);
+    const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+      req.id === deliveryRequest!.id ? failedDelivery : req
+    );
+
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      deliveryRequests: updatedDeliveryRequests,
+      complete: true,
+    };
+  }
+
+  // Phase-based state machine for delivery workflow
+  // Phases: boarding → to_pickup → loading → to_delivery → unloading → completing
+
+  // PHASE: boarding - Board the vehicle at depot
+  if (deliveryPhase === 'boarding') {
+    // Agent must board the vehicle as operator
+    if (!agent.inVehicle) {
+      const boardResult = boardVehicle(assignedVehicle, agent, true, ctx.phase);
+      if (boardResult.success) {
+        const updatedVehicles = (ctx.vehicles ?? []).map(v =>
+          v.id === assignedVehicle.id ? boardResult.vehicle : v
+        );
+
+        const updatedTask: AgentTask = {
+          ...task,
+          params: { ...task.params, deliveryPhase: 'to_pickup' },
+        };
+
+        return {
+          agent: setTask(boardResult.agent, updatedTask),
+          locations: ctx.locations,
+          orgs: ctx.orgs,
+          vehicles: updatedVehicles,
+          complete: false,
+        };
+      }
+
+      // Failed to board - fail delivery
+      const failedDelivery = failDelivery(deliveryRequest!, 'cannot board vehicle', ctx.phase);
+      const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+        req.id === deliveryRequest!.id ? failedDelivery : req
+      );
+
+      return {
+        agent: clearTask(agent),
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        deliveryRequests: updatedDeliveryRequests,
+        complete: true,
+      };
+    }
+
+    // Already in vehicle - move to next phase
+    const updatedTask: AgentTask = {
+      ...task,
+      params: { ...task.params, deliveryPhase: 'to_pickup' },
+    };
+
+    return {
+      agent: setTask(agent, updatedTask),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: false,
+    };
+  }
+
+  // PHASE: to_pickup - Drive vehicle to pickup building
+  if (deliveryPhase === 'to_pickup') {
+    // Check if vehicle is already traveling
+    if (assignedVehicle.travelingToBuilding) {
+      // Wait for vehicle to arrive
+      return {
+        agent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Check if vehicle is at pickup building
+    if (assignedVehicle.currentBuilding === fromBuilding.id) {
+      // Arrived - move to loading phase
+      const updatedTask: AgentTask = {
+        ...task,
+        params: { ...task.params, deliveryPhase: 'loading' },
+      };
+
+      return {
+        agent: setTask(agent, updatedTask),
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Start vehicle travel to pickup building
+    const travelingVehicle = startVehicleTravel(
+      assignedVehicle,
+      ctx.buildings.find(b => b.id === assignedVehicle.currentBuilding)!,
+      fromBuilding,
+      'truck',
+      ctx.transportConfig,
+      ctx.phase
+    );
+
+    const updatedVehicles = (ctx.vehicles ?? []).map(v =>
+      v.id === assignedVehicle.id ? travelingVehicle : v
+    );
+
+    return {
+      agent,
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      vehicles: updatedVehicles,
+      complete: false,
+    };
+  }
+
+  // PHASE: loading - Exit vehicle, load goods, board again
+  if (deliveryPhase === 'loading') {
+    // If in vehicle, exit first
+    if (agent.inVehicle) {
+      const exitResult = exitVehicle(assignedVehicle, agent, ctx.buildings, ctx.phase);
+      if (exitResult.success) {
+        const updatedVehicles = (ctx.vehicles ?? []).map(v =>
+          v.id === assignedVehicle.id ? exitResult.vehicle : v
+        );
+
+        return {
+          agent: exitResult.agent,
+          locations: ctx.locations,
+          orgs: ctx.orgs,
+          vehicles: updatedVehicles,
+          complete: false,
+        };
+      }
+    }
+
+    // Agent is out of vehicle - now move to location and load goods
+    // For simplicity, we'll assume agent can instantly access the location in the building
+    // In a more detailed sim, agent would need to travel within the building
+
+    let updatedVehicle = assignedVehicle;
+    let updatedLocation = fromLocation;
+
+    // Load each good type into vehicle
+    for (const [good, amount] of Object.entries(deliveryRequest!.goods)) {
+      const goodConfig = ctx.economyConfig.goods[good];
+      const goodSize = goodConfig?.size ?? ctx.economyConfig.defaultGoodsSize;
+
+      const loadResult = loadCargo(
+        updatedVehicle,
+        updatedLocation.inventory,
+        good,
+        amount,
+        goodSize,
+        ctx.phase
+      );
+
+      updatedVehicle = loadResult.vehicle;
+      updatedLocation = {
+        ...updatedLocation,
+        inventory: loadResult.locationInventory,
+      };
+    }
+
+    // Board vehicle again
+    const boardResult = boardVehicle(updatedVehicle, agent, true, ctx.phase);
+    if (!boardResult.success) {
+      // Failed to board - fail delivery
+      const failedDelivery = failDelivery(deliveryRequest!, 'cannot reboard vehicle', ctx.phase);
+      const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+        req.id === deliveryRequest!.id ? failedDelivery : req
+      );
+
+      return {
+        agent: clearTask(agent),
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        deliveryRequests: updatedDeliveryRequests,
+        complete: true,
+      };
+    }
+
+    // Update delivery status to 'in_transit'
+    const inTransitDelivery = startDelivery(deliveryRequest!, ctx.phase);
+
+    const updatedVehicles = (ctx.vehicles ?? []).map(v =>
+      v.id === assignedVehicle.id ? boardResult.vehicle : v
+    );
+
+    const updatedLocations = ctx.locations.map(loc =>
+      loc.id === fromLocation.id ? updatedLocation : loc
+    );
+
+    const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+      req.id === deliveryRequest!.id ? inTransitDelivery : req
+    );
+
+    const updatedTask: AgentTask = {
+      ...task,
+      params: { ...task.params, deliveryPhase: 'to_delivery' },
+    };
+
+    return {
+      agent: setTask(boardResult.agent, updatedTask),
+      locations: updatedLocations,
+      orgs: ctx.orgs,
+      vehicles: updatedVehicles,
+      deliveryRequests: updatedDeliveryRequests,
+      complete: false,
+    };
+  }
+
+  // PHASE: to_delivery - Drive vehicle to delivery building
+  if (deliveryPhase === 'to_delivery') {
+    // Check if vehicle is already traveling
+    if (assignedVehicle.travelingToBuilding) {
+      // Wait for vehicle to arrive
+      return {
+        agent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Check if vehicle is at delivery building
+    if (assignedVehicle.currentBuilding === toBuilding.id) {
+      // Arrived - move to unloading phase
+      const updatedTask: AgentTask = {
+        ...task,
+        params: { ...task.params, deliveryPhase: 'unloading' },
+      };
+
+      return {
+        agent: setTask(agent, updatedTask),
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Start vehicle travel to delivery building
+    const travelingVehicle = startVehicleTravel(
+      assignedVehicle,
+      ctx.buildings.find(b => b.id === assignedVehicle.currentBuilding)!,
+      toBuilding,
+      'truck',
+      ctx.transportConfig,
+      ctx.phase
+    );
+
+    const updatedVehicles = (ctx.vehicles ?? []).map(v =>
+      v.id === assignedVehicle.id ? travelingVehicle : v
+    );
+
+    return {
+      agent,
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      vehicles: updatedVehicles,
+      complete: false,
+    };
+  }
+
+  // PHASE: unloading - Exit vehicle, unload goods
+  if (deliveryPhase === 'unloading') {
+    // If in vehicle, exit first
+    if (agent.inVehicle) {
+      const exitResult = exitVehicle(assignedVehicle, agent, ctx.buildings, ctx.phase);
+      if (exitResult.success) {
+        const updatedVehicles = (ctx.vehicles ?? []).map(v =>
+          v.id === assignedVehicle.id ? exitResult.vehicle : v
+        );
+
+        return {
+          agent: exitResult.agent,
+          locations: ctx.locations,
+          orgs: ctx.orgs,
+          vehicles: updatedVehicles,
+          complete: false,
+        };
+      }
+    }
+
+    // Agent is out of vehicle - unload goods
+    let updatedVehicle = assignedVehicle;
+    let updatedLocation = toLocation;
+
+    // Unload each good type from vehicle
+    for (const [good, amount] of Object.entries(deliveryRequest!.goods)) {
+      const goodConfig = ctx.economyConfig.goods[good];
+      const goodSize = goodConfig?.size ?? ctx.economyConfig.defaultGoodsSize;
+
+      const unloadResult = unloadCargo(
+        updatedVehicle,
+        updatedLocation.inventory,
+        updatedLocation.inventoryCapacity,
+        good,
+        amount,
+        goodSize,
+        ctx.phase
+      );
+
+      updatedVehicle = unloadResult.vehicle;
+      updatedLocation = {
+        ...updatedLocation,
+        inventory: unloadResult.locationInventory,
+      };
+    }
+
+    // Complete delivery (pay logistics company)
+    const deliveryResult = completeDelivery(deliveryRequest!, logisticsCompany, ctx.phase);
+
+    const updatedVehicles = (ctx.vehicles ?? []).map(v =>
+      v.id === assignedVehicle.id ? updatedVehicle : v
+    );
+
+    const updatedLocations = ctx.locations.map(loc =>
+      loc.id === toLocation.id ? updatedLocation : loc
+    );
+
+    const updatedOrgs = ctx.orgs.map(org =>
+      org.id === logisticsCompany.id ? deliveryResult.company : org
+    );
+
+    const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+      req.id === deliveryRequest!.id ? deliveryResult.request : req
+    );
+
+    // Task complete - vehicle is parked at delivery building
+    return {
+      agent: clearTask(agent),
+      locations: updatedLocations,
+      orgs: updatedOrgs,
+      vehicles: updatedVehicles,
+      deliveryRequests: updatedDeliveryRequests,
+      complete: true,
+    };
+  }
+
+  // Unknown phase - fail delivery
+  const failedDelivery = failDelivery(deliveryRequest!, `unknown phase: ${deliveryPhase}`, ctx.phase);
+  const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+    req.id === deliveryRequest!.id ? failedDelivery : req
+  );
+
+  return {
+    agent: clearTask(agent),
+    locations: ctx.locations,
+    orgs: ctx.orgs,
+    deliveryRequests: updatedDeliveryRequests,
+    complete: true,
+  };
+}
+
+// ============================================
 // Register All Executors
 // ============================================
 
@@ -1424,6 +1958,7 @@ export function registerAllExecutors(): void {
   registerExecutor('entrepreneur', executeEntrepreneurBehavior);
   registerExecutor('consume_luxury', executeConsumeLuxuryBehavior);
   registerExecutor('purchase_orphaned', executePurchaseOrphanedLocationBehavior);
+  registerExecutor('deliver_goods', executeDeliverGoodsBehavior);
 }
 
 // Auto-register on import

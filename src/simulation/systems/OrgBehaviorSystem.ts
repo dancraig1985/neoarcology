@@ -6,13 +6,15 @@
  * - Expand operations (e.g., open offices when profitable)
  */
 
-import type { Organization, Location, Building } from '../../types';
+import type { Organization, Location, Building, DeliveryRequest } from '../../types';
 import type { EconomyConfig, LocationTemplate } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import { createLocation, findBuildingForLocation } from './LocationSystem';
 import { addLocationToOrg } from './OrgSystem';
 import { transferInventory, type GoodsSizes } from './InventorySystem';
 import { trackB2BSale, trackBusinessOpened } from '../Metrics';
+import { createDeliveryRequest, calculateDeliveryPayment } from './DeliverySystem';
+import { getDistance } from './TravelSystem';
 
 // Office name generator
 const OFFICE_NAMES = [
@@ -82,6 +84,7 @@ export interface OrgBehaviorResult {
   orgs: Organization[];
   locations: Location[];
   newLocations: Location[];
+  deliveryRequests: DeliveryRequest[];
 }
 
 /**
@@ -100,6 +103,7 @@ export function processOrgBehaviors(
   let updatedOrgs = [...orgs];
   let updatedLocations = [...locations];
   const newLocations: Location[] = [];
+  const deliveryRequests: DeliveryRequest[] = [];
 
   for (const org of updatedOrgs) {
     // Get this org's locations
@@ -126,6 +130,7 @@ export function processOrgBehaviors(
       phase
     );
     updatedLocations = warehouseTransferResult.locations;
+    deliveryRequests.push(...warehouseTransferResult.deliveryRequests);
 
     // 1. Try to sell valuable_data for revenue (temporary B2B market)
     const dataRevenueResult = trySelllValuableData(
@@ -219,6 +224,7 @@ export function processOrgBehaviors(
     orgs: updatedOrgs,
     locations: updatedLocations,
     newLocations,
+    deliveryRequests,
   };
 }
 
@@ -313,9 +319,9 @@ function tryTransferInputGoods(
 }
 
 /**
- * Try to transfer surplus goods from factories to warehouses
+ * Try to create delivery requests for surplus goods from factories to warehouses
  * Triggered when factory inventory exceeds 80% capacity
- * Moves tangible goods to warehouse storage for later wholesale distribution
+ * Creates delivery requests instead of instant teleportation (PLAN-028)
  */
 function tryTransferToWarehouse(
   org: Organization,
@@ -324,15 +330,15 @@ function tryTransferToWarehouse(
   locationTemplates: Record<string, LocationTemplate>,
   economyConfig: EconomyConfig,
   phase: number
-): { locations: Location[] } {
-  let updatedLocations = [...allLocations];
+): { locations: Location[]; deliveryRequests: DeliveryRequest[] } {
+  const deliveryRequests: DeliveryRequest[] = [];
 
   // Find org-owned warehouses (storage facilities)
   const warehouses = orgLocations.filter(loc => loc.tags.includes('storage'));
 
   // Skip if org has no warehouses
   if (warehouses.length === 0) {
-    return { locations: updatedLocations };
+    return { locations: allLocations, deliveryRequests };
   }
 
   // Find production facilities (factories) with high inventory
@@ -350,10 +356,10 @@ function tryTransferToWarehouse(
 
   // No transfers needed
   if (productionFacilities.length === 0) {
-    return { locations: updatedLocations };
+    return { locations: allLocations, deliveryRequests };
   }
 
-  // For each factory with high inventory, transfer surplus to warehouse
+  // For each factory with high inventory, create delivery request to warehouse
   for (const factory of productionFacilities) {
     const template = locationTemplates[factory.template];
     const capacity = template?.balance?.inventoryCapacity ?? 100;
@@ -392,7 +398,7 @@ function tryTransferToWarehouse(
 
     // Identify goods to transfer (tangible goods only, preserve valuable_data for internal use)
     const tangibleGoods = ['provisions', 'alcohol', 'luxury_goods', 'high_tech_prototypes', 'data_storage'];
-    const goodsToTransfer: Array<{ good: string; amount: number }> = [];
+    const goodsForDelivery: Record<string, number> = {};
 
     for (const good of tangibleGoods) {
       const amount = factory.inventory[good] ?? 0;
@@ -400,50 +406,33 @@ function tryTransferToWarehouse(
         // Transfer up to 50% of factory stock (leave some buffer for immediate sales)
         const transferAmount = Math.floor(amount * 0.5);
         if (transferAmount > 0) {
-          goodsToTransfer.push({ good, amount: Math.min(transferAmount, whAvailable) });
+          goodsForDelivery[good] = Math.min(transferAmount, whAvailable);
         }
       }
     }
 
-    if (goodsToTransfer.length === 0) {
+    if (Object.keys(goodsForDelivery).length === 0) {
       continue;
     }
 
-    // Perform transfers
-    const goodsSizes: GoodsSizes = {
-      goods: economyConfig.goods,
-      defaultGoodsSize: economyConfig.defaultGoodsSize,
-    };
+    // Calculate delivery payment based on distance
+    const distance = getDistance(factory, warehouse);
+    const payment = calculateDeliveryPayment(goodsForDelivery, distance);
 
-    for (const { good, amount } of goodsToTransfer) {
-      const transferResult = transferInventory(
-        updatedLocations.find(loc => loc.id === factory.id) ?? factory,
-        updatedLocations.find(loc => loc.id === warehouse.id) ?? warehouse,
-        good,
-        amount,
-        goodsSizes
-      );
+    // Create delivery request (goods will be transferred when delivery completes)
+    const request = createDeliveryRequest(
+      factory,
+      warehouse,
+      goodsForDelivery,
+      payment,
+      'medium', // Factory overflow is medium urgency
+      phase
+    );
 
-      if (transferResult.transferred > 0) {
-        // Update locations in our list
-        updatedLocations = updatedLocations.map(loc => {
-          if (loc.id === factory.id) return transferResult.from as Location;
-          if (loc.id === warehouse.id) return transferResult.to as Location;
-          return loc;
-        });
-
-        ActivityLog.info(
-          phase,
-          'transfer',
-          `transferred ${transferResult.transferred} ${good} from ${factory.name} to ${warehouse.name} (factory overflow management)`,
-          org.id,
-          org.name
-        );
-      }
-    }
+    deliveryRequests.push(request);
   }
 
-  return { locations: updatedLocations };
+  return { locations: allLocations, deliveryRequests };
 }
 
 /**

@@ -21,6 +21,7 @@ import {
 import { Agent, Location, Organization, Wallet, Building, Vehicle } from '../types';
 import { CityGrid, GRID_SIZE } from './types';
 import { generateZones } from './ZoneGenerator';
+import { createVehicle } from '../simulation/systems/VehicleSystem';
 
 const CENTER = GRID_SIZE / 2;
 
@@ -1520,8 +1521,94 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
     `${organizations.length} orgs, ${agents.length} agents`
   );
 
-  // PLAN-028: Vehicles will be spawned when logistics companies are created
+  // PLAN-028: Spawn logistics companies with depots and vehicles
   const vehicles: Vehicle[] = [];
+  const logisticsTemplate = config.orgTemplates['logistics_company'];
+  const depotTemplate = config.locationTemplates['depot'];
+
+  if (logisticsTemplate && depotTemplate) {
+    const numLogisticsCompanies = randomFromRange(logisticsTemplate.generation?.count ?? { min: 2, max: 3 }, rand);
+
+    for (let i = 0; i < numLogisticsCompanies; i++) {
+      // Create logistics company leader (hire from unemployed agents)
+      const unemployed = agents.filter(a => a.status === 'available');
+      const leader = unemployed[i % unemployed.length];
+      if (!leader) continue;
+
+      const credits = logisticsTemplate.defaults?.credits
+        ? randomFromRange(logisticsTemplate.defaults.credits, rand)
+        : randomInt(3000, 6000, rand);
+
+      const companyName = `${pickRandom(lastNames, rand)} Logistics`;
+      const company = createOrgFromTemplate(companyName, logisticsTemplate, leader.id, credits, 0, rand);
+
+      // Leader becomes employed at their own company
+      if (logisticsTemplate.generation?.leaderBecomesEmployed) {
+        leader.status = 'employed';
+        leader.employer = company.id;
+      }
+
+      organizations.push(company);
+
+      // Create depot for this logistics company
+      const buildingPlacement = findBuildingForLocation(
+        buildings,
+        depotTemplate.tags ?? [],
+        buildingOccupancy,
+        undefined,
+        grid,
+        rand
+      );
+
+      if (buildingPlacement) {
+        const depotName = `${companyName} Depot`;
+        const depot = createLocationFromTemplate(
+          depotName,
+          depotTemplate,
+          buildingPlacement.building.x,
+          buildingPlacement.building.y,
+          buildingPlacement.floor,
+          company.id,
+          0,
+          buildingPlacement
+        );
+
+        depot.ownerType = 'org';
+        locations.push(depot);
+        company.locations.push(depot.id);
+        // Don't push to buildingOccupancy - findBuildingForLocation already updated it
+
+        // Leader starts at their depot
+        leader.currentLocation = depot.id;
+        leader.employedAt = depot.id;
+        depot.employees.push(leader.id);
+
+        // Spawn vehicles for this logistics company (2-4 per company)
+        const vehiclesPerCompany = randomInt(2, 4, rand);
+
+        for (let v = 0; v < vehiclesPerCompany; v++) {
+          const vehicleId = `vehicle_${company.id}_${v}`;
+          const vehicleName = `${companyName} Truck #${v + 1}`;
+
+          const vehicle = createVehicle(
+            vehicleId,
+            vehicleName,
+            'cargo_truck',
+            company,
+            buildingPlacement.building,
+            50, // 50 space cargo capacity
+            0   // created at phase 0
+          );
+
+          vehicles.push(vehicle);
+        }
+
+        console.log(`[CityGenerator] Created ${companyName} with depot and ${vehiclesPerCompany} vehicles`);
+      }
+    }
+  }
+
+  console.log(`[CityGenerator] Spawned ${vehicles.length} vehicles for logistics companies`);
 
   return { grid, buildings, locations, organizations, agents, vehicles };
 }

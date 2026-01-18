@@ -201,9 +201,26 @@ export const VEHICLE_COLUMNS: ColumnDef<Vehicle>[] = [
     render: (v) => v.operator ?? 'Parked',
   },
   {
-    key: 'building',
+    key: 'location',
     label: 'Location',
     width: 120,
+    render: (v) => {
+      if (v.travelingToBuilding) {
+        return 'In Transit';
+      }
+      return v.currentBuilding ?? '-';
+    },
+  },
+  {
+    key: 'passengers',
+    label: 'Occupants',
+    width: 80,
+    align: 'right',
+    render: (v) => {
+      const total = v.passengers.length + (v.operator ? 1 : 0);
+      return total.toString();
+    },
+    sortValue: (v) => v.passengers.length + (v.operator ? 1 : 0),
   },
   {
     key: 'cargo',
@@ -214,12 +231,6 @@ export const VEHICLE_COLUMNS: ColumnDef<Vehicle>[] = [
       const total = Object.values(v.cargo).reduce((sum, amt) => sum + amt, 0);
       return total.toString();
     },
-  },
-  {
-    key: 'cargoCapacity',
-    label: 'Capacity',
-    width: 80,
-    align: 'right',
   },
 ];
 
@@ -493,17 +504,56 @@ export const VEHICLE_DETAILS: DetailSection[] = [
     title: 'Ownership',
     fields: [
       { key: 'owner', label: 'Owner ID' },
+    ],
+  },
+  {
+    title: 'Occupancy',
+    fields: [
       {
         key: 'operator',
         label: 'Operator',
         render: (v) => (v as Vehicle).operator ?? 'Parked (no operator)',
+      },
+      {
+        key: 'passengers',
+        label: 'Passengers',
+        render: (v) => {
+          const passengers = (v as Vehicle).passengers;
+          return passengers.length > 0 ? passengers.join(', ') : 'None';
+        },
       },
     ],
   },
   {
     title: 'Location',
     fields: [
-      { key: 'building', label: 'Parked At (Building ID)' },
+      {
+        key: 'currentBuilding',
+        label: 'Current Building',
+        render: (v) => {
+          const vehicle = v as Vehicle;
+          if (vehicle.travelingToBuilding) {
+            return 'In Transit';
+          }
+          return vehicle.currentBuilding ?? '-';
+        },
+      },
+      {
+        key: 'travelStatus',
+        label: 'Travel Status',
+        render: (v) => {
+          const vehicle = v as Vehicle;
+          if (vehicle.travelingToBuilding) {
+            return `To: ${vehicle.travelingToBuilding} (${vehicle.travelPhasesRemaining} phases)`;
+          }
+          return 'Not traveling';
+        },
+      },
+      {
+        key: 'travelMethod',
+        label: 'Travel Method',
+        render: (v) => (v as Vehicle).travelMethod ?? '-',
+      },
     ],
   },
   {

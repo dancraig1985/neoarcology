@@ -33,7 +33,8 @@ export function createVehicle(
     created: phase,
     owner: owner.id,
     operator: undefined, // Parked, not being operated
-    building: building.id,
+    passengers: [], // No passengers initially
+    currentBuilding: building.id, // Parked at this building
     cargo: {}, // Empty cargo
     cargoCapacity,
   };
@@ -100,7 +101,7 @@ export function releaseVehicle(
     vehicle: {
       ...vehicle,
       operator: undefined,
-      building: buildingId,
+      currentBuilding: buildingId,
     },
   };
 }
@@ -241,4 +242,271 @@ export function isParked(vehicle: Vehicle): boolean {
  */
 export function isOperated(vehicle: Vehicle): boolean {
   return vehicle.operator !== undefined;
+}
+
+/**
+ * Process vehicle travel for one phase
+ * Handles vehicles in transit, decrementing travel time and processing arrivals
+ */
+export function processVehicleTravel(
+  vehicle: Vehicle,
+  phase: number
+): Vehicle {
+  // Skip if vehicle is not traveling
+  if (!vehicle.travelingToBuilding || vehicle.travelPhasesRemaining === undefined) {
+    return vehicle;
+  }
+
+  // Decrement travel time
+  const remainingPhases = vehicle.travelPhasesRemaining - 1;
+
+  // Still traveling
+  if (remainingPhases > 0) {
+    return {
+      ...vehicle,
+      travelPhasesRemaining: remainingPhases,
+    };
+  }
+
+  // Arrived at destination
+  ActivityLog.info(
+    phase,
+    'vehicle',
+    `${vehicle.name} arrived at destination`,
+    vehicle.operator ?? 'system',
+    vehicle.name
+  );
+
+  return {
+    ...vehicle,
+    currentBuilding: vehicle.travelingToBuilding,
+    travelingFromBuilding: undefined,
+    travelingToBuilding: undefined,
+    travelMethod: undefined,
+    travelPhasesRemaining: undefined,
+  };
+}
+
+/**
+ * Start vehicle travel to a destination building
+ * Uses transport system to calculate travel time
+ */
+export function startVehicleTravel(
+  vehicle: Vehicle,
+  fromBuilding: Building,
+  toBuilding: Building,
+  travelMethod: string,
+  transportConfig: any,
+  phase: number
+): Vehicle {
+  // Calculate travel time using transport system
+  const distance = Math.sqrt(
+    Math.pow(toBuilding.x - fromBuilding.x, 2) +
+    Math.pow(toBuilding.y - fromBuilding.y, 2)
+  );
+
+  // Get phases for this travel method and distance
+  const mode = transportConfig.transportModes[travelMethod];
+  if (!mode) {
+    console.warn(`[VehicleSystem] Unknown travel method: ${travelMethod}, using transit`);
+    return vehicle;
+  }
+
+  const thresholds = mode.distanceThresholds;
+  let phases = thresholds[thresholds.length - 1].phases; // Default to longest
+  for (const threshold of thresholds) {
+    if (distance <= threshold.maxDistance) {
+      phases = threshold.phases;
+      break;
+    }
+  }
+
+  ActivityLog.info(
+    phase,
+    'vehicle',
+    `${vehicle.name} started traveling to destination (${phases} phases)`,
+    vehicle.operator ?? 'system',
+    vehicle.name
+  );
+
+  return {
+    ...vehicle,
+    currentBuilding: undefined, // In transit, not at any building
+    travelingFromBuilding: fromBuilding.id,
+    travelingToBuilding: toBuilding.id,
+    travelMethod,
+    travelPhasesRemaining: phases,
+  };
+}
+
+/**
+ * Move a vehicle to a new building
+ * Should be called when the driver arrives at a new location
+ */
+export function moveVehicleToBuilding(
+  vehicle: Vehicle,
+  buildingId: string,
+  phase: number
+): Vehicle {
+  if (vehicle.currentBuilding === buildingId) {
+    return vehicle; // Already at this building
+  }
+
+  ActivityLog.info(
+    phase,
+    'vehicle',
+    `${vehicle.name} arrived at new location`,
+    vehicle.operator ?? 'system',
+    vehicle.name
+  );
+
+  return {
+    ...vehicle,
+    currentBuilding: buildingId,
+  };
+}
+
+/**
+ * Agent boards a vehicle (as operator or passenger)
+ * Updates both vehicle and agent state
+ * Agent must be at the same building as the vehicle
+ */
+export function boardVehicle(
+  vehicle: Vehicle,
+  agent: Agent,
+  asOperator: boolean,
+  phase: number
+): { vehicle: Vehicle; agent: Agent; success: boolean; reason?: string } {
+  // Check if vehicle already has an operator (if trying to board as operator)
+  if (asOperator && vehicle.operator) {
+    return {
+      vehicle,
+      agent,
+      success: false,
+      reason: 'Vehicle already has an operator'
+    };
+  }
+
+  // Check if agent is already in a vehicle
+  if (agent.inVehicle) {
+    return {
+      vehicle,
+      agent,
+      success: false,
+      reason: 'Agent is already in a vehicle'
+    };
+  }
+
+  // Check if agent is in transit (can't board while traveling)
+  if (agent.travelingTo) {
+    return {
+      vehicle,
+      agent,
+      success: false,
+      reason: 'Agent is currently in transit'
+    };
+  }
+
+  const role = asOperator ? 'operator' : 'passenger';
+
+  ActivityLog.info(
+    phase,
+    'vehicle',
+    `boarded ${vehicle.name} as ${role}`,
+    agent.id,
+    agent.name
+  );
+
+  // Update vehicle
+  const updatedVehicle: Vehicle = {
+    ...vehicle,
+    operator: asOperator ? agent.id : vehicle.operator,
+    passengers: asOperator ? vehicle.passengers : [...vehicle.passengers, agent.id],
+  };
+
+  // Update agent
+  const updatedAgent: Agent = {
+    ...agent,
+    inVehicle: vehicle.id,
+    currentLocation: undefined, // Agent location is now determined by vehicle
+  };
+
+  return {
+    vehicle: updatedVehicle,
+    agent: updatedAgent,
+    success: true,
+  };
+}
+
+/**
+ * Agent exits a vehicle
+ * Updates both vehicle and agent state
+ * Agent will be at the vehicle's current building
+ */
+export function exitVehicle(
+  vehicle: Vehicle,
+  agent: Agent,
+  _buildings: Building[],
+  phase: number
+): { vehicle: Vehicle; agent: Agent; success: boolean; reason?: string } {
+  // Check if agent is actually in this vehicle
+  if (agent.inVehicle !== vehicle.id) {
+    return {
+      vehicle,
+      agent,
+      success: false,
+      reason: 'Agent is not in this vehicle'
+    };
+  }
+
+  // Check if vehicle is in transit (can't exit while moving)
+  if (vehicle.travelingToBuilding) {
+    return {
+      vehicle,
+      agent,
+      success: false,
+      reason: 'Cannot exit vehicle while in transit'
+    };
+  }
+
+  // Check if vehicle is at a building
+  if (!vehicle.currentBuilding) {
+    return {
+      vehicle,
+      agent,
+      success: false,
+      reason: 'Vehicle is not at a building'
+    };
+  }
+
+  const wasOperator = vehicle.operator === agent.id;
+
+  ActivityLog.info(
+    phase,
+    'vehicle',
+    `exited ${vehicle.name}`,
+    agent.id,
+    agent.name
+  );
+
+  // Update vehicle
+  const updatedVehicle: Vehicle = {
+    ...vehicle,
+    operator: wasOperator ? undefined : vehicle.operator,
+    passengers: vehicle.passengers.filter(p => p !== agent.id),
+  };
+
+  // Update agent - clear inVehicle, set currentLocation to undefined (they're at building level)
+  // Agent will need to move to a specific location within the building
+  const updatedAgent: Agent = {
+    ...agent,
+    inVehicle: undefined,
+    currentLocation: undefined, // Agent is at building but not in a specific location yet
+  };
+
+  return {
+    vehicle: updatedVehicle,
+    agent: updatedAgent,
+    success: true,
+  };
 }

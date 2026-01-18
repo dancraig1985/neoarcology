@@ -1,8 +1,9 @@
 {
-  "generated": "2026-01-18T11:26:33.631Z",
+  "generated": "2026-01-18T13:11:34.696Z",
   "templates": {
     "orgs": [
       "corporation.json",
+      "logistics_company.json",
       "small_business.json"
     ],
     "agents": [
@@ -11,6 +12,7 @@
     "locations": [
       "apartment.json",
       "brewery.json",
+      "depot.json",
       "laboratory.json",
       "luxury_boutique.json",
       "luxury_factory.json",

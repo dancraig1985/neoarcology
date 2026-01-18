@@ -14,6 +14,7 @@ import { processFactoryProduction } from './systems/OrgSystem';
 import { processOrgBehaviors } from './systems/OrgBehaviorSystem';
 import { cleanupDeadEmployees } from './systems/LocationSystem';
 import { checkImmigration } from './systems/ImmigrationSystem';
+import { processVehicleTravel } from './systems/VehicleSystem';
 import { generateCity } from '../generation/CityGenerator';
 import { createMetrics, takeSnapshot, startNewWeek, setActiveMetrics, type SimulationMetrics, type MetricsSnapshot } from './Metrics';
 
@@ -155,6 +156,9 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   updatedLocations = cleanupDeadEmployees(updatedLocations, updatedAgents, newTime.currentPhase);
 
   // 3. Process behavior-based decisions for each agent
+  let updatedVehicles = [...state.vehicles];
+  let updatedDeliveryRequests = [...state.deliveryRequests];
+
   for (let i = 0; i < updatedAgents.length; i++) {
     const agent = updatedAgents[i];
     if (!agent || agent.status === 'dead') continue;
@@ -165,6 +169,8 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
       updatedLocations,
       updatedOrgs,
       state.buildings,
+      updatedVehicles,
+      updatedDeliveryRequests,
       config,
       newTime.currentPhase
     );
@@ -172,6 +178,8 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     updatedAgents[i] = result.agent;
     updatedLocations = result.locations;
     updatedOrgs = result.orgs;
+    updatedVehicles = result.vehicles;
+    updatedDeliveryRequests = result.deliveryRequests;
 
     // Add new location and org if agent opened a business
     if (result.newLocation) {
@@ -182,7 +190,12 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     }
   }
 
-  // 3b. Process org-level behaviors (procurement, expansion)
+  // 3b. Process vehicle travel (all vehicles in transit)
+  updatedVehicles = updatedVehicles.map(vehicle =>
+    processVehicleTravel(vehicle, newTime.currentPhase)
+  );
+
+  // 3c. Process org-level behaviors (procurement, expansion)
   const orgBehaviorResult = processOrgBehaviors(
     updatedOrgs,
     updatedLocations,
@@ -193,6 +206,9 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   );
   updatedOrgs = orgBehaviorResult.orgs;
   updatedLocations = orgBehaviorResult.locations;
+
+  // Collect new delivery requests from org behaviors (warehouse transfers)
+  updatedDeliveryRequests = [...updatedDeliveryRequests, ...orgBehaviorResult.deliveryRequests];
 
   // 4. Process weekly economy (payroll, operating costs) - STAGGERED across week
   // Each org processes on their weeklyPhaseOffset (spread across 56 phases)
@@ -236,8 +252,8 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     agents: updatedAgents,
     locations: updatedLocations,
     organizations: updatedOrgs,
-    vehicles: state.vehicles, // PLAN-028: Will be updated when truckers operate vehicles
-    deliveryRequests: state.deliveryRequests, // PLAN-028: Will be updated with delivery logic
+    vehicles: updatedVehicles, // Updated by deliver_goods behavior
+    deliveryRequests: updatedDeliveryRequests, // Includes new requests from warehouse transfers and updated by deliveries
   };
 
   // Update current snapshot for Reports panel
