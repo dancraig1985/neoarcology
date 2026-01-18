@@ -138,7 +138,29 @@ export function processOrgBehaviors(
     updatedLocations = dataRevenueResult.locations;
     updatedOrgs = dataRevenueResult.orgs;
 
-    // 2. Try to procure data_storage if needed
+    // 2. Try to expand to warehouse if needed (corporations only)
+    if (org.tags.includes('corporation')) {
+      const warehouseExpandResult = tryExpandToWarehouse(
+        updatedOrgs.find(o => o.id === org.id) ?? org,
+        updatedLocations.filter(loc => org.locations.includes(loc.id)),
+        buildings,
+        updatedLocations,
+        locationTemplates,
+        phase,
+        config
+      );
+
+      if (warehouseExpandResult.newLocation) {
+        newLocations.push(warehouseExpandResult.newLocation);
+        updatedLocations = [...updatedLocations, warehouseExpandResult.newLocation];
+        // Update the org in our list
+        updatedOrgs = updatedOrgs.map(o =>
+          o.id === org.id ? warehouseExpandResult.org : o
+        );
+      }
+    }
+
+    // 3. Try to procure data_storage if needed
     const procureResult = tryProcureDataStorage(
       updatedOrgs.find(o => o.id === org.id) ?? org,
       updatedLocations.filter(loc => org.locations.includes(loc.id)),
@@ -150,7 +172,7 @@ export function processOrgBehaviors(
     updatedLocations = procureResult.locations;
     updatedOrgs = procureResult.orgs;
 
-    // 3. Try to expand to office if profitable and has storage (corporations only)
+    // 4. Try to expand to office if profitable and has storage (corporations only)
     if (org.tags.includes('corporation')) {
       const expandResult = tryExpandToOffice(
         updatedOrgs.find(o => o.id === org.id) ?? org,
@@ -171,7 +193,7 @@ export function processOrgBehaviors(
         );
       }
 
-      // 4. Try to expand to prototype factory if very wealthy and has valuable_data production
+      // 5. Try to expand to prototype factory if very wealthy and has valuable_data production
       const prototypeExpandResult = tryExpandToPrototypeFactory(
         updatedOrgs.find(o => o.id === org.id) ?? org,
         updatedLocations.filter(loc => org.locations.includes(loc.id)),
@@ -784,6 +806,131 @@ function tryExpandToOffice(
     phase,
     'expansion',
     `opened ${locationName} (${templateName}) for ${openingCost} credits - needs data_storage to begin R&D`,
+    org.id,
+    org.name
+  );
+
+  // Track business opening in metrics
+  trackBusinessOpened(locationName);
+
+  return { org: updatedOrg, newLocation };
+}
+
+/**
+ * Try to expand org by opening a warehouse (storage expansion)
+ * Triggered when org has production facilities hitting capacity and needs bulk storage
+ */
+function tryExpandToWarehouse(
+  org: Organization,
+  orgLocations: Location[],
+  buildings: Building[],
+  allLocations: Location[],
+  locationTemplates: Record<string, LocationTemplate>,
+  phase: number,
+  config: OrgBehaviorConfig
+): { org: Organization; newLocation?: Location } {
+  // Check if org has warehouse capacity available
+  const warehouses = orgLocations.filter(loc => loc.tags.includes('storage'));
+
+  if (warehouses.length > 0) {
+    // Have warehouses - check if they have available capacity
+    const averageCapacityUsed = warehouses.reduce((sum, wh) => {
+      const template = locationTemplates[wh.template];
+      const capacity = template?.balance?.inventoryCapacity ?? 1000;
+      const inventory = Object.values(wh.inventory).reduce((total, amt) => total + amt, 0);
+      return sum + (inventory / capacity);
+    }, 0) / warehouses.length;
+
+    // If average warehouse capacity is < 70%, we have enough warehouse space
+    if (averageCapacityUsed < 0.7) {
+      return { org }; // Existing warehouses have space
+    }
+  }
+
+  // Check if org has any production facilities (factories, breweries, etc.)
+  const productionFacilities = orgLocations.filter(loc => {
+    const template = locationTemplates[loc.template];
+    // Must have production config AND wholesale tag (not just offices/labs)
+    return template?.balance?.production &&
+           template.balance.production.length > 0 &&
+           (loc.tags.includes('wholesale') || loc.tags.includes('production'));
+  });
+
+  if (productionFacilities.length === 0) {
+    return { org }; // No production facilities, no need for warehouse
+  }
+
+  // Check if any factory is at high capacity (>80%)
+  const hasCapacityIssue = productionFacilities.some(loc => {
+    const template = locationTemplates[loc.template];
+    const capacity = template?.balance?.inventoryCapacity ?? 100;
+    const currentInventory = Object.values(loc.inventory).reduce((sum, amount) => sum + amount, 0);
+    const capacityUsedPercent = (currentInventory / capacity) * 100;
+    return capacityUsedPercent > 80;
+  });
+
+  if (!hasCapacityIssue) {
+    return { org }; // Factories aren't full, no urgent need for warehouse
+  }
+
+  // Get warehouse template
+  const template = locationTemplates['warehouse'];
+
+  if (!template) {
+    return { org };
+  }
+
+  const openingCost = template.balance?.openingCost ?? 800;
+
+  // Check if org can afford it (opening cost + buffer)
+  if (org.wallet.credits < openingCost + 300) {
+    return { org };
+  }
+
+  // Random chance to expand (5% per phase when eligible)
+  // Higher than office expansion since this is a practical need, not speculative R&D
+  if (Math.random() > 0.05) {
+    return { org };
+  }
+
+  // Find a building for the warehouse
+  const buildingPlacement = findBuildingForLocation(
+    buildings,
+    template.tags ?? [],
+    allLocations
+  );
+
+  if (!buildingPlacement) {
+    return { org };
+  }
+
+  // Create the location
+  const locationId = getNextLocationId();
+  const locationName = 'Storage Warehouse';
+
+  const newLocation = createLocation(
+    locationId,
+    locationName,
+    template,
+    org.id,
+    org.name,
+    phase,
+    buildingPlacement
+  );
+
+  // Link location to org
+  const updatedOrg = addLocationToOrg(
+    {
+      ...org,
+      wallet: { ...org.wallet, credits: org.wallet.credits - openingCost },
+    },
+    locationId
+  );
+
+  ActivityLog.info(
+    phase,
+    'expansion',
+    `opened ${locationName} for ${openingCost} credits - provides bulk storage for factory overflow`,
     org.id,
     org.name
   );

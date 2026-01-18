@@ -19,8 +19,8 @@
     "inventoryCapacity": 1000
   },
   "generation": {
-    "count": { "min": 2, "max": 4 },
-    "spawnAtStart": true,
+    "count": { "min": 0, "max": 0 },
+    "spawnAtStart": false,
     "ownerOrgTemplate": "corporation"
   }
 }
