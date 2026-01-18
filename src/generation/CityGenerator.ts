@@ -21,7 +21,6 @@ import {
 import { Agent, Location, Organization, Wallet, Building, Vehicle } from '../types';
 import { CityGrid, GRID_SIZE } from './types';
 import { generateZones } from './ZoneGenerator';
-import { createVehicle } from '../simulation/systems/VehicleSystem';
 
 const CENTER = GRID_SIZE / 2;
 
@@ -1521,44 +1520,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
     `${organizations.length} orgs, ${agents.length} agents`
   );
 
-  // PLAN-027: Spawn test vehicles for UI verification (TEMPORARY - remove before PLAN-028)
+  // PLAN-028: Vehicles will be spawned when logistics companies are created
   const vehicles: Vehicle[] = [];
-
-  // Create 5 test trucks owned by different corporations, parked at different buildings
-  const corporationsForVehicles = organizations.filter(org => org.tags.includes('corporation')).slice(0, 5);
-  const buildingsForParking = buildings.slice(0, 5);
-
-  for (let i = 0; i < Math.min(corporationsForVehicles.length, buildingsForParking.length); i++) {
-    const org = corporationsForVehicles[i];
-    const building = buildingsForParking[i];
-
-    if (!org || !building) continue;
-
-    const vehicleId = `vehicle_test_${i}`;
-    const vehicleName = `Truck #${i + 1}`;
-
-    const vehicle = createVehicle(
-      vehicleId,
-      vehicleName,
-      'cargo_truck',
-      org,
-      building,
-      50, // 50 space cargo capacity
-      0   // created at phase 0
-    );
-
-    // Add some test cargo to a couple of trucks to test cargo display
-    if (i === 0) {
-      vehicle.cargo = { provisions: 10, alcohol: 5 };
-    } else if (i === 1) {
-      vehicle.cargo = { provisions: 25 };
-    }
-    // Others remain empty
-
-    vehicles.push(vehicle);
-  }
-
-  console.log(`[CityGenerator] Spawned ${vehicles.length} test vehicles`);
 
   return { grid, buildings, locations, organizations, agents, vehicles };
 }

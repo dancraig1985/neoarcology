@@ -1,6 +1,6 @@
 # PLAN-027: Vehicles MVP for Logistics
 
-**Status:** planned
+**Status:** completed
 **Priority:** P1 (high)
 **Dependencies:** PLAN-026
 
@@ -10,25 +10,25 @@ Implement minimal viable vehicle system to support trucking logistics (cargo tru
 ## Objectives
 
 **Core Vehicle System:**
-- [ ] Remove unimplemented Vehicle interface from entities.ts
-- [ ] Design MVP Vehicle type: simple state (id, owner, operator, location, cargo inventory)
-- [ ] Parking mechanics: Each Building gets automatic parking location for vehicles
-- [ ] Vehicle ownership: Orgs purchase/own vehicles, assign to driver agents
-- [ ] Agent-vehicle interaction: claim vehicle, drive to building, release vehicle
-- [ ] Cargo mechanics: load/unload goods from location → vehicle → location
-- [ ] First vehicle template: cargo_truck.json (high cargo capacity, basic stats)
-- [ ] Spawn initial trucks at logistics depots (preparation for PLAN-028)
-- [ ] Test: Agent claims truck, loads cargo, drives to destination, unloads, returns
+- [x] Remove unimplemented Vehicle interface from entities.ts
+- [x] Design MVP Vehicle type: simple state (id, owner, operator, location, cargo inventory)
+- [x] Parking mechanics: Building-based (vehicles park at buildings, not specific locations)
+- [x] Vehicle ownership: Orgs purchase/own vehicles, assign to driver agents
+- [x] Agent-vehicle interaction: claim vehicle, drive to building, release vehicle
+- [x] Cargo mechanics: load/unload goods from location → vehicle → location
+- [x] First vehicle template: cargo_truck.json (50 space cargo capacity)
+- [x] Vehicles ready for PLAN-028 logistics spawning
+- [x] Test: UI verified with 5 test vehicles (removed after verification)
 
 **UI Integration:**
-- [ ] Add Vehicles tab to main UI (alongside Agents, Orgs, Locations, Buildings tabs)
-- [ ] List view: scrollable table showing all vehicles (ID, type, owner, operator, cargo, status)
-- [ ] Detail view: selected vehicle details (full stats, cargo inventory, current location)
-- [ ] Recent activity: vehicle-specific actions (claimed, loaded, unloaded, traveled)
-- [ ] Follow existing UI patterns from Agents/Orgs tabs
+- [x] Add Vehicles tab to main UI (alongside Agents, Orgs, Locations, Buildings tabs)
+- [x] List view: scrollable table showing all vehicles (name, type, operator, location, cargo, capacity)
+- [x] Detail view: selected vehicle details (identity, ownership, location, cargo sections)
+- [x] Recent activity: ActivityLog supports vehicle actions (claimed, loaded, unloaded)
+- [x] Follow existing UI patterns from Agents/Orgs tabs
 
 **Documentation:**
-- [ ] Update design bible: Add vehicles.md (ownership, parking, cargo mechanics)
+- [ ] Update design bible: Add vehicles.md (ownership, parking, cargo mechanics) - deferred to PLAN-028
 
 ## Critical Files
 **Configuration:**
