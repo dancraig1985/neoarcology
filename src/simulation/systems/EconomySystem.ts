@@ -972,6 +972,25 @@ function tryGetJob(
     Math.random() * (salaryRange.max - salaryRange.min + 1) + salaryRange.min
   );
 
+  // AFFORDABILITY CHECK: Verify employer can afford 4 weeks of salary before hiring
+  // This prevents hiring when the org will immediately fire due to unpaid payroll
+  const employerOrg = orgs.find((o) => o.id === location.owner);
+  if (employerOrg) {
+    const weeksBuffer = 4;
+    const requiredCredits = salary * weeksBuffer;
+    if (employerOrg.wallet.credits < requiredCredits) {
+      // Can't afford to hire - skip this job opportunity
+      ActivityLog.info(
+        phase,
+        'employment',
+        `${location.name} cannot afford to hire (need ${requiredCredits} credits for ${weeksBuffer} weeks salary, have ${employerOrg.wallet.credits})`,
+        employerOrg.id,
+        employerOrg.name
+      );
+      return { agent, locations };
+    }
+  }
+
   const result = hireAgent(location, agent, salary, phase);
 
   const updatedLocations = locations.map((loc) =>
@@ -1345,6 +1364,13 @@ export function processWeeklyEconomy(
   for (let orgIdx = 0; orgIdx < updatedOrgs.length; orgIdx++) {
     let org = updatedOrgs[orgIdx];
     if (!org) continue;
+
+    // STAGGERED WEEKLY PROCESSING: Only process this org on their designated phase
+    // This spreads payroll/costs across the week instead of all at once
+    const currentPhaseInWeek = phase % 56;
+    if (currentPhaseInWeek !== org.weeklyPhaseOffset) {
+      continue; // Not this org's payday yet
+    }
 
     const orgId = org.id; // Capture for type narrowing in filter
     const orgLeader = org.leader; // Capture for use in closures

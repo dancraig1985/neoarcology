@@ -190,25 +190,26 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   updatedOrgs = orgBehaviorResult.orgs;
   updatedLocations = orgBehaviorResult.locations;
 
-  // 4. Process weekly economy on week rollover (payroll, operating costs for all orgs)
+  // 4. Process weekly economy (payroll, operating costs) - STAGGERED across week
+  // Each org processes on their weeklyPhaseOffset (spread across 56 phases)
+  const weeklyResult = processWeeklyEconomy(
+    updatedAgents,
+    updatedLocations,
+    updatedOrgs,
+    newTime.currentPhase
+  );
+  updatedAgents = weeklyResult.agents;
+  updatedLocations = weeklyResult.locations;
+  updatedOrgs = weeklyResult.orgs;
+
+  // 4b. Fix any homeless agents created by org dissolution
+  // (e.g., employees at deleted locations)
+  updatedAgents = fixHomelessAgents(updatedAgents, updatedLocations, newTime.currentPhase);
+
+  // 4c. Check for immigration on week rollover only
   if (weekRollover) {
     console.log(`\n=== WEEK ${newTime.week} ROLLOVER ===`);
 
-    const weeklyResult = processWeeklyEconomy(
-      updatedAgents,
-      updatedLocations,
-      updatedOrgs,
-      newTime.currentPhase
-    );
-    updatedAgents = weeklyResult.agents;
-    updatedLocations = weeklyResult.locations;
-    updatedOrgs = weeklyResult.orgs;
-
-    // 4b. Fix any homeless agents created by org dissolution
-    // (e.g., employees at deleted locations)
-    updatedAgents = fixHomelessAgents(updatedAgents, updatedLocations, newTime.currentPhase);
-
-    // 4c. Check for immigration (spawn new agents if population is low)
     const immigrants = checkImmigration(
       updatedAgents,
       updatedLocations,

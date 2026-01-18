@@ -41,6 +41,8 @@ export function createOrganization(
       stashes: [],
     },
     locations: [],
+    // Randomize weekly cycle offset to stagger payroll/costs across week
+    weeklyPhaseOffset: Math.floor(Math.random() * 56),
   };
 }
 

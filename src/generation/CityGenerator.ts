@@ -462,7 +462,8 @@ function createOrgFromTemplate(
   template: OrgTemplate,
   leaderId: string,
   credits: number,
-  phase: number
+  phase: number,
+  rand: () => number
 ): Organization {
   return {
     id: nextOrgId(),
@@ -474,6 +475,8 @@ function createOrgFromTemplate(
     leader: leaderId,
     wallet: createWallet(credits),
     locations: [],
+    // Randomize weekly cycle offset to stagger payroll/costs across week (0-55)
+    weeklyPhaseOffset: randomInt(0, 55, rand),
   };
 }
 
@@ -718,7 +721,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         : randomInt(2000, 5000, rand);
 
       const corpName = `${pickRandom(lastNames, rand)} Industries`;
-      const corp = createOrgFromTemplate(corpName, corpTemplate, leader.id, credits, 0);
+      const corp = createOrgFromTemplate(corpName, corpTemplate, leader.id, credits, 0, rand);
 
       if (corpTemplate.generation.leaderBecomesEmployed) {
         leader.status = 'employed';
@@ -876,7 +879,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         shopOrgTemplate,
         owner.id,
         orgCredits,
-        0
+        0,
+        rand
       );
 
       // Set owner as employed if template specifies
@@ -973,7 +977,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         restaurantOrgTemplate,
         owner.id,
         orgCredits,
-        0
+        0,
+        rand
       );
 
       // Set owner as employed if template specifies
@@ -1070,7 +1075,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         pubOrgTemplate,
         owner.id,
         orgCredits,
-        0
+        0,
+        rand
       );
 
       // Set owner as employed if template specifies
@@ -1167,7 +1173,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         boutiqueOrgTemplate,
         owner.id,
         orgCredits,
-        0
+        0,
+        rand
       );
 
       // Set owner as employed if template specifies
@@ -1307,7 +1314,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         apartmentOrgTemplate,
         owner.id,
         orgCredits,
-        0
+        0,
+        rand
       );
 
       if (apartmentOrgTemplate.generation?.leaderBecomesEmployed) {

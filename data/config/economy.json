@@ -2,7 +2,7 @@
   "goods": {
     "provisions": {
       "size": 0.1,
-      "retailPrice": 10,
+      "retailPrice": 20,
       "wholesalePrice": 3,
       "vertical": {
         "demandType": "consumer",
@@ -14,13 +14,13 @@
     },
     "alcohol": {
       "size": 0.2,
-      "retailPrice": 15,
+      "retailPrice": 25,
       "wholesalePrice": 5,
       "vertical": {
         "demandType": "consumer",
         "needsField": "leisure",
         "needsThreshold": 40,
-        "minCredits": 15,
+        "minCredits": 25,
         "productionTemplate": "brewery",
         "retailTemplate": "pub"
       }

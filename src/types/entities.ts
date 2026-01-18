@@ -194,6 +194,10 @@ export interface Organization extends Entity {
 
   // Owned locations (factories, warehouses, etc.)
   locations: LocationRef[];
+
+  // Weekly cycle offset (0-55) - staggers payroll/rent across week
+  // Org processes weekly operations when (phase % 56) === weeklyPhaseOffset
+  weeklyPhaseOffset: number;
 }
 
 /**
