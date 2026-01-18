@@ -18,7 +18,7 @@ import {
   MinMaxRange,
   BuildingTemplate,
 } from '../config/ConfigLoader';
-import { Agent, Location, Organization, Wallet, Building } from '../types';
+import { Agent, Location, Organization, Wallet, Building, Vehicle } from '../types';
 import { CityGrid, GRID_SIZE } from './types';
 import { generateZones } from './ZoneGenerator';
 
@@ -33,6 +33,7 @@ export interface GeneratedCity {
   locations: Location[];
   organizations: Organization[];
   agents: Agent[];
+  vehicles: Vehicle[];
 }
 
 /**
@@ -1519,5 +1520,9 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
     `${organizations.length} orgs, ${agents.length} agents`
   );
 
-  return { grid, buildings, locations, organizations, agents };
+  // TODO PLAN-027: Spawn test vehicles for initial testing
+  // TODO PLAN-028: Spawn vehicles when logistics companies are created
+  const vehicles: Vehicle[] = [];
+
+  return { grid, buildings, locations, organizations, agents, vehicles };
 }

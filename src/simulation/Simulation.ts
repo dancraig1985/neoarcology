@@ -3,7 +3,7 @@
  * Ties together tick engine, agents, and systems
  */
 
-import type { Agent, Location, Organization, Building } from '../types';
+import type { Agent, Location, Organization, Building, Vehicle } from '../types';
 import type { LoadedConfig } from '../config/ConfigLoader';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
@@ -23,6 +23,7 @@ export interface SimulationState {
   buildings: Building[];
   locations: Location[];
   organizations: Organization[];
+  vehicles: Vehicle[];
   grid: import('../generation/types').CityGrid | null;
   isRunning: boolean;
   ticksPerSecond: number;
@@ -85,6 +86,7 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
     buildings: city.buildings,
     locations: city.locations,
     organizations: city.organizations,
+    vehicles: [], // Will be populated when logistics companies spawn
     grid: city.grid,
     isRunning: false,
     ticksPerSecond: 10,
@@ -232,6 +234,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     agents: updatedAgents,
     locations: updatedLocations,
     organizations: updatedOrgs,
+    vehicles: state.vehicles, // No vehicle behaviors yet (PLAN-027 in progress)
   };
 
   // Update current snapshot for Reports panel

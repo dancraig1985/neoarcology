@@ -366,24 +366,19 @@ export interface MissionOutcome {
 }
 
 /**
- * Vehicle - transportation and mobile assets
+ * Vehicle - MVP for logistics (cargo trucks)
+ * Simplified from original design for PLAN-027
  */
-export interface Vehicle extends Entity {
-  owner?: OrgRef;
-  operator?: AgentRef;
-
-  stats: VehicleStats;
-  condition: number; // 0-100
-  location?: LocationRef;
-  maintenanceCost: number; // Per week
-}
-
-export interface VehicleStats {
-  speed: number;
-  capacity: number; // Agent slots
-  armor: number;
-  stealth: number;
-  cargo: number; // Equipment/goods capacity
+export interface Vehicle {
+  id: string;
+  name: string;
+  template: string;  // 'cargo_truck'
+  created: number;   // Phase when spawned
+  owner: OrgRef;     // Which org owns this vehicle
+  operator?: AgentRef;  // Who's currently driving (undefined = parked)
+  building: BuildingRef;  // Which building parking lot it's at
+  cargo: Inventory;  // Goods being transported
+  cargoCapacity: number;  // Max cargo space (in size units, not item count)
 }
 
 /**

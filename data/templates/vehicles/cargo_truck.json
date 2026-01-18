@@ -1,0 +1,10 @@
+{
+  "id": "cargo_truck",
+  "name": "Cargo Truck",
+  "description": "Basic cargo truck for goods delivery (MVP for PLAN-027)",
+  "cargoCapacity": 50,
+  "generation": {
+    "spawnAtStart": false,
+    "ownerOrgTemplate": "logistics_company"
+  }
+}
