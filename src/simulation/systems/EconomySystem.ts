@@ -2,7 +2,7 @@
  * EconomySystem - Handles agent economic decisions and weekly processing
  */
 
-import type { Agent, Location, Organization, Building, Vehicle } from '../../types';
+import type { Agent, Location, Organization, Building, Vehicle, DeliveryRequest } from '../../types';
 import type { EconomyConfig, AgentsConfig, LocationTemplate, TransportConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import {
@@ -19,7 +19,7 @@ import { createOrganization, addLocationToOrg } from './OrgSystem';
 import { findNearestLocation, isTraveling, startTravel, redirectTravel } from './TravelSystem';
 import { setLocation, clearEmployment, onOrgDissolvedWithLocations, onOrgDissolvedOrphanLocations } from './AgentStateHelpers';
 import { needsRest, processRest } from './AgentSystem';
-import { onOrgDissolved as onOrgDissolvedVehicles } from './VehicleSystem';
+import { onOrgDissolved as onOrgDissolvedVehicles, createVehicle } from './VehicleSystem';
 import { getBestBusinessOpportunities, selectBusinessOpportunity } from './DemandAnalyzer';
 import {
   trackWholesaleSale,
@@ -316,7 +316,7 @@ export function processAgentEconomicDecision(
     updatedAgent.status === 'available'; // Must be unemployed
 
   if (canStartBusiness) {
-    const result = tryOpenBusiness(updatedAgent, locationTemplates, buildings, updatedLocations, allAgents, updatedOrgs, agentsConfig, economyConfig, phase);
+    const result = tryOpenBusiness(updatedAgent, locationTemplates, buildings, updatedLocations, allAgents, updatedOrgs, agentsConfig, economyConfig, [], [], phase);
     if (result.newLocation && result.newOrg) {
       updatedAgent = result.agent;
       newLocation = result.newLocation;
@@ -1023,6 +1023,7 @@ function chooseBestBusiness(
   agentsConfig: AgentsConfig,
   economyConfig: EconomyConfig,
   orgs: Organization[],
+  deliveryRequests: DeliveryRequest[],
   phase: number
 ): string {
   // Use DemandAnalyzer for scalable, config-driven demand calculation
@@ -1032,7 +1033,8 @@ function chooseBestBusiness(
     orgs,
     economyConfig,
     agentsConfig,
-    locationTemplates
+    locationTemplates,
+    deliveryRequests
   );
 
   // Select using weighted random (higher demand = higher chance)
@@ -1084,15 +1086,19 @@ export function tryOpenBusiness(
   orgs: Organization[],
   agentsConfig: AgentsConfig,
   economyConfig: EconomyConfig,
+  deliveryRequests: DeliveryRequest[],
+  vehicles: Vehicle[], // Used for signature compatibility, not needed internally
   phase: number
-): { agent: Agent; newLocation?: Location; newOrg?: Organization } {
+): { agent: Agent; newLocation?: Location; newOrg?: Organization; newVehicles?: Vehicle[] } {
+  void vehicles; // Suppress unused variable warning
+
   // 20% chance to try opening a business each phase when eligible
   if (Math.random() > 0.2) {
     return { agent };
   }
 
   // Choose business type based on market demand (uses DemandAnalyzer)
-  const businessType = chooseBestBusiness(agents, locations, locationTemplates, agentsConfig, economyConfig, orgs, phase);
+  const businessType = chooseBestBusiness(agents, locations, locationTemplates, agentsConfig, economyConfig, orgs, deliveryRequests, phase);
   const template = locationTemplates[businessType];
   if (!template) {
     return { agent };
@@ -1125,11 +1131,14 @@ export function tryOpenBusiness(
   const isResidential = templateTags.includes('residential');
   const isLeisure = templateTags.includes('leisure');
   const isLuxury = templateTags.includes('luxury');
+  const isLogistics = templateTags.includes('depot') || businessType === 'depot';
 
   // Generate org name based on business type
   const lastName = agent.name.split(' ')[1] ?? agent.name;
   let orgName: string;
-  if (isProduction) {
+  if (isLogistics) {
+    orgName = `${lastName} Logistics`;
+  } else if (isProduction) {
     orgName = `${lastName} Industries`;
   } else if (isResidential) {
     orgName = `${agent.name}'s Rental`;
@@ -1192,6 +1201,45 @@ export function tryOpenBusiness(
   // Link location to org
   newOrg = addLocationToOrg(newOrg, locationId);
 
+  // Tag logistics orgs for easy identification
+  if (isLogistics) {
+    newOrg = {
+      ...newOrg,
+      tags: [...(newOrg.tags ?? []), 'logistics'],
+    };
+  }
+
+  // Spawn free trucks for new logistics companies
+  const newVehicles: Vehicle[] = [];
+  if (isLogistics && buildingPlacement) {
+    const building = buildings.find(b => b.id === buildingPlacement.building.id);
+    if (building) {
+      const numTrucks = 2 + Math.floor(Math.random() * 3); // 2-4 trucks
+      for (let i = 0; i < numTrucks; i++) {
+        const vehicleId = `vehicle_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const truckName = `${lastName} Truck ${i + 1}`;
+        const truck = createVehicle(
+          vehicleId,
+          truckName,
+          'truck',
+          newOrg,
+          building,
+          100, // Cargo capacity
+          phase
+        );
+        newVehicles.push(truck);
+      }
+
+      ActivityLog.info(
+        phase,
+        'business',
+        `${orgName} received ${numTrucks} free trucks`,
+        orgId,
+        orgName
+      );
+    }
+  }
+
   // Deduct opening cost + business capital from agent
   const totalCost = openingCost + businessCapital;
   const updatedAgent: Agent = {
@@ -1204,7 +1252,7 @@ export function tryOpenBusiness(
     },
   };
 
-  return { agent: updatedAgent, newLocation, newOrg };
+  return { agent: updatedAgent, newLocation, newOrg, newVehicles: newVehicles.length > 0 ? newVehicles : undefined };
 }
 
 /**

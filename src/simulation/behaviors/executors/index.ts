@@ -1162,6 +1162,8 @@ function executeEntrepreneurBehavior(
     ctx.orgs,
     ctx.agentsConfig,
     ctx.economyConfig,
+    ctx.deliveryRequests ?? [],
+    ctx.vehicles ?? [],
     ctx.phase
   );
 
@@ -1179,10 +1181,16 @@ function executeEntrepreneurBehavior(
     // Track business opening in metrics
     trackBusinessOpened(businessName);
 
+    // Add new vehicles to the result if any were created
+    const updatedVehicles = result.newVehicles
+      ? [...(ctx.vehicles ?? []), ...result.newVehicles]
+      : ctx.vehicles;
+
     return {
       agent: clearTask(result.agent),
       locations: ctx.locations,
       orgs: ctx.orgs,
+      vehicles: updatedVehicles,
       newLocation: result.newLocation,
       newOrg: result.newOrg,
       complete: true,

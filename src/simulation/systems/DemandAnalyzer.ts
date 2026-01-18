@@ -6,7 +6,7 @@
  * business decisions.
  */
 
-import type { Agent, Location, Organization } from '../../types';
+import type { Agent, Location, Organization, DeliveryRequest } from '../../types';
 import type { EconomyConfig, AgentsConfig, LocationTemplate, VerticalConfig } from '../../config/ConfigLoader';
 
 /**
@@ -276,6 +276,33 @@ export function analyzeWholesaleShortage(
 }
 
 /**
+ * Analyze demand for logistics services based on delivery backlog
+ */
+function analyzeLogisticsDemand(
+  deliveryRequests: DeliveryRequest[],
+  locations: Location[],
+  orgs: Organization[]
+): number {
+  // Count pending delivery requests (unmet demand)
+  const pendingDeliveries = deliveryRequests.filter(req => req.status === 'pending').length;
+
+  // Count existing logistics companies and their capacity
+  const logisticsOrgs = orgs.filter(org => org.tags.includes('logistics'));
+  const depots = locations.filter(loc => loc.tags.includes('depot'));
+
+  // Each depot can support ~5 drivers (employee slots)
+  const totalCapacity = depots.reduce((sum, depot) => sum + (depot.employeeSlots ?? 5), 0);
+  const currentDrivers = depots.reduce((sum, depot) => sum + depot.employees.length, 0);
+  const availableCapacity = totalCapacity - currentDrivers;
+
+  // Demand score: pending deliveries that exceed available capacity
+  // If we have 10 pending deliveries but only capacity for 5 more drivers, score is 5
+  const demandScore = Math.max(0, pendingDeliveries - availableCapacity);
+
+  return demandScore;
+}
+
+/**
  * Get best business opportunities based on current market conditions
  * Returns sorted list of opportunities with scores
  */
@@ -285,7 +312,8 @@ export function getBestBusinessOpportunities(
   orgs: Organization[],
   economyConfig: EconomyConfig,
   agentsConfig: AgentsConfig,
-  locationTemplates: Record<string, LocationTemplate>
+  locationTemplates: Record<string, LocationTemplate>,
+  deliveryRequests?: DeliveryRequest[]
 ): BusinessOpportunity[] {
   const opportunities: BusinessOpportunity[] = [];
 
@@ -339,6 +367,21 @@ export function getBestBusinessOpportunities(
       finalScore: housingDemand.demand - housingDemand.supply,
       reason: `${housingDemand.demand} homeless agents with funds, only ${housingDemand.supply} available units`,
     });
+  }
+
+  // Add logistics opportunity if delivery backlog exists
+  if (deliveryRequests && locationTemplates['depot']) {
+    const logisticsDemand = analyzeLogisticsDemand(deliveryRequests, locations, orgs);
+    if (logisticsDemand >= 3) {
+      const existingDepots = locations.filter(loc => loc.tags.includes('depot')).length;
+      opportunities.push({
+        templateId: 'depot',
+        demandScore: logisticsDemand,
+        competitionScore: existingDepots,
+        finalScore: logisticsDemand - (existingDepots * 2),
+        reason: `${logisticsDemand} unmet delivery requests, ${existingDepots} existing logistics companies`,
+      });
+    }
   }
 
   // Always include retail_shop as fallback (food is always needed)

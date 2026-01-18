@@ -284,6 +284,7 @@ export interface BehaviorConditions {
   shopNeedsStock?: boolean;
   shopHasStock?: boolean;
   atLocation?: string;                      // e.g., "employedAt", "residence"
+  atLocationWithTag?: string;               // e.g., "depot", "retail", "public"
   or?: BehaviorConditions[];                // OR logic for conditions
   never?: boolean;                          // Never completes (for continuous tasks)
 }

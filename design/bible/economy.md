@@ -303,6 +303,35 @@ Selection uses weighted random - higher scores are more likely but not guarantee
 | Luxury Boutique | `luxury_boutique` | Wealthy agents (250+ credits) |
 | Apartment | `apartment` | Homeless agents with savings |
 | Factory | Various | Wholesale supply shortage |
+| Logistics Company | `depot` | Delivery request backlog |
+
+### Logistics Companies (Special Case)
+
+Logistics companies are unique in the entrepreneurship system:
+
+**Demand Analysis**
+- Calculated from pending delivery requests vs. available driver capacity
+- Each depot supports ~5 drivers (employee slots)
+- Demand score = pending deliveries exceeding capacity
+- Minimum demand threshold: 3 unmet deliveries
+
+**Free Truck Spawning**
+When an agent opens a logistics company:
+- 2-4 free trucks are spawned (owned by the new org)
+- Trucks parked at the depot's building
+- Each truck has 100 cargo capacity
+- No purchase cost (until vehicle vertical is implemented)
+
+**Org Structure**
+- Org name: "{LastName} Logistics" (e.g., "Smith Logistics")
+- Org tagged with 'logistics' for identification
+- Depot location in industrial zones
+- Drivers employed at depot (seek_job behavior assigns them)
+
+**City Generation**
+- Only 1 initial logistics company spawned
+- Others appear organically based on delivery demand
+- Prevents oversupply at game start
 
 ### The Entrepreneur Loop
 1. Agent accumulates 500+ credits

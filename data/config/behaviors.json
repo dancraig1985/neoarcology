@@ -79,6 +79,7 @@
       "conditions": {
         "hasEmployment": true,
         "atWorkplace": true,
+        "atLocationWithTag": "depot",
         "needsBelow": { "hunger": 50 }
       },
       "completionConditions": {

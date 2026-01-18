@@ -202,6 +202,13 @@ export function evaluateConditions(
     if (!atTarget) return false;
   }
 
+  // atLocationWithTag: "depot" → current location has 'depot' tag
+  if (conditions.atLocationWithTag !== undefined) {
+    const currentLoc = ctx.locations.find(l => l.id === agent.currentLocation);
+    const hasTag = currentLoc?.tags.includes(conditions.atLocationWithTag) ?? false;
+    if (!hasTag) return false;
+  }
+
   // All conditions passed
   return true;
 }

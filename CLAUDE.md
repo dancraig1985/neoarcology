@@ -129,6 +129,13 @@ Agent decisions are **data-driven** via `data/config/behaviors.json`. Each behav
 "completionConditions": { "needsAbove": { "hunger": 50 } }
 ```
 
+**Behavior Condition Best Practices**:
+- Always scope conditions as narrowly as possible to avoid unintended behavior matches
+- Use `atLocationWithTag` to restrict behaviors to specific location types (e.g., `"atLocationWithTag": "depot"` for logistics-only behaviors)
+- Test new behaviors by running headless sim and checking for unexpected warning spam
+- When adding specialized worker behaviors (truckers, security guards, etc.), gate them with location tag conditions
+- Remember: `hasEmployment: true` matches ALL employed agents, not just specific job types
+
 ## Economic Verticals
 
 The economy has separate supply chains (verticals):

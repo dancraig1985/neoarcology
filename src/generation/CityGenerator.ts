@@ -1522,12 +1522,13 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   );
 
   // PLAN-028: Spawn logistics companies with depots and vehicles
+  // Start with just 1 company - others will appear based on demand via entrepreneurship system
   const vehicles: Vehicle[] = [];
   const logisticsTemplate = config.orgTemplates['logistics_company'];
   const depotTemplate = config.locationTemplates['depot'];
 
   if (logisticsTemplate && depotTemplate) {
-    const numLogisticsCompanies = randomFromRange(logisticsTemplate.generation?.count ?? { min: 2, max: 3 }, rand);
+    const numLogisticsCompanies = 1; // Only 1 initial logistics company, demand-driven expansion
 
     for (let i = 0; i < numLogisticsCompanies; i++) {
       // Create logistics company leader (hire from unemployed agents)

@@ -54,6 +54,21 @@ Factory produces goods → Factory reaches 80% capacity
       → Retail shop restocks from warehouse (pays wholesale price)
 ```
 
+### Logistics Locations
+Tagged with `depot`. These handle goods delivery:
+- `depot` - Logistics hub for truck drivers
+  - Owned by logistics companies (special org type with 'logistics' tag)
+  - Employs truck_drivers who make deliveries
+  - Houses company trucks (vehicles parked at depot building)
+  - ~5 employee slots per depot (driver capacity)
+  - Creates delivery requests for factory→warehouse and warehouse→retail transfers
+  - Revenue from delivery fees paid by requesting orgs
+
+**Depot Employment:**
+- Only agents employed at depots can deliver goods (gated by `atLocationWithTag: "depot"` behavior condition)
+- Drivers use company trucks to pick up and deliver cargo
+- Delivery workflow: claim truck → drive to pickup → load cargo → drive to delivery → unload → return to depot
+
 ### Retail Locations
 Tagged with `retail`. These sell to consumers:
 - `retail_shop` - Sells provisions
