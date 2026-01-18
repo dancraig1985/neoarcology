@@ -1404,15 +1404,15 @@ function getNextGoodsOrderId(): string {
 }
 
 /**
- * Place a goods order from retail shop to wholesaler
+ * Place a goods order from retail shop to seller organization
  * Creates an Order entity with orderType='goods'
+ * Note: pickupLocation is NOT set here - seller assigns it during fulfillment
  */
 export function placeGoodsOrder(
   buyerOrg: Organization,
   shop: Location,
   goodType: string,
   quantity: number,
-  wholesaler: Location,
   sellerOrg: Organization,
   economyConfig: EconomyConfig,
   phase: number
@@ -1432,7 +1432,7 @@ export function placeGoodsOrder(
     good: goodType,
     quantity,
     totalPrice,
-    pickupLocation: wholesaler.id,
+    // pickupLocation: assigned by seller during fulfillment
     deliveryLocation: shop.id,
   };
 
@@ -1490,25 +1490,24 @@ export function tryPlaceGoodsOrder(
     return null; // Don't place duplicate orders
   }
 
-  // Find wholesale locations with the needed good type
-  // Filter to only locations that can produce this good (have production config for it)
-  const wholesaleLocations = locations.filter(
-    (loc) => loc.tags.includes('wholesale') &&
-             !buyerOrg.locations.includes(loc.id) // Don't order from yourself
-  );
+  // Find orgs that have wholesale locations (factories/producers)
+  // Don't filter by current stock - seller will find stock during fulfillment
+  const wholesaleOrgs = orgs.filter((org) => {
+    // Must own at least one wholesale location
+    const hasWholesaleLocation = locations.some(
+      (loc) => org.locations.includes(loc.id) && loc.tags.includes('wholesale')
+    );
+    // Don't order from yourself
+    const isNotSelf = org.id !== buyerOrg.id;
+    return hasWholesaleLocation && isNotSelf;
+  });
 
-  if (wholesaleLocations.length === 0) {
+  if (wholesaleOrgs.length === 0) {
     return null;
   }
 
-  // Pick a random wholesaler
-  const wholesaler = wholesaleLocations[Math.floor(Math.random() * wholesaleLocations.length)];
-  if (!wholesaler) {
-    return null;
-  }
-
-  // Find the org that owns this wholesale location
-  const sellerOrg = orgs.find((org) => org.locations.includes(wholesaler.id));
+  // Pick a random seller organization
+  const sellerOrg = wholesaleOrgs[Math.floor(Math.random() * wholesaleOrgs.length)];
   if (!sellerOrg) {
     return null;
   }
@@ -1526,13 +1525,12 @@ export function tryPlaceGoodsOrder(
     return null;
   }
 
-  // Place the order
+  // Place the order (seller will assign pickup location during fulfillment)
   return placeGoodsOrder(
     buyerOrg,
     shop,
     goodType,
     orderQuantity,
-    wholesaler,
     sellerOrg,
     economyConfig,
     phase
@@ -1561,12 +1559,14 @@ export function processGoodsOrders(
       continue;
     }
 
-    // Check if wholesaler (pickup location) has enough inventory
-    const pickupLoc = locations.find(loc => loc.id === order.pickupLocation);
-    const deliveryLoc = locations.find(loc => loc.id === order.deliveryLocation);
+    // Seller-driven fulfillment: seller org decides where to ship from
+    const goodType = order.good ?? 'provisions';
+    const quantity = order.quantity ?? 0;
 
-    if (!pickupLoc || !deliveryLoc) {
-      // Locations don't exist - cancel order
+    // Find seller organization
+    const sellerOrg = orgs.find(org => org.id === order.seller);
+    if (!sellerOrg) {
+      // Seller org no longer exists - cancel order
       updatedOrders.push({
         ...order,
         status: 'cancelled',
@@ -1575,22 +1575,50 @@ export function processGoodsOrders(
       continue;
     }
 
-    const goodType = order.good ?? 'provisions';
-    const quantity = order.quantity ?? 0;
-    const pickupStock = getGoodsCount(pickupLoc, goodType);
+    // Check delivery location still exists
+    const deliveryLoc = locations.find(loc => loc.id === order.deliveryLocation);
+    if (!deliveryLoc) {
+      // Delivery location doesn't exist - cancel order
+      updatedOrders.push({
+        ...order,
+        status: 'cancelled',
+        fulfilled: phase,
+      });
+      continue;
+    }
 
-    if (pickupStock >= quantity) {
-      // Order is ready! Mark it and create a logistics order for delivery
+    // Intelligent fulfillment: search seller's locations for stock
+    // Priority 1: Warehouses (designed for storage)
+    // Priority 2: Factories (production locations)
+    const sellerLocations = locations.filter(loc => sellerOrg.locations.includes(loc.id));
+
+    const warehouses = sellerLocations.filter(loc => loc.tags.includes('storage'));
+    const factories = sellerLocations.filter(loc => loc.tags.includes('wholesale'));
+
+    // Search in priority order
+    const searchOrder = [...warehouses, ...factories];
+
+    let pickupLoc: Location | undefined = undefined;
+    for (const loc of searchOrder) {
+      const stock = getGoodsCount(loc, goodType);
+      if (stock >= quantity) {
+        pickupLoc = loc;
+        break; // Found a location with enough stock
+      }
+    }
+
+    if (pickupLoc) {
+      // Order is ready! Assign pickup location and create logistics order
       const updatedOrder: Order = {
         ...order,
         status: 'ready',
+        pickupLocation: pickupLoc.id, // Seller assigns pickup location
       };
 
       // Create logistics order (delivery request) for this goods order
-      // Import will be needed from DeliverySystem
       const cargo: Record<string, number> = { [goodType]: quantity };
 
-      // Calculate delivery payment (same logic as warehouse transfers)
+      // Calculate delivery payment
       const distance = Math.abs((pickupLoc.x ?? 0) - (deliveryLoc.x ?? 0)) +
                       Math.abs((pickupLoc.y ?? 0) - (deliveryLoc.y ?? 0));
       const totalGoods = quantity;
@@ -1615,15 +1643,16 @@ export function processGoodsOrders(
       ActivityLog.info(
         phase,
         'order',
-        `goods order ${order.id} ready - created logistics order for delivery`,
-        order.buyer,
-        'Order System'
+        `${sellerOrg.name} fulfilled order ${order.id} - shipping ${quantity} ${goodType} from ${pickupLoc.name}`,
+        order.seller,
+        sellerOrg.name
       );
 
       updatedOrders.push(updatedOrder);
       newLogisticsOrders.push(logisticsOrder);
     } else {
-      // Not ready yet, keep pending
+      // Not ready yet - seller doesn't have stock in any single location
+      // Keep pending (Option 2: wait for consolidation)
       updatedOrders.push(order);
     }
   }

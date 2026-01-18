@@ -447,7 +447,7 @@ export interface Order {
   good?: string; // 'provisions', 'alcohol', etc.
   quantity?: number;
   totalPrice?: number;
-  pickupLocation?: LocationRef; // Where seller will have goods ready
+  pickupLocation?: LocationRef; // Where seller will have goods ready (assigned during fulfillment)
   deliveryLocation?: LocationRef; // Where buyer wants delivery
 
   // For logistics orders (delivery service)

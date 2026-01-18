@@ -13,8 +13,6 @@ import { createLocation, findBuildingForLocation } from './LocationSystem';
 import { addLocationToOrg } from './OrgSystem';
 import { transferInventory, type GoodsSizes } from './InventorySystem';
 import { trackB2BSale, trackBusinessOpened } from '../Metrics';
-import { createDeliveryRequest, calculateDeliveryPayment } from './DeliverySystem';
-import { getDistance } from './TravelSystem';
 
 // Office name generator
 const OFFICE_NAMES = [
@@ -120,7 +118,7 @@ export function processOrgBehaviors(
     );
     updatedLocations = transferResult.locations;
 
-    // 0.5. Try to transfer surplus goods from factories to warehouses
+    // 0.5. Try to transfer surplus goods from factories to warehouses (instant internal transfer)
     const warehouseTransferResult = tryTransferToWarehouse(
       org,
       updatedLocations.filter(loc => org.locations.includes(loc.id)),
@@ -130,7 +128,7 @@ export function processOrgBehaviors(
       phase
     );
     updatedLocations = warehouseTransferResult.locations;
-    deliveryRequests.push(...warehouseTransferResult.deliveryRequests);
+    // No delivery requests created - internal transfers are instant
 
     // 1. Try to sell valuable_data for revenue (temporary B2B market)
     const dataRevenueResult = trySelllValuableData(
@@ -319,9 +317,9 @@ function tryTransferInputGoods(
 }
 
 /**
- * Try to create delivery requests for surplus goods from factories to warehouses
+ * Try to transfer surplus goods from factories to warehouses
  * Triggered when factory inventory exceeds 80% capacity
- * Creates delivery requests instead of instant teleportation (PLAN-028)
+ * Uses instant internal transfer (company's own logistics, not external delivery service)
  */
 function tryTransferToWarehouse(
   org: Organization,
@@ -330,15 +328,16 @@ function tryTransferToWarehouse(
   locationTemplates: Record<string, LocationTemplate>,
   economyConfig: EconomyConfig,
   phase: number
-): { locations: Location[]; deliveryRequests: DeliveryRequest[] } {
-  const deliveryRequests: DeliveryRequest[] = [];
+): { locations: Location[] } {
+  // Construct goodsSizes for inventory transfers
+  const goodsSizes: GoodsSizes = { goods: economyConfig.goods, defaultGoodsSize: economyConfig.defaultGoodsSize };
 
   // Find org-owned warehouses (storage facilities)
   const warehouses = orgLocations.filter(loc => loc.tags.includes('storage'));
 
   // Skip if org has no warehouses
   if (warehouses.length === 0) {
-    return { locations: allLocations, deliveryRequests };
+    return { locations: allLocations };
   }
 
   // Find production facilities (factories) with high inventory
@@ -356,7 +355,7 @@ function tryTransferToWarehouse(
 
   // No transfers needed
   if (productionFacilities.length === 0) {
-    return { locations: allLocations, deliveryRequests };
+    return { locations: allLocations };
   }
 
   // For each factory with high inventory, create delivery request to warehouse
@@ -396,9 +395,14 @@ function tryTransferToWarehouse(
       continue;
     }
 
+    // Instant internal transfer: factory → warehouse (company's own logistics)
     // Identify goods to transfer (tangible goods only, preserve valuable_data for internal use)
     const tangibleGoods = ['provisions', 'alcohol', 'luxury_goods', 'high_tech_prototypes', 'data_storage'];
-    const goodsForDelivery: Record<string, number> = {};
+
+    let updatedFactory = factory;
+    let updatedWarehouse = warehouse;
+    let totalTransferred = 0;
+    const transferredGoods: Record<string, number> = {};
 
     for (const good of tangibleGoods) {
       const amount = factory.inventory[good] ?? 0;
@@ -406,33 +410,50 @@ function tryTransferToWarehouse(
         // Transfer up to 50% of factory stock (leave some buffer for immediate sales)
         const transferAmount = Math.floor(amount * 0.5);
         if (transferAmount > 0) {
-          goodsForDelivery[good] = Math.min(transferAmount, whAvailable);
+          const result = transferInventory(
+            updatedFactory,
+            updatedWarehouse,
+            good,
+            transferAmount,
+            goodsSizes
+          );
+
+          if (result.transferred > 0) {
+            updatedFactory = result.from;
+            updatedWarehouse = result.to;
+            totalTransferred += result.transferred;
+            transferredGoods[good] = result.transferred;
+          }
         }
       }
     }
 
-    if (Object.keys(goodsForDelivery).length === 0) {
-      continue;
+    if (totalTransferred === 0) {
+      continue; // Nothing transferred (warehouse might be full)
     }
 
-    // Calculate delivery payment based on distance
-    const distance = getDistance(factory, warehouse);
-    const payment = calculateDeliveryPayment(goodsForDelivery, distance);
+    // Log the instant transfer
+    const goodsList = Object.entries(transferredGoods)
+      .map(([good, amt]) => `${amt} ${good}`)
+      .join(', ');
 
-    // Create delivery request (goods will be transferred when delivery completes)
-    const request = createDeliveryRequest(
-      factory,
-      warehouse,
-      goodsForDelivery,
-      payment,
-      'medium', // Factory overflow is medium urgency
-      phase
+    ActivityLog.info(
+      phase,
+      'transfer',
+      `internal transfer: ${goodsList} from ${factory.name} to ${warehouse.name}`,
+      org.id,
+      org.name
     );
 
-    deliveryRequests.push(request);
+    // Update locations in the main array
+    allLocations = allLocations.map(loc => {
+      if (loc.id === factory.id) return updatedFactory;
+      if (loc.id === warehouse.id) return updatedWarehouse;
+      return loc;
+    });
   }
 
-  return { locations: allLocations, deliveryRequests };
+  return { locations: allLocations };
 }
 
 /**
