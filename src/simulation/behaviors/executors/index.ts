@@ -1678,10 +1678,59 @@ function executeDeliverGoodsBehavior(
       };
     }
 
+    // Validate vehicle has a current building
+    if (!assignedVehicle.currentBuilding) {
+      ActivityLog.warning(
+        ctx.phase,
+        'delivery',
+        `vehicle has no currentBuilding, cannot travel - failing delivery`,
+        agent.id,
+        agent.name
+      );
+
+      const failedDelivery = failDelivery(deliveryRequest!, 'vehicle has no location', ctx.phase);
+      const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+        req.id === deliveryRequest!.id ? failedDelivery : req
+      );
+
+      return {
+        agent: clearTask(agent),
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        deliveryRequests: updatedDeliveryRequests,
+        complete: true,
+      };
+    }
+
+    // Find the current building
+    const currentBuilding = ctx.buildings.find(b => b.id === assignedVehicle.currentBuilding);
+    if (!currentBuilding) {
+      ActivityLog.warning(
+        ctx.phase,
+        'delivery',
+        `vehicle currentBuilding not found: ${assignedVehicle.currentBuilding} - failing delivery`,
+        agent.id,
+        agent.name
+      );
+
+      const failedDelivery = failDelivery(deliveryRequest!, 'current building not found', ctx.phase);
+      const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+        req.id === deliveryRequest!.id ? failedDelivery : req
+      );
+
+      return {
+        agent: clearTask(agent),
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        deliveryRequests: updatedDeliveryRequests,
+        complete: true,
+      };
+    }
+
     // Start vehicle travel to pickup building
     const travelingVehicle = startVehicleTravel(
       assignedVehicle,
-      ctx.buildings.find(b => b.id === assignedVehicle.currentBuilding)!,
+      currentBuilding,
       fromBuilding,
       'truck',
       ctx.transportConfig,
@@ -1826,10 +1875,59 @@ function executeDeliverGoodsBehavior(
       };
     }
 
+    // Validate vehicle has a current building
+    if (!assignedVehicle.currentBuilding) {
+      ActivityLog.warning(
+        ctx.phase,
+        'delivery',
+        `vehicle has no currentBuilding, cannot travel - failing delivery`,
+        agent.id,
+        agent.name
+      );
+
+      const failedDelivery = failDelivery(deliveryRequest!, 'vehicle has no location', ctx.phase);
+      const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+        req.id === deliveryRequest!.id ? failedDelivery : req
+      );
+
+      return {
+        agent: clearTask(agent),
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        deliveryRequests: updatedDeliveryRequests,
+        complete: true,
+      };
+    }
+
+    // Find the current building
+    const currentBuilding = ctx.buildings.find(b => b.id === assignedVehicle.currentBuilding);
+    if (!currentBuilding) {
+      ActivityLog.warning(
+        ctx.phase,
+        'delivery',
+        `vehicle currentBuilding not found: ${assignedVehicle.currentBuilding} - failing delivery`,
+        agent.id,
+        agent.name
+      );
+
+      const failedDelivery = failDelivery(deliveryRequest!, 'current building not found', ctx.phase);
+      const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+        req.id === deliveryRequest!.id ? failedDelivery : req
+      );
+
+      return {
+        agent: clearTask(agent),
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        deliveryRequests: updatedDeliveryRequests,
+        complete: true,
+      };
+    }
+
     // Start vehicle travel to delivery building
     const travelingVehicle = startVehicleTravel(
       assignedVehicle,
-      ctx.buildings.find(b => b.id === assignedVehicle.currentBuilding)!,
+      currentBuilding,
       toBuilding,
       'truck',
       ctx.transportConfig,

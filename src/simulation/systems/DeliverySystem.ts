@@ -197,7 +197,7 @@ export function findAvailableVehicle(
   vehicles: Vehicle[]
 ): Vehicle | null {
   const availableVehicles = vehicles.filter(
-    (v) => v.owner === company.id && !v.operator
+    (v) => v.owner === company.id && !v.operator && v.currentBuilding // Must be parked at a building
   );
 
   return availableVehicles.length > 0 ? availableVehicles[0]! : null;
