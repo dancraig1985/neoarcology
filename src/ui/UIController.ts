@@ -68,10 +68,10 @@ export class UIController {
     // Controls (bottom)
     this.controlsPanel = new ControlsPanel(width, {
       onEndTurn: () => this.callbacks.onTick(1),
-      onAdvanceDay: () => this.callbacks.onTick(4),
-      onAdvanceWeek: () => this.callbacks.onTick(28),
-      onAdvanceMonth: () => this.callbacks.onTick(112),
-      onAdvanceYear: () => this.callbacks.onTick(1344),
+      onAdvanceDay: () => this.callbacks.onTick(8),      // 8 phases per day
+      onAdvanceWeek: () => this.callbacks.onTick(56),    // 8 * 7 days
+      onAdvanceMonth: () => this.callbacks.onTick(224),  // 8 * 28 days
+      onAdvanceYear: () => this.callbacks.onTick(2688),  // 8 * 336 days
     });
     this.root.addChild(this.controlsPanel);
 
@@ -127,19 +127,19 @@ export class UIController {
           break;
         case 'KeyD':
           event.preventDefault();
-          this.callbacks.onTick(4); // +Day
+          this.callbacks.onTick(8); // +Day (8 phases per day)
           break;
         case 'KeyW':
           event.preventDefault();
-          this.callbacks.onTick(28); // +Week
+          this.callbacks.onTick(56); // +Week (8 phases/day * 7 days)
           break;
         case 'KeyM':
           event.preventDefault();
-          this.callbacks.onTick(112); // +Month
+          this.callbacks.onTick(224); // +Month (8 phases/day * 28 days)
           break;
         case 'KeyY':
           event.preventDefault();
-          this.callbacks.onTick(1344); // +Year
+          this.callbacks.onTick(2688); // +Year (8 phases/day * 336 days)
           break;
       }
     });
