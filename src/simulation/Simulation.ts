@@ -86,7 +86,7 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
     buildings: city.buildings,
     locations: city.locations,
     organizations: city.organizations,
-    vehicles: [], // Will be populated when logistics companies spawn
+    vehicles: city.vehicles, // Use vehicles from city generation
     grid: city.grid,
     isRunning: false,
     ticksPerSecond: 10,

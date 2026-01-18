@@ -253,6 +253,8 @@ export class MainPanel extends Panel {
         this.locationTable.setData(this.currentState.locations);
         break;
       case 'vehicles':
+        console.log('[MainPanel] Updating vehicles table, count:', this.currentState.vehicles.length);
+        console.log('[MainPanel] Vehicles:', this.currentState.vehicles);
         this.vehicleTable.setData(this.currentState.vehicles);
         break;
     }
