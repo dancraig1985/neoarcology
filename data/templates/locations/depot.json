@@ -1,0 +1,26 @@
+{
+  "id": "depot",
+  "name": "Logistics Depot",
+  "description": "A trucking hub where drivers pick up delivery assignments and park vehicles",
+  "tags": ["logistics", "industrial", "depot"],
+  "spawnConstraints": {
+    "allowedZones": ["industrial", "commercial"],
+    "floorRange": [0, 2],
+    "preferGroundFloor": true,
+    "minDistanceFromCenter": 3,
+    "maxPerCity": 5
+  },
+  "balance": {
+    "openingCost": 600,
+    "operatingCost": 50,
+    "employeeSlots": 5,
+    "salaryTier": "skilled",
+    "startingInventory": 0,
+    "inventoryCapacity": 100
+  },
+  "generation": {
+    "count": { "min": 1, "max": 1 },
+    "spawnAtStart": true,
+    "ownerOrgTemplate": "logistics_company"
+  }
+}

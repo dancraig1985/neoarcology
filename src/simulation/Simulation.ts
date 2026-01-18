@@ -3,7 +3,7 @@
  * Ties together tick engine, agents, and systems
  */
 
-import type { Agent, Location, Organization, Building, Vehicle } from '../types';
+import type { Agent, Location, Organization, Building, Vehicle, DeliveryRequest } from '../types';
 import type { LoadedConfig } from '../config/ConfigLoader';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
@@ -24,6 +24,7 @@ export interface SimulationState {
   locations: Location[];
   organizations: Organization[];
   vehicles: Vehicle[];
+  deliveryRequests: DeliveryRequest[];
   grid: import('../generation/types').CityGrid | null;
   isRunning: boolean;
   ticksPerSecond: number;
@@ -87,6 +88,7 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
     locations: city.locations,
     organizations: city.organizations,
     vehicles: city.vehicles, // Use vehicles from city generation
+    deliveryRequests: [], // Populated as factories/warehouses create delivery requests
     grid: city.grid,
     isRunning: false,
     ticksPerSecond: 10,
@@ -234,7 +236,8 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     agents: updatedAgents,
     locations: updatedLocations,
     organizations: updatedOrgs,
-    vehicles: state.vehicles, // No vehicle behaviors yet (PLAN-027 in progress)
+    vehicles: state.vehicles, // PLAN-028: Will be updated when truckers operate vehicles
+    deliveryRequests: state.deliveryRequests, // PLAN-028: Will be updated with delivery logic
   };
 
   // Update current snapshot for Reports panel

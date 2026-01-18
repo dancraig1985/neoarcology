@@ -403,3 +403,22 @@ export interface CashStash {
   locationId: LocationRef;
   hidden: boolean;
 }
+
+/**
+ * DeliveryRequest - Request for goods delivery between locations
+ * Created by factories/warehouses, fulfilled by logistics companies
+ */
+export interface DeliveryRequest {
+  id: string;
+  created: number; // Phase when request was created
+  from: LocationRef; // Pickup location
+  to: LocationRef; // Delivery destination
+  goods: Record<string, number>; // What to deliver (e.g., { provisions: 50 })
+  payment: number; // Credits paid to logistics company
+  urgency: 'low' | 'medium' | 'high';
+  status: 'pending' | 'assigned' | 'in_transit' | 'delivered' | 'failed';
+  assignedDriver?: AgentRef; // Which trucker is handling this
+  assignedVehicle?: VehicleRef; // Which truck is being used
+  assignedAt?: number; // When assigned
+  deliveredAt?: number; // When completed
+}

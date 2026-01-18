@@ -1,0 +1,16 @@
+{
+  "id": "logistics_company",
+  "name": "Logistics Company",
+  "description": "A trucking and delivery company that transports goods between locations",
+  "tags": ["corporation", "logistics", "legal"],
+  "defaults": {
+    "credits": { "min": 3000, "max": 6000 }
+  },
+  "generation": {
+    "count": { "min": 2, "max": 3 },
+    "spawnAtStart": true,
+    "ownsLocations": ["depot"],
+    "leaderBecomesEmployed": true,
+    "vehiclesPerLocation": { "min": 2, "max": 4 }
+  }
+}
