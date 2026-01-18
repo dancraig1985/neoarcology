@@ -186,6 +186,8 @@ export function setDead(agent: Agent, phase: number): Agent {
     travelingTo: undefined,
     travelMethod: undefined,
     travelPhasesRemaining: undefined,
+    // Clear vehicle occupancy
+    inVehicle: undefined,
     // Clear residence
     residence: undefined,
   };

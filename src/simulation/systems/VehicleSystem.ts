@@ -244,6 +244,120 @@ export function isOperated(vehicle: Vehicle): boolean {
   return vehicle.operator !== undefined;
 }
 
+// ============================================
+// Lifecycle & Cleanup Functions
+// ============================================
+
+/**
+ * Remove dead or missing agents from vehicle occupancy
+ * Call this after agent death or when agents are removed from simulation
+ */
+export function cleanupVehicleOccupants(
+  vehicle: Vehicle,
+  livingAgentIds: Set<string>,
+  phase: number
+): Vehicle {
+  let updated = vehicle;
+  let needsCleanup = false;
+
+  // Check operator
+  if (vehicle.operator && !livingAgentIds.has(vehicle.operator)) {
+    ActivityLog.warning(
+      phase,
+      'vehicle',
+      `operator ${vehicle.operator} is dead/missing - releasing vehicle`,
+      'system',
+      vehicle.name
+    );
+    updated = {
+      ...updated,
+      operator: undefined,
+    };
+    needsCleanup = true;
+  }
+
+  // Check passengers
+  const validPassengers = vehicle.passengers.filter(p => livingAgentIds.has(p));
+  if (validPassengers.length !== vehicle.passengers.length) {
+    const removed = vehicle.passengers.length - validPassengers.length;
+    ActivityLog.warning(
+      phase,
+      'vehicle',
+      `${removed} dead/missing passengers removed from vehicle`,
+      'system',
+      vehicle.name
+    );
+    updated = {
+      ...updated,
+      passengers: validPassengers,
+    };
+    needsCleanup = true;
+  }
+
+  // If vehicle lost its operator and is in transit, park it at destination
+  if (needsCleanup && !updated.operator && updated.travelingToBuilding) {
+    ActivityLog.warning(
+      phase,
+      'vehicle',
+      `vehicle lost operator while traveling - parking at destination`,
+      'system',
+      vehicle.name
+    );
+    updated = {
+      ...updated,
+      currentBuilding: updated.travelingToBuilding,
+      travelingFromBuilding: undefined,
+      travelingToBuilding: undefined,
+      travelMethod: undefined,
+      travelPhasesRemaining: undefined,
+    };
+  }
+
+  return updated;
+}
+
+/**
+ * Transfer vehicles from dissolved org to new owner or delete them
+ * Call this when an org is dissolved
+ */
+export function onOrgDissolved(
+  vehicles: Vehicle[],
+  dissolvedOrgId: string,
+  phase: number
+): Vehicle[] {
+  // For now, we delete vehicles owned by dissolved orgs
+  // In future, could transfer to successor org or put up for sale
+  const deletedVehicles = vehicles.filter(v => v.owner === dissolvedOrgId);
+
+  if (deletedVehicles.length > 0) {
+    ActivityLog.info(
+      phase,
+      'vehicle',
+      `${deletedVehicles.length} vehicles deleted due to org dissolution`,
+      'system',
+      `org_${dissolvedOrgId}`
+    );
+  }
+
+  return vehicles.filter(v => v.owner !== dissolvedOrgId);
+}
+
+/**
+ * Process all vehicles to remove dead occupants
+ * Call this after agent deaths or at regular intervals
+ */
+export function cleanupAllVehicles(
+  vehicles: Vehicle[],
+  agents: Agent[],
+  phase: number
+): Vehicle[] {
+  const livingAgentIds = new Set(
+    agents.filter(a => a.status !== 'dead').map(a => a.id)
+  );
+
+  return vehicles.map(v => cleanupVehicleOccupants(v, livingAgentIds, phase));
+}
+
 /**
  * Process vehicle travel for one phase
  * Handles vehicles in transit, decrementing travel time and processing arrivals

@@ -2,7 +2,7 @@
  * EconomySystem - Handles agent economic decisions and weekly processing
  */
 
-import type { Agent, Location, Organization, Building } from '../../types';
+import type { Agent, Location, Organization, Building, Vehicle } from '../../types';
 import type { EconomyConfig, AgentsConfig, LocationTemplate, TransportConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import {
@@ -19,6 +19,7 @@ import { createOrganization, addLocationToOrg } from './OrgSystem';
 import { findNearestLocation, isTraveling, startTravel, redirectTravel } from './TravelSystem';
 import { setLocation, clearEmployment, onOrgDissolvedWithLocations, onOrgDissolvedOrphanLocations } from './AgentStateHelpers';
 import { needsRest, processRest } from './AgentSystem';
+import { onOrgDissolved as onOrgDissolvedVehicles } from './VehicleSystem';
 import { getBestBusinessOpportunities, selectBusinessOpportunity } from './DemandAnalyzer';
 import {
   trackWholesaleSale,
@@ -1354,11 +1355,13 @@ export function processWeeklyEconomy(
   agents: Agent[],
   locations: Location[],
   orgs: Organization[],
+  vehicles: Vehicle[],
   phase: number
-): { agents: Agent[]; locations: Location[]; orgs: Organization[] } {
+): { agents: Agent[]; locations: Location[]; orgs: Organization[]; vehicles: Vehicle[] } {
   let updatedAgents = [...agents];
   let updatedLocations = [...locations];
   let updatedOrgs = [...orgs];
+  let updatedVehicles = [...vehicles];
   const orgsToRemove: string[] = [];
 
   for (let orgIdx = 0; orgIdx < updatedOrgs.length; orgIdx++) {
@@ -1594,7 +1597,12 @@ export function processWeeklyEconomy(
   // Remove dissolved orgs (locations are now orphaned, not deleted)
   updatedOrgs = updatedOrgs.filter((org) => !orgsToRemove.includes(org.id));
 
-  return { agents: updatedAgents, locations: updatedLocations, orgs: updatedOrgs };
+  // Clean up vehicles owned by dissolved orgs
+  for (const dissolvedOrgId of orgsToRemove) {
+    updatedVehicles = onOrgDissolvedVehicles(updatedVehicles, dissolvedOrgId, phase);
+  }
+
+  return { agents: updatedAgents, locations: updatedLocations, orgs: updatedOrgs, vehicles: updatedVehicles };
 }
 
 /**

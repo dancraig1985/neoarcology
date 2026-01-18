@@ -14,7 +14,7 @@ import { processFactoryProduction } from './systems/OrgSystem';
 import { processOrgBehaviors } from './systems/OrgBehaviorSystem';
 import { cleanupDeadEmployees } from './systems/LocationSystem';
 import { checkImmigration } from './systems/ImmigrationSystem';
-import { processVehicleTravel } from './systems/VehicleSystem';
+import { processVehicleTravel, cleanupAllVehicles } from './systems/VehicleSystem';
 import { generateCity } from '../generation/CityGenerator';
 import { createMetrics, takeSnapshot, startNewWeek, setActiveMetrics, type SimulationMetrics, type MetricsSnapshot } from './Metrics';
 
@@ -155,8 +155,10 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   // 2b. Clean up dead employees from location employee lists
   updatedLocations = cleanupDeadEmployees(updatedLocations, updatedAgents, newTime.currentPhase);
 
+  // 2c. Clean up dead agents from vehicles (operators and passengers)
+  let updatedVehicles = cleanupAllVehicles(state.vehicles, updatedAgents, newTime.currentPhase);
+
   // 3. Process behavior-based decisions for each agent
-  let updatedVehicles = [...state.vehicles];
   let updatedDeliveryRequests = [...state.deliveryRequests];
 
   for (let i = 0; i < updatedAgents.length; i++) {
@@ -212,15 +214,18 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
 
   // 4. Process weekly economy (payroll, operating costs) - STAGGERED across week
   // Each org processes on their weeklyPhaseOffset (spread across 56 phases)
+  // Also cleans up vehicles from dissolved orgs
   const weeklyResult = processWeeklyEconomy(
     updatedAgents,
     updatedLocations,
     updatedOrgs,
+    updatedVehicles,
     newTime.currentPhase
   );
   updatedAgents = weeklyResult.agents;
   updatedLocations = weeklyResult.locations;
   updatedOrgs = weeklyResult.orgs;
+  updatedVehicles = weeklyResult.vehicles;
 
   // 4b. Fix any homeless agents created by org dissolution
   // (e.g., employees at deleted locations)
