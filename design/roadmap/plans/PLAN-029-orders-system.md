@@ -1,6 +1,6 @@
 # PLAN-029: Orders System (Unified Commerce Model)
 
-**Status:** planned
+**Status:** in-progress
 **Priority:** P2 (medium)
 **Dependencies:** PLAN-028
 
