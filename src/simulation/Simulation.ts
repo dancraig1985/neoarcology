@@ -20,7 +20,7 @@ import { processWeeklyEconomy } from './systems/PayrollSystem';
 import { processAgentBehavior } from './behaviors/BehaviorProcessor';
 import { processFactoryProduction } from './systems/OrgSystem';
 import { processOrgBehaviors } from './systems/OrgBehaviorSystem';
-import { cleanupDeadEmployees } from './systems/LocationSystem';
+import { cleanupDeadEmployees, cleanupDeadResidents } from './systems/LocationSystem';
 import { checkImmigration } from './systems/ImmigrationSystem';
 import { processVehicleTravel, cleanupAllVehicles } from './systems/VehicleSystem';
 import { generateCity } from '../generation/CityGenerator';
@@ -210,7 +210,10 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   // 2b. Clean up dead employees from location employee lists
   updatedLocations = cleanupDeadEmployees(updatedLocations, updatedAgents, newTime.currentPhase);
 
-  // 2c. Clean up dead agents from vehicles (operators and passengers)
+  // 2c. Clean up dead residents from apartment resident lists (frees apartments for rent)
+  updatedLocations = cleanupDeadResidents(updatedLocations, updatedAgents, newTime.currentPhase);
+
+  // 2d. Clean up dead agents from vehicles (operators and passengers)
   let updatedVehicles = cleanupAllVehicles(state.vehicles, updatedAgents, newTime.currentPhase);
 
   // 3. Process behavior-based decisions for each agent
@@ -290,12 +293,13 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
 
   // 4. Process weekly economy (payroll, operating costs) - STAGGERED across week
   // Each org processes on their weeklyPhaseOffset (spread across 56 phases)
-  // Also cleans up vehicles from dissolved orgs
+  // Also cleans up vehicles and orders from dissolved orgs
   const weeklyResult = processWeeklyEconomy(
     updatedAgents,
     updatedLocations,
     updatedOrgs,
     updatedVehicles,
+    updatedDeliveryRequests,
     config.business,
     newTime.currentPhase,
     context
@@ -304,6 +308,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   updatedLocations = weeklyResult.locations;
   updatedOrgs = weeklyResult.orgs;
   updatedVehicles = weeklyResult.vehicles;
+  updatedDeliveryRequests = weeklyResult.deliveryRequests;
 
   // 4b. Fix any homeless agents created by org dissolution
   // (e.g., employees at deleted locations)

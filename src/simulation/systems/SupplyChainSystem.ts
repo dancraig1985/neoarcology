@@ -576,3 +576,33 @@ export function restockLocation(
     },
   };
 }
+
+/**
+ * Clean up orders involving a dissolved org
+ * Called when an org is dissolved to cancel/remove orphaned orders
+ */
+export function onOrgDissolvedOrders(
+  orders: DeliveryRequest[],
+  dissolvedOrgId: string,
+  phase: number
+): DeliveryRequest[] {
+  // Find orders that reference the dissolved org as buyer or seller
+  const orphanedOrders = orders.filter(
+    order => order.buyer === dissolvedOrgId || order.seller === dissolvedOrgId
+  );
+
+  if (orphanedOrders.length > 0) {
+    ActivityLog.info(
+      phase,
+      'orders',
+      `cancelled ${orphanedOrders.length} orders due to org dissolution`,
+      'system',
+      `org_${dissolvedOrgId}`
+    );
+  }
+
+  // Remove orders that reference the dissolved org
+  return orders.filter(
+    order => order.buyer !== dissolvedOrgId && order.seller !== dissolvedOrgId
+  );
+}

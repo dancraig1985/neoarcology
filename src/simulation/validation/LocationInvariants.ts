@@ -100,7 +100,13 @@ export function checkLocationInvariants(
     }
 
     // Can't have more employees than slots
-    if (location.employees.length > location.employeeSlots) {
+    // EXCEPTION: Residential locations (apartments) can have 1 employee (property manager) even with 0 slots
+    const isResidentialException =
+      location.tags.includes('residential') &&
+      location.employeeSlots === 0 &&
+      location.employees.length === 1;
+
+    if (location.employees.length > location.employeeSlots && !isResidentialException) {
       violations.push({
         severity: 'error',
         category: 'employment',

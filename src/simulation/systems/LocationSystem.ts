@@ -451,3 +451,42 @@ export function cleanupDeadEmployees(
       : loc;
   });
 }
+
+/**
+ * Remove dead agents from location resident lists
+ * Call this after processing agent deaths to free up apartments
+ */
+export function cleanupDeadResidents(
+  locations: Location[],
+  agents: Agent[],
+  phase: number
+): Location[] {
+  const deadAgentIds = new Set(
+    agents.filter((a) => a.status === 'dead').map((a) => a.id)
+  );
+
+  return locations.map((loc) => {
+    // Skip locations without residents
+    if (!loc.residents || loc.residents.length === 0) {
+      return loc;
+    }
+
+    const aliveResidents = loc.residents.filter((id) => !deadAgentIds.has(id));
+
+    // Log if we removed anyone
+    const removedCount = loc.residents.length - aliveResidents.length;
+    if (removedCount > 0) {
+      ActivityLog.info(
+        phase,
+        'housing',
+        `removed ${removedCount} deceased resident(s) from ${loc.name}, apartment now available for rent`,
+        loc.owner,
+        loc.name
+      );
+    }
+
+    return aliveResidents.length !== loc.residents.length
+      ? { ...loc, residents: aliveResidents }
+      : loc;
+  });
+}

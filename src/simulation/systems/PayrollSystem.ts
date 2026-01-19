@@ -8,12 +8,13 @@
  * - Simulation.ts (processWeeklyEconomy in the main tick loop)
  */
 
-import type { Agent, Location, Organization, Vehicle } from '../../types/entities';
+import type { Agent, Location, Organization, Vehicle, DeliveryRequest } from '../../types/entities';
 import type { BusinessConfig } from '../../config/ConfigLoader';
 import type { SimulationContext } from '../../types/SimulationContext';
 import { releaseAgent } from './LocationSystem';
 import { onOrgDissolvedOrphanLocations } from './AgentStateHelpers';
 import { onOrgDissolved as onOrgDissolvedVehicles } from './VehicleSystem';
+import { onOrgDissolvedOrders } from './SupplyChainSystem';
 import { recordWagePayment, recordDividendPayment, recordBusinessClosed } from '../Metrics';
 import { ActivityLog } from '../ActivityLog';
 import { createTransaction, recordTransaction } from '../../types/Transaction';
@@ -33,14 +34,16 @@ export function processWeeklyEconomy(
   locations: Location[],
   orgs: Organization[],
   vehicles: Vehicle[],
+  deliveryRequests: DeliveryRequest[],
   businessConfig: BusinessConfig,
   phase: number,
   context: SimulationContext
-): { agents: Agent[]; locations: Location[]; orgs: Organization[]; vehicles: Vehicle[] } {
+): { agents: Agent[]; locations: Location[]; orgs: Organization[]; vehicles: Vehicle[]; deliveryRequests: DeliveryRequest[] } {
   let updatedAgents = [...agents];
   let updatedLocations = [...locations];
   let updatedOrgs = [...orgs];
   let updatedVehicles = [...vehicles];
+  let updatedDeliveryRequests = [...deliveryRequests];
   const orgsToRemove: string[] = [];
 
   for (let orgIdx = 0; orgIdx < updatedOrgs.length; orgIdx++) {
@@ -280,12 +283,13 @@ export function processWeeklyEconomy(
   // Remove dissolved orgs (locations are now orphaned, not deleted)
   updatedOrgs = updatedOrgs.filter((org) => !orgsToRemove.includes(org.id));
 
-  // Clean up vehicles owned by dissolved orgs
+  // Clean up vehicles and orders owned by dissolved orgs
   for (const dissolvedOrgId of orgsToRemove) {
     updatedVehicles = onOrgDissolvedVehicles(updatedVehicles, dissolvedOrgId, phase);
+    updatedDeliveryRequests = onOrgDissolvedOrders(updatedDeliveryRequests, dissolvedOrgId, phase);
   }
 
-  return { agents: updatedAgents, locations: updatedLocations, orgs: updatedOrgs, vehicles: updatedVehicles };
+  return { agents: updatedAgents, locations: updatedLocations, orgs: updatedOrgs, vehicles: updatedVehicles, deliveryRequests: updatedDeliveryRequests };
 }
 
 /**

@@ -46,8 +46,8 @@ export function processAgentPhase(
     }
   }
 
-  // Accumulate hunger
-  const newHunger = updatedAgent.needs.hunger + agentsConfig.hunger.perPhase;
+  // Accumulate hunger (capped at 100)
+  const newHunger = Math.min(100, updatedAgent.needs.hunger + agentsConfig.hunger.perPhase);
 
   // Accumulate fatigue (capped at 100)
   const currentFatigue = updatedAgent.needs.fatigue ?? 0;
