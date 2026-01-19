@@ -5,8 +5,10 @@
 
 import type { Agent, Location, Organization, Building, Vehicle, Order, DeliveryRequest } from '../types';
 import type { LoadedConfig } from '../config/ConfigLoader';
+import type { SeededRNG } from '../types/SimulationContext';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
+import { createSeededRNG } from './SeededRandom';
 import { processAgentPhase, countLivingAgents, countDeadAgents } from './systems/AgentSystem';
 import { fixHomelessAgents } from './systems/AgentEconomicSystem';
 import { tryRestockFromWholesale, tryPlaceGoodsOrder, processGoodsOrders } from './systems/SupplyChainSystem';
@@ -34,6 +36,8 @@ export interface SimulationState {
   // Metrics for Reports panel
   metrics: SimulationMetrics;
   currentSnapshot: MetricsSnapshot | null;
+  // Seeded random number generator for reproducible simulations
+  rng: SeededRNG;
 }
 
 /**
@@ -42,6 +46,10 @@ export interface SimulationState {
  */
 export function createSimulationWithCity(config: LoadedConfig, seed?: number): SimulationState {
   const time = createTimeState();
+
+  // Create seeded RNG for reproducible simulation (uses same seed as city generation)
+  const actualSeed = seed ?? Date.now();
+  const rng = createSeededRNG(actualSeed);
 
   // Generate the city with zones, locations, agents, and orgs
   const city = generateCity(config, seed);
@@ -97,6 +105,7 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
     ticksPerSecond: 10,
     metrics,
     currentSnapshot: null,
+    rng, // Seeded RNG for reproducible simulation runs
   };
 
   // Take initial snapshot
