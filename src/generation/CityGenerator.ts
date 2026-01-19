@@ -786,7 +786,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
 
       if (facility) {
         locations.push(facility);
-        corp.locations.push(facility.id);
+        // Use spread operator instead of mutation for consistency
+        corp.locations = [...corp.locations, facility.id];
       }
     }
   }
