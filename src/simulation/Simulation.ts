@@ -6,6 +6,8 @@
 import type { Agent, Location, Organization, Building, Vehicle, Order, DeliveryRequest } from '../types';
 import type { LoadedConfig } from '../config/ConfigLoader';
 import type { SeededRNG, SimulationContext } from '../types/SimulationContext';
+import type { IdState } from './IdGenerator';
+import { IdGenerator, createInitialIdState } from './IdGenerator';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
 import { createSeededRNG } from './SeededRandom';
@@ -38,6 +40,8 @@ export interface SimulationState {
   currentSnapshot: MetricsSnapshot | null;
   // Seeded random number generator for reproducible simulations
   rng: SeededRNG;
+  // ID generation state for reproducible simulations
+  idState: IdState;
 }
 
 /**
@@ -103,6 +107,7 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
     metrics,
     currentSnapshot: null,
     rng, // Seeded RNG for reproducible simulation runs
+    idState: createInitialIdState(), // ID generation state for reproducible simulations
   };
 
   // Take initial snapshot
@@ -119,11 +124,13 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   const { time: newTime, dayRollover, weekRollover } = advancePhase(state.time, config.simulation);
 
   // Create simulation context for this tick (dependency injection container)
+  const idGen = new IdGenerator(state.idState);
   const context: SimulationContext = {
     metrics: state.metrics,
     rng: state.rng,
     config,
     phase: newTime.currentPhase,
+    idGen,
   };
 
   // Log time progression on day rollover

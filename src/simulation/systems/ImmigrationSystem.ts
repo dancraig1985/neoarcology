@@ -23,9 +23,6 @@ const LAST_NAMES = [
   'Rivera', 'Singh', 'Sterling', 'Vasquez', 'Yamamoto',
 ];
 
-// Counter for unique immigrant IDs (starts high to avoid collision with initial agents)
-let immigrantIdCounter = 10000;
-
 /**
  * Generate a random name for an immigrant
  */
@@ -33,13 +30,6 @@ function generateImmigrantName(context: SimulationContext): string {
   const first = FIRST_NAMES[Math.floor(context.rng() * FIRST_NAMES.length)];
   const last = LAST_NAMES[Math.floor(context.rng() * LAST_NAMES.length)];
   return `${first} ${last}`;
-}
-
-/**
- * Generate a unique ID for an immigrant
- */
-function nextImmigrantId(): string {
-  return `agent_imm_${++immigrantIdCounter}`;
 }
 
 /**
@@ -73,7 +63,7 @@ function createImmigrant(
   );
 
   return {
-    id: nextImmigrantId(),
+    id: context.idGen.nextAgentId(),
     name: generateImmigrantName(context),
     template: 'civilian',
     tags: ['civilian', 'immigrant'],
@@ -176,9 +166,3 @@ export function checkImmigration(
   return newAgents;
 }
 
-/**
- * Reset the immigrant ID counter (for testing)
- */
-export function resetImmigrantCounter(): void {
-  immigrantIdCounter = 10000;
-}

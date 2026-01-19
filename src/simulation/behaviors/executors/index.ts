@@ -1358,7 +1358,7 @@ function executePurchaseOrphanedLocationBehavior(
   const purchasePrice = Math.floor(basePrice * resaleDiscount);
 
   // Create a new organization for this agent
-  const orgId = `org-purchase-${Date.now()}-${ctx.context.rng().toString(36).substring(2, 8)}`;
+  const orgId = ctx.context.idGen.nextOrgId();
   const orgName = `${agent.name}'s ${targetLocation.template === 'apartment' ? 'Properties' : 'Business'}`;
 
   // Agent pays the purchase price (goes to "the market" - money disappears)

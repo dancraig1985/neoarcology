@@ -72,45 +72,21 @@ const APARTMENT_NAMES = [
   "Grid Apartments",
 ];
 
-// ID counters - maintain sequence for reproducibility
-let shopNameIndex = 0;
-let pubNameIndex = 0;
-let boutiqueNameIndex = 0;
-let apartmentNameIndex = 0;
-let locationIdCounter = 1;
-let orgIdCounter = 100; // Start at 100 to avoid conflicts with initial orgs
-
-// Name generators
-function getNextShopName(): string {
-  const name = SHOP_NAMES[shopNameIndex % SHOP_NAMES.length];
-  shopNameIndex++;
-  return name ?? "Shop";
+// Name generators (now use context.idGen for deterministic IDs)
+function getNextShopName(context: SimulationContext): string {
+  return context.idGen.nextShopName();
 }
 
-function getNextPubName(): string {
-  const name = PUB_NAMES[pubNameIndex % PUB_NAMES.length];
-  pubNameIndex++;
-  return name ?? "Pub";
+function getNextPubName(context: SimulationContext): string {
+  return context.idGen.nextPubName();
 }
 
-function getNextBoutiqueName(): string {
-  const name = BOUTIQUE_NAMES[boutiqueNameIndex % BOUTIQUE_NAMES.length];
-  boutiqueNameIndex++;
-  return name ?? "Boutique";
+function getNextBoutiqueName(context: SimulationContext): string {
+  return context.idGen.nextBoutiqueName();
 }
 
-function getNextApartmentName(): string {
-  const name = APARTMENT_NAMES[apartmentNameIndex % APARTMENT_NAMES.length];
-  apartmentNameIndex++;
-  return name ?? "Apartment";
-}
-
-export function getNextLocationId(): string {
-  return `location-${locationIdCounter++}`;
-}
-
-export function getNextOrgId(): string {
-  return `org-${orgIdCounter++}`;
+function getNextApartmentName(context: SimulationContext): string {
+  return context.idGen.nextApartmentName();
 }
 
 /**
@@ -222,7 +198,7 @@ export function tryOpenBusiness(
   }
 
   // Create a micro-org for this business
-  const orgId = getNextOrgId();
+  const orgId = context.idGen.nextOrgId();
   const templateTags = template.tags ?? [];
   const isProduction = templateTags.includes('production') || templateTags.includes('wholesale');
   const isResidential = templateTags.includes('residential');
@@ -271,19 +247,19 @@ export function tryOpenBusiness(
   );
 
   // Create the location owned by the org (placed in building)
-  const locationId = getNextLocationId();
+  const locationId = context.idGen.nextLocationId();
   // Generate location name based on business type
   let locationName: string;
   if (isProduction) {
     locationName = `${lastName} Factory`;
   } else if (isResidential) {
-    locationName = getNextApartmentName();
+    locationName = getNextApartmentName(context);
   } else if (isLeisure) {
-    locationName = getNextPubName();
+    locationName = getNextPubName(context);
   } else if (isLuxury) {
-    locationName = getNextBoutiqueName();
+    locationName = getNextBoutiqueName(context);
   } else {
-    locationName = getNextShopName();
+    locationName = getNextShopName(context);
   }
 
   const newLocation = createLocation(
@@ -314,7 +290,7 @@ export function tryOpenBusiness(
     if (building) {
       const numTrucks = logisticsConfig.trucking.minTrucks + Math.floor(context.rng() * (logisticsConfig.trucking.maxTrucks - logisticsConfig.trucking.minTrucks + 1));
       for (let i = 0; i < numTrucks; i++) {
-        const vehicleId = `vehicle_${Date.now()}_${context.rng().toString(36).substring(2, 9)}`;
+        const vehicleId = context.idGen.nextVehicleId();
         const truckName = `${lastName} Truck ${i + 1}`;
         const truck = createVehicle(
           vehicleId,

@@ -17,12 +17,6 @@ import { getGoodsCount, getAvailableCapacity, transferInventory, type GoodsSizes
 import { recordWholesaleSale } from '../Metrics';
 import { ActivityLog } from '../ActivityLog';
 
-// Order ID counter - maintain sequence for reproducibility
-let goodsOrderIdCounter = 0;
-
-function getNextGoodsOrderId(): string {
-  return `goods_order_${goodsOrderIdCounter++}`;
-}
 
 /**
  * Org tries to restock their shop by buying wholesale from another org
@@ -177,13 +171,14 @@ export function placeGoodsOrder(
   quantity: number,
   sellerOrg: Organization,
   economyConfig: EconomyConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): Order {
   const wholesalePrice = economyConfig.goods[goodType]?.wholesalePrice ?? 5;
   const totalPrice = quantity * wholesalePrice;
 
   const order: Order = {
-    id: getNextGoodsOrderId(),
+    id: context.idGen.nextGoodsOrderId(),
     orderType: 'goods',
     created: phase,
     buyer: buyerOrg.id,
@@ -297,7 +292,8 @@ export function tryPlaceGoodsOrder(
     orderQuantity,
     sellerOrg,
     economyConfig,
-    phase
+    phase,
+    context
   );
 }
 

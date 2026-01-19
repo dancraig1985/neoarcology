@@ -7,6 +7,7 @@
 
 import type { SimulationMetrics } from '../simulation/Metrics';
 import type { LoadedConfig } from '../config/ConfigLoader';
+import type { IdGenerator } from '../simulation/IdGenerator';
 
 /**
  * Seeded random number generator function
@@ -30,4 +31,7 @@ export interface SimulationContext {
 
   /** Current simulation phase (for convenience, also available in TimeState) */
   phase: number;
+
+  /** ID generator for deterministic ID creation */
+  idGen: IdGenerator;
 }

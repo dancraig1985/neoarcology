@@ -4,9 +4,8 @@
  */
 
 import type { Order, DeliveryRequest, Agent, Vehicle, Location, Organization } from '../../types';
+import type { SimulationContext } from '../../types/SimulationContext';
 import { ActivityLog } from '../ActivityLog';
-
-let deliveryIdCounter = 0;
 
 /**
  * Create a new delivery request (logistics order)
@@ -17,9 +16,10 @@ export function createDeliveryRequest(
   goods: Record<string, number>,
   payment: number,
   urgency: 'low' | 'medium' | 'high',
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): DeliveryRequest {
-  const id = `order_${deliveryIdCounter++}`;
+  const id = context.idGen.nextDeliveryId();
 
   ActivityLog.info(
     phase,

@@ -40,25 +40,13 @@ const LAB_NAMES = [
   'Development Lab',
 ];
 
-let officeNameIndex = 0;
-let labNameIndex = 0;
-let locationIdCounter = 10000; // Start high to avoid conflicts
-
-function getNextOfficeName(): string {
-  const name = OFFICE_NAMES[officeNameIndex % OFFICE_NAMES.length];
-  officeNameIndex++;
-  return name ?? 'Office';
+// Name generators (now use context.idGen for deterministic IDs)
+function getNextOfficeName(context: SimulationContext): string {
+  return context.idGen.nextOfficeName();
 }
 
-function getNextLabName(): string {
-  const name = LAB_NAMES[labNameIndex % LAB_NAMES.length];
-  labNameIndex++;
-  return name ?? 'Lab';
-}
-
-function getNextLocationId(): string {
-  locationIdCounter++;
-  return `loc-${locationIdCounter}`;
+function getNextLabName(context: SimulationContext): string {
+  return context.idGen.nextLaboratoryName();
 }
 
 /**
@@ -813,8 +801,8 @@ function tryExpandToOffice(
   }
 
   // Create the location
-  const locationId = getNextLocationId();
-  const locationName = templateName === 'office' ? getNextOfficeName() : getNextLabName();
+  const locationId = context.idGen.nextLocationId();
+  const locationName = templateName === 'office' ? getNextOfficeName(context) : getNextLabName(context);
 
   const newLocation = createLocation(
     locationId,
@@ -991,7 +979,7 @@ function tryExpandToWarehouse(
   }
 
   // Create the location
-  const locationId = getNextLocationId();
+  const locationId = context.idGen.nextLocationId();
   const locationName = 'Storage Warehouse';
 
   const newLocation = createLocation(
@@ -1103,7 +1091,7 @@ function tryExpandToPrototypeFactory(
   }
 
   // Create the location
-  const locationId = getNextLocationId();
+  const locationId = context.idGen.nextLocationId();
   const locationName = 'Prototyping Facility';
 
   const newLocation = createLocation(
