@@ -25,6 +25,7 @@ import { checkImmigration } from './systems/ImmigrationSystem';
 import { processVehicleTravel, cleanupAllVehicles } from './systems/VehicleSystem';
 import { generateCity } from '../generation/CityGenerator';
 import { createMetrics, takeSnapshot, startNewWeek, type SimulationMetrics, type MetricsSnapshot } from './Metrics';
+import { InvariantChecker } from './validation/InvariantChecker';
 
 export interface SimulationState {
   time: TimeState;
@@ -341,6 +342,16 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
 
   // Update current snapshot for Reports panel
   updatedState.currentSnapshot = takeSnapshot(updatedState, newTime.currentPhase);
+
+  // Run invariant checks if enabled (PLAN-036)
+  if (config.simulation.invariantChecking) {
+    const checker = new InvariantChecker(config.simulation.invariantChecking);
+    const shouldFail = checker.checkAndLog(updatedState);
+
+    if (shouldFail) {
+      throw new Error(`Invariant violations detected at phase ${newTime.currentPhase}`);
+    }
+  }
 
   return updatedState;
 }

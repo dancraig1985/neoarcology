@@ -16,6 +16,17 @@ export interface PopulationConfig {
 }
 
 /**
+ * Invariant checking configuration
+ */
+export interface InvariantCheckingConfig {
+  enabled: boolean;
+  failOnErrors: boolean;
+  logWarnings: boolean;
+  logInfo: boolean;
+  checkEveryNPhases: number;
+}
+
+/**
  * Simulation configuration from data/config/simulation.json
  * Core simulation parameters (time only)
  */
@@ -27,6 +38,7 @@ export interface SimulationConfig {
     phasesPerYear: number;
   };
   population?: PopulationConfig;
+  invariantChecking?: InvariantCheckingConfig;
 }
 
 /**

@@ -12,5 +12,12 @@
     "spawnRate": 5,
     "immigrantCredits": { "min": 80, "max": 200 },
     "immigrantProvisions": { "min": 3, "max": 6 }
+  },
+  "invariantChecking": {
+    "enabled": true,
+    "failOnErrors": false,
+    "logWarnings": true,
+    "logInfo": false,
+    "checkEveryNPhases": 1
   }
 }
