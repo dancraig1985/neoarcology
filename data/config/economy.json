@@ -83,6 +83,6 @@
     "skilled": { "min": 90, "max": 110 },
     "professional": { "min": 120, "max": 160 }
   },
-  "entrepreneurThreshold": 1000,
+  "entrepreneurThreshold": 1250,
   "resaleDiscount": 0.6
 }

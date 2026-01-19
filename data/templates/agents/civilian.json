@@ -12,7 +12,7 @@
       "business": { "min": 20, "max": 60 },
       "engineering": { "min": 20, "max": 60 }
     },
-    "credits": { "min": 150, "max": 400 },
+    "credits": { "min": 150, "max": 300 },
     "provisions": { "min": 2, "max": 5 },
     "hunger": { "min": 10, "max": 30 },
     "morale": { "min": 20, "max": 80 },
