@@ -5,8 +5,9 @@
 
 import type { Agent, Location } from '../../types';
 import type { PopulationConfig, AgentTemplate } from '../../config/ConfigLoader';
+import type { SimulationContext } from '../../types/SimulationContext';
 import { ActivityLog } from '../ActivityLog';
-import { trackImmigrant } from '../Metrics';
+import { recordImmigrant } from '../Metrics';
 
 // Name pools for immigrants
 const FIRST_NAMES = [
@@ -113,7 +114,8 @@ export function checkImmigration(
   locations: Location[],
   config: PopulationConfig | undefined,
   agentTemplate: AgentTemplate | undefined,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): Agent[] {
   // Skip if no population config
   if (!config) {
@@ -160,8 +162,8 @@ export function checkImmigration(
       immigrant.name
     );
 
-    // Track immigrant in metrics
-    trackImmigrant();
+    // Record immigrant in metrics
+    recordImmigrant(context.metrics);
   }
 
   if (isEmergency) {

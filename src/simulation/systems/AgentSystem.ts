@@ -4,10 +4,11 @@
 
 import type { Agent, Location } from '../../types';
 import type { AgentsConfig } from '../../config/ConfigLoader';
+import type { SimulationContext } from '../../types/SimulationContext';
 import { ActivityLog } from '../ActivityLog';
 import { processTravel, isTraveling } from './TravelSystem';
 import { setDead } from './AgentStateHelpers';
-import { trackDeath } from '../Metrics';
+import { recordDeath } from '../Metrics';
 
 /**
  * Process a single agent for one phase
@@ -17,7 +18,8 @@ export function processAgentPhase(
   agent: Agent,
   phase: number,
   agentsConfig: AgentsConfig,
-  locations: Location[]
+  locations: Location[],
+  context: SimulationContext
 ): Agent {
   // Skip dead agents
   if (agent.status === 'dead') {
@@ -89,7 +91,7 @@ export function processAgentPhase(
 
   // Check for starvation
   if (updatedAgent.needs.hunger >= agentsConfig.hunger.max) {
-    updatedAgent = handleStarvation(updatedAgent, phase);
+    updatedAgent = handleStarvation(updatedAgent, phase, context);
   } else if (updatedAgent.needs.hunger >= agentsConfig.hunger.max * 0.75) {
     // Starving warning (75%+)
     ActivityLog.warning(
@@ -160,7 +162,7 @@ function attemptToEat(agent: Agent, phase: number, agentsConfig: AgentsConfig): 
  * Handle agent starvation (death)
  * Uses centralized setDead helper to clear all state atomically
  */
-function handleStarvation(agent: Agent, phase: number): Agent {
+function handleStarvation(agent: Agent, phase: number, context: SimulationContext): Agent {
   // Log if they were employed when they died
   if (agent.employer) {
     console.log(`[DEATH] ${agent.name} died while employed by ${agent.employer}`);
@@ -174,8 +176,8 @@ function handleStarvation(agent: Agent, phase: number): Agent {
     agent.name
   );
 
-  // Track death in metrics
-  trackDeath(agent.name, 'starvation');
+  // Record death in metrics
+  recordDeath(context.metrics, agent.name, 'starvation');
 
   return setDead(agent, phase);
 }

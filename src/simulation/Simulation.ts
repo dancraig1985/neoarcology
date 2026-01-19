@@ -189,7 +189,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
 
   // 2. Process biological needs (hunger, eating, travel)
   updatedAgents = updatedAgents.map((agent) =>
-    processAgentPhase(agent, newTime.currentPhase, config.agents, updatedLocations)
+    processAgentPhase(agent, newTime.currentPhase, config.agents, updatedLocations, context)
   );
 
   // 2b. Clean up dead employees from location employee lists
@@ -280,7 +280,8 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     updatedOrgs,
     updatedVehicles,
     config.business,
-    newTime.currentPhase
+    newTime.currentPhase,
+    context
   );
   updatedAgents = weeklyResult.agents;
   updatedLocations = weeklyResult.locations;
@@ -300,7 +301,8 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
       updatedLocations,
       config.simulation.population,
       config.agentTemplates['civilian'],
-      newTime.currentPhase
+      newTime.currentPhase,
+      context
     );
     if (immigrants.length > 0) {
       updatedAgents = [...updatedAgents, ...immigrants];

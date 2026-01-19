@@ -10,10 +10,11 @@
 
 import type { Agent, Location, Organization, Vehicle } from '../../types/entities';
 import type { BusinessConfig } from '../../config/ConfigLoader';
+import type { SimulationContext } from '../../types/SimulationContext';
 import { releaseAgent, resetWeeklyTracking } from './LocationSystem';
 import { onOrgDissolvedOrphanLocations } from './AgentStateHelpers';
 import { onOrgDissolved as onOrgDissolvedVehicles } from './VehicleSystem';
-import { trackWagePayment, trackDividendPayment, trackBusinessClosed } from '../Metrics';
+import { recordWagePayment, recordDividendPayment, recordBusinessClosed } from '../Metrics';
 import { ActivityLog } from '../ActivityLog';
 
 /**
@@ -32,7 +33,8 @@ export function processWeeklyEconomy(
   orgs: Organization[],
   vehicles: Vehicle[],
   businessConfig: BusinessConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { agents: Agent[]; locations: Location[]; orgs: Organization[]; vehicles: Vehicle[] } {
   let updatedAgents = [...agents];
   let updatedLocations = [...locations];
@@ -85,8 +87,8 @@ export function processWeeklyEconomy(
           leader.name
         );
 
-        // Track dividend payment in metrics
-        trackDividendPayment(ownerDividend);
+        // Record dividend payment in metrics
+        recordDividendPayment(context.metrics, ownerDividend);
       }
     }
 
@@ -238,8 +240,8 @@ export function processWeeklyEconomy(
         org.name
       );
 
-      // Track business closing in metrics
-      trackBusinessClosed(org.name);
+      // Record business closing in metrics
+      recordBusinessClosed(context.metrics, org.name);
 
       // Orphan locations instead of deleting them
       // Employees lose jobs, but residents stay (stop paying rent)
@@ -321,8 +323,8 @@ function processOrgPayroll(
         employee.name
       );
 
-      // Track wage payment in metrics
-      trackWagePayment(employee.salary);
+      // Record wage payment in metrics
+      recordWagePayment(context.metrics, employee.salary);
     } else {
       // Can't pay - employee will quit
       unpaidEmployees.push(employee);
