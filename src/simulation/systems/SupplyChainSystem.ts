@@ -75,7 +75,7 @@ export function tryRestockFromWholesale(
   }
 
   // Pick a random wholesale location
-  const wholesaler = wholesaleLocations[Math.floor(Math.random() * wholesaleLocations.length)];
+  const wholesaler = wholesaleLocations[Math.floor(context.rng() * wholesaleLocations.length)];
   if (!wholesaler) {
     return { locations, orgs };
   }
@@ -221,7 +221,8 @@ export function tryPlaceGoodsOrder(
   existingOrders: Order[],
   economyConfig: EconomyConfig,
   thresholdsConfig: ThresholdsConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): Order | null {
   const goodsSizes: GoodsSizes = { goods: economyConfig.goods, defaultGoodsSize: economyConfig.defaultGoodsSize };
 
@@ -270,7 +271,7 @@ export function tryPlaceGoodsOrder(
   }
 
   // Pick a random seller organization
-  const sellerOrg = wholesaleOrgs[Math.floor(Math.random() * wholesaleOrgs.length)];
+  const sellerOrg = wholesaleOrgs[Math.floor(context.rng() * wholesaleOrgs.length)];
   if (!sellerOrg) {
     return null;
   }

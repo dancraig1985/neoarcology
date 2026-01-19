@@ -8,6 +8,7 @@
 
 import type { Agent, Location, Organization, DeliveryRequest } from '../../types';
 import type { EconomyConfig, AgentsConfig, LocationTemplate, VerticalConfig } from '../../config/ConfigLoader';
+import type { SimulationContext } from '../../types/SimulationContext';
 
 /**
  * Demand signal for a single vertical/good type
@@ -474,7 +475,8 @@ export function getBestBusinessOpportunities(
  * Higher-scored opportunities are more likely to be chosen
  */
 export function selectBusinessOpportunity(
-  opportunities: BusinessOpportunity[]
+  opportunities: BusinessOpportunity[],
+  context: SimulationContext
 ): BusinessOpportunity | null {
   if (opportunities.length === 0) {
     return null;
@@ -487,7 +489,7 @@ export function selectBusinessOpportunity(
   }));
 
   const totalWeight = adjustedOpportunities.reduce((sum, opp) => sum + opp.weight, 0);
-  let roll = Math.random() * totalWeight;
+  let roll = context.rng() * totalWeight;
 
   for (const opp of adjustedOpportunities) {
     roll -= opp.weight;

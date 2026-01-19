@@ -29,9 +29,9 @@ let immigrantIdCounter = 10000;
 /**
  * Generate a random name for an immigrant
  */
-function generateImmigrantName(): string {
-  const first = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
-  const last = LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
+function generateImmigrantName(context: SimulationContext): string {
+  const first = FIRST_NAMES[Math.floor(context.rng() * FIRST_NAMES.length)];
+  const last = LAST_NAMES[Math.floor(context.rng() * LAST_NAMES.length)];
   return `${first} ${last}`;
 }
 
@@ -49,31 +49,32 @@ function createImmigrant(
   config: PopulationConfig,
   agentTemplate: AgentTemplate | undefined,
   spawnLocation: string | undefined,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): Agent {
   const defaults = agentTemplate?.defaults ?? {};
   const stats = defaults.stats ?? {};
 
   const randomStat = (range?: { min: number; max: number }) => {
     if (range) {
-      return Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+      return Math.floor(context.rng() * (range.max - range.min + 1)) + range.min;
     }
-    return Math.floor(Math.random() * 41) + 20; // 20-60 default
+    return Math.floor(context.rng() * 41) + 20; // 20-60 default
   };
 
   // Use population config for starting resources (immigrants arrive with less)
   const credits = Math.floor(
-    Math.random() * (config.immigrantCredits.max - config.immigrantCredits.min + 1) +
+    context.rng() * (config.immigrantCredits.max - config.immigrantCredits.min + 1) +
     config.immigrantCredits.min
   );
   const provisions = Math.floor(
-    Math.random() * (config.immigrantProvisions.max - config.immigrantProvisions.min + 1) +
+    context.rng() * (config.immigrantProvisions.max - config.immigrantProvisions.min + 1) +
     config.immigrantProvisions.min
   );
 
   return {
     id: nextImmigrantId(),
-    name: generateImmigrantName(),
+    name: generateImmigrantName(context),
     template: 'civilian',
     tags: ['civilian', 'immigrant'],
     created: phase,
@@ -89,9 +90,9 @@ function createImmigrant(
       engineering: randomStat(stats.engineering),
     },
     needs: {
-      hunger: Math.floor(Math.random() * 21), // 0-20 (arrive hungry but not starving)
-      fatigue: Math.floor(Math.random() * 31) + 20, // 20-50 (arrive somewhat tired from journey)
-      leisure: Math.floor(Math.random() * 31), // 0-30 (arrive wanting some fun)
+      hunger: Math.floor(context.rng() * 21), // 0-20 (arrive hungry but not starving)
+      fatigue: Math.floor(context.rng() * 31) + 20, // 20-50 (arrive somewhat tired from journey)
+      leisure: Math.floor(context.rng() * 31), // 0-30 (arrive wanting some fun)
     },
     inventory: {
       provisions,
@@ -100,7 +101,7 @@ function createImmigrant(
     salary: 0,
     wallet: { credits, accounts: [], stashes: [] },
     currentLocation: spawnLocation,
-    morale: Math.floor(Math.random() * 41) + 30, // 30-70 (cautiously optimistic)
+    morale: Math.floor(context.rng() * 41) + 30, // 30-70 (cautiously optimistic)
     personalGoals: [],
   };
 }
@@ -145,13 +146,13 @@ export function checkImmigration(
   // Find a public location for immigrants to arrive at
   const publicLocations = locations.filter(loc => loc.tags.includes('public'));
   const spawnLocation = publicLocations.length > 0
-    ? publicLocations[Math.floor(Math.random() * publicLocations.length)]?.id
+    ? publicLocations[Math.floor(context.rng() * publicLocations.length)]?.id
     : undefined;
 
   // Spawn immigrants
   const newAgents: Agent[] = [];
   for (let i = 0; i < toSpawn; i++) {
-    const immigrant = createImmigrant(config, agentTemplate, spawnLocation, phase);
+    const immigrant = createImmigrant(config, agentTemplate, spawnLocation, phase, context);
     newAgents.push(immigrant);
 
     ActivityLog.info(

@@ -192,7 +192,7 @@ export function processAgentEconomicDecision(
     updatedAgent.status !== 'dead' &&
     !isTraveling(updatedAgent)
   ) {
-    const housingResult = tryFindHousing(updatedAgent, updatedLocations, agentsConfig, phase);
+    const housingResult = tryFindHousing(updatedAgent, updatedLocations, agentsConfig, phase, context);
     updatedAgent = housingResult.agent;
     updatedLocations = housingResult.locations;
   }
@@ -611,7 +611,8 @@ function tryFindHousing(
   agent: Agent,
   locations: Location[],
   agentsConfig: AgentsConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { agent: Agent; locations: Location[] } {
   // Calculate rent buffer requirement (4 weeks of rent typically)
   const bufferWeeks = agentsConfig.housing.bufferWeeks;
@@ -638,7 +639,7 @@ function tryFindHousing(
   }
 
   // Pick a random available apartment
-  const apartment = availableApartments[Math.floor(Math.random() * availableApartments.length)];
+  const apartment = availableApartments[Math.floor(context.rng() * availableApartments.length)];
   if (!apartment) {
     return { agent, locations };
   }
@@ -859,7 +860,7 @@ function tryGetJob(
   }
 
   // Pick a random hiring location
-  const location = availableJobs[Math.floor(Math.random() * availableJobs.length)];
+  const location = availableJobs[Math.floor(context.rng() * availableJobs.length)];
   if (!location) {
     return { agent, locations };
   }
@@ -871,7 +872,7 @@ function tryGetJob(
   const salaryRange = economyConfig.salary[salaryTierName] ?? economyConfig.salary.unskilled;
 
   const salary = Math.floor(
-    Math.random() * (salaryRange.max - salaryRange.min + 1) + salaryRange.min
+    context.rng() * (salaryRange.max - salaryRange.min + 1) + salaryRange.min
   );
 
   // AFFORDABILITY CHECK: Verify employer can afford 4 weeks of salary before hiring

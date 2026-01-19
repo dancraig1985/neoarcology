@@ -826,7 +826,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
     const currentStaff = factory.employees.length;
     const targetStaff = Math.max(
       currentStaff + 1,
-      Math.floor(factory.employeeSlots * (0.6 + Math.random() * 0.2))
+      Math.floor(factory.employeeSlots * (0.6 + rand() * 0.2))
     );
     const needWorkers = targetStaff - currentStaff;
 
@@ -840,7 +840,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
 
       // Hire the worker
       const salary = config.economy.salary.skilled.min +
-        Math.floor(Math.random() * (config.economy.salary.skilled.max - config.economy.salary.skilled.min));
+        Math.floor(rand() * (config.economy.salary.skilled.max - config.economy.salary.skilled.min));
 
       worker.status = 'employed';
       worker.employer = ownerOrg.id;

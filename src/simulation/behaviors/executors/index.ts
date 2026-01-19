@@ -685,7 +685,7 @@ function executeSeekJobBehavior(
 
   // Hire the agent
   const salary = ctx.economyConfig.salary.unskilled.min +
-    Math.floor(Math.random() * (ctx.economyConfig.salary.unskilled.max - ctx.economyConfig.salary.unskilled.min));
+    Math.floor(ctx.context.rng() * (ctx.economyConfig.salary.unskilled.max - ctx.economyConfig.salary.unskilled.min));
 
   const updatedAgent = {
     ...agent,
@@ -1168,7 +1168,8 @@ function executeEntrepreneurBehavior(
     ctx.logisticsConfig,
     ctx.deliveryRequests ?? [],
     ctx.vehicles ?? [],
-    ctx.phase
+    ctx.phase,
+    ctx.context
   );
 
   // If business was created, return with new entities
@@ -1331,7 +1332,7 @@ function executePurchaseOrphanedLocationBehavior(
   }
 
   // Random chance to actually purchase (like entrepreneur behavior)
-  if (Math.random() > 0.1) {
+  if (ctx.context.rng() > 0.1) {
     // 10% chance per phase to purchase
     return {
       agent,
@@ -1357,7 +1358,7 @@ function executePurchaseOrphanedLocationBehavior(
   const purchasePrice = Math.floor(basePrice * resaleDiscount);
 
   // Create a new organization for this agent
-  const orgId = `org-purchase-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  const orgId = `org-purchase-${Date.now()}-${ctx.context.rng().toString(36).substring(2, 8)}`;
   const orgName = `${agent.name}'s ${targetLocation.template === 'apartment' ? 'Properties' : 'Business'}`;
 
   // Agent pays the purchase price (goes to "the market" - money disappears)
@@ -1380,7 +1381,8 @@ function executePurchaseOrphanedLocationBehavior(
     agent.id,
     agent.name,
     seedCapital,
-    ctx.phase
+    ctx.phase,
+    ctx.context
   );
 
   // Update agent wallet after transferring to org

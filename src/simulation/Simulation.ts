@@ -179,7 +179,8 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
         state.deliveryRequests, // Check existing orders to avoid duplicates
         config.economy,
         config.thresholds,
-        newTime.currentPhase
+        newTime.currentPhase,
+        context
       );
       if (order) {
         newGoodsOrders.push(order);

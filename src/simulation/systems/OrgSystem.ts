@@ -5,6 +5,7 @@
 
 import type { Organization, Location, Agent, AgentRef, LocationRef } from '../../types';
 import type { LocationTemplate, ProductionConfig } from '../../config/ConfigLoader';
+import type { SimulationContext } from '../../types/SimulationContext';
 import { ActivityLog } from '../ActivityLog';
 import { addToInventory, getAvailableCapacity, getInventorySpaceUsed, type GoodsSizes } from './InventorySystem';
 
@@ -17,7 +18,8 @@ export function createOrganization(
   leaderId: AgentRef,
   leaderName: string,
   startingCredits: number,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): Organization {
   ActivityLog.info(
     phase,
@@ -42,7 +44,7 @@ export function createOrganization(
     },
     locations: [],
     // Randomize weekly cycle offset to stagger payroll/costs across week
-    weeklyPhaseOffset: Math.floor(Math.random() * 56),
+    weeklyPhaseOffset: Math.floor(context.rng() * 56),
   };
 }
 

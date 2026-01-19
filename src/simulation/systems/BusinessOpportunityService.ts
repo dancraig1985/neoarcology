@@ -11,6 +11,7 @@
 
 import type { Agent, Location, Organization, Building, Vehicle, DeliveryRequest } from '../../types/entities';
 import type { AgentsConfig, LocationTemplate, BusinessConfig, LogisticsConfig, EconomyConfig, ThresholdsConfig } from '../../config/ConfigLoader';
+import type { SimulationContext } from '../../types/SimulationContext';
 import { findBuildingForLocation } from './LocationSystem';
 import { createOrganization, addLocationToOrg } from './OrgSystem';
 import { createLocation } from './LocationSystem';
@@ -132,7 +133,8 @@ function chooseBestBusiness(
   economyConfig: EconomyConfig,
   orgs: Organization[],
   deliveryRequests: DeliveryRequest[],
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): string {
   // Use DemandAnalyzer for scalable, config-driven demand calculation
   const opportunities = getBestBusinessOpportunities(
@@ -146,7 +148,7 @@ function chooseBestBusiness(
   );
 
   // Select using weighted random (higher demand = higher chance)
-  const selected = selectBusinessOpportunity(opportunities);
+  const selected = selectBusinessOpportunity(opportunities, context);
 
   if (selected) {
     ActivityLog.info(
@@ -180,18 +182,19 @@ export function tryOpenBusiness(
   logisticsConfig: LogisticsConfig,
   deliveryRequests: DeliveryRequest[],
   vehicles: Vehicle[], // Used for signature compatibility, not needed internally
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { agent: Agent; newLocation?: Location; newOrg?: Organization; newVehicles?: Vehicle[] } {
   void vehicles; // Suppress unused variable warning
   void thresholdsConfig; // Not currently used but keeping for consistency
 
   // Chance to try opening a business each phase when eligible
-  if (Math.random() > businessConfig.entrepreneurship.openingChancePerPhase) {
+  if (context.rng() > businessConfig.entrepreneurship.openingChancePerPhase) {
     return { agent };
   }
 
   // Choose business type based on market demand (uses DemandAnalyzer)
-  const businessType = chooseBestBusiness(agents, locations, locationTemplates, agentsConfig, economyConfig, orgs, deliveryRequests, phase);
+  const businessType = chooseBestBusiness(agents, locations, locationTemplates, agentsConfig, economyConfig, orgs, deliveryRequests, phase, context);
   const template = locationTemplates[businessType];
   if (!template) {
     return { agent };
@@ -209,7 +212,8 @@ export function tryOpenBusiness(
   const buildingPlacement = findBuildingForLocation(
     buildings,
     template.tags ?? [],
-    locations
+    locations,
+    context
   );
 
   // If no building found, agent can't open shop (no outdoor retail)
@@ -262,7 +266,8 @@ export function tryOpenBusiness(
     agent.id,
     agent.name,
     businessCapital,
-    phase
+    phase,
+    context
   );
 
   // Create the location owned by the org (placed in building)
@@ -307,9 +312,9 @@ export function tryOpenBusiness(
   if (isLogistics && buildingPlacement) {
     const building = buildings.find(b => b.id === buildingPlacement.building.id);
     if (building) {
-      const numTrucks = logisticsConfig.trucking.minTrucks + Math.floor(Math.random() * (logisticsConfig.trucking.maxTrucks - logisticsConfig.trucking.minTrucks + 1));
+      const numTrucks = logisticsConfig.trucking.minTrucks + Math.floor(context.rng() * (logisticsConfig.trucking.maxTrucks - logisticsConfig.trucking.minTrucks + 1));
       for (let i = 0; i < numTrucks; i++) {
-        const vehicleId = `vehicle_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const vehicleId = `vehicle_${Date.now()}_${context.rng().toString(36).substring(2, 9)}`;
         const truckName = `${lastName} Truck ${i + 1}`;
         const truck = createVehicle(
           vehicleId,

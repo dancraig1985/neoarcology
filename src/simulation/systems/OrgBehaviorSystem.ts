@@ -770,7 +770,7 @@ function tryExpandToOffice(
   }
 
   // Random chance to expand (don't spam expansions)
-  if (Math.random() > businessConfig.expansion.expansionChancePerPhase) {
+  if (context.rng() > businessConfig.expansion.expansionChancePerPhase) {
     return { org };
   }
 
@@ -786,7 +786,7 @@ function tryExpandToOffice(
   }
 
   // Choose office or laboratory (50/50)
-  const templateName = Math.random() < 0.5 ? 'office' : 'laboratory';
+  const templateName = context.rng() < 0.5 ? 'office' : 'laboratory';
   const template = locationTemplates[templateName];
 
   if (!template) {
@@ -804,7 +804,8 @@ function tryExpandToOffice(
   const buildingPlacement = findBuildingForLocation(
     buildings,
     template.tags ?? [],
-    allLocations
+    allLocations,
+    context
   );
 
   if (!buildingPlacement) {
@@ -924,7 +925,7 @@ function tryExpandToWarehouse(
 
   // Random chance to expand (5% per phase when eligible)
   // Higher than office expansion since this is a practical need, not speculative R&D
-  if (Math.random() > 0.05) {
+  if (context.rng() > 0.05) {
     return { org };
   }
 
@@ -981,7 +982,8 @@ function tryExpandToWarehouse(
   const buildingPlacement = findBuildingForLocation(
     buildings,
     template.tags ?? [],
-    allLocations
+    allLocations,
+    context
   );
 
   if (!buildingPlacement) {
@@ -1084,7 +1086,7 @@ function tryExpandToPrototypeFactory(
 
   // Very low random chance to expand (rare, expensive end-game content)
   // 0.01 = 1% chance per phase when eligible
-  if (Math.random() > 0.01) {
+  if (context.rng() > 0.01) {
     return { org };
   }
 
@@ -1092,7 +1094,8 @@ function tryExpandToPrototypeFactory(
   const buildingPlacement = findBuildingForLocation(
     buildings,
     template.tags ?? [],
-    allLocations
+    allLocations,
+    context
   );
 
   if (!buildingPlacement) {

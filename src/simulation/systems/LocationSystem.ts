@@ -6,6 +6,7 @@ import type { Location, Agent, Building } from '../../types';
 import type { LocationTemplate, EconomyConfig } from '../../config/ConfigLoader';
 import type { SimulationContext } from '../../types/SimulationContext';
 import { ActivityLog } from '../ActivityLog';
+import { shuffleArray } from '../SeededRandom';
 import { setEmployment, clearEmployment } from './AgentStateHelpers';
 import { recordHire, recordFire } from '../Metrics';
 
@@ -39,13 +40,14 @@ function getBuildingOccupancy(building: Building, locations: Location[]): number
 export function findBuildingForLocation(
   buildings: Building[],
   locationTags: string[],
-  locations: Location[]
+  locations: Location[],
+  context: SimulationContext
 ): BuildingPlacement | null {
   // Filter buildings that match the location tags
   const candidates = buildings.filter((b) => locationMatchesBuilding(locationTags, b));
 
   // Shuffle candidates for variety
-  const shuffled = [...candidates].sort(() => Math.random() - 0.5);
+  const shuffled = shuffleArray([...candidates], context.rng);
 
   // Find a building with available space
   for (const building of shuffled) {
