@@ -1,6 +1,6 @@
 # PLAN-032: Split EconomySystem into Domain Systems
 
-**Status:** planned
+**Status:** completed
 **Priority:** P0 (critical)
 **Dependencies:** PLAN-031 (extract magic numbers first)
 
@@ -24,34 +24,38 @@ This makes it impossible to understand, test, or modify safely.
 
 ## Objectives
 
-- [ ] Create `src/simulation/systems/AgentEconomicSystem.ts`
+- [x] Create `src/simulation/systems/AgentEconomicSystem.ts` (~940 LOC)
   - Extract: `handleEmergencyHunger()`, `handleUrgentRest()`, `handleRestSeeking()`
   - Extract: `tryBuyProvisions()`, `tryFindHousing()`, `trySeekLeisure()`
-  - Extract: `tryGetJob()`, agent-level decision making
-  - ~600 lines
+  - Extract: `tryGetJob()`, agent-level decision making, `fixHomelessAgents()`
 
-- [ ] Create `src/simulation/systems/BusinessSystem.ts`
+- [x] Create `src/simulation/systems/BusinessOpportunityService.ts` (~370 LOC)
   - Extract: `tryOpenBusiness()`, business opportunity selection
   - Extract: Business creation logic, initial capital, owner assignment
-  - ~300 lines
+  - **Note**: Created as shared service to break circular dependency
 
-- [ ] Create `src/simulation/systems/SupplyChainSystem.ts`
+- [x] Create `src/simulation/systems/SupplyChainSystem.ts` (~560 LOC)
   - Extract: `tryRestockFromWholesale()`, `tryPlaceGoodsOrder()`, `processGoodsOrders()`
   - Extract: Delivery job creation, order fulfillment, transfer logistics
-  - ~500 lines
 
-- [ ] Create `src/simulation/systems/PayrollSystem.ts`
+- [x] Create `src/simulation/systems/PayrollSystem.ts` (~420 LOC)
   - Extract: `processWeeklyEconomy()`, wage payments, rent collection
   - Extract: Owner dividend logic, business profitability checks
-  - Extract: Org dissolution logic (move to OrgSystem?)
-  - ~400 lines
+  - Extract: Org dissolution logic with auto-succession
 
-- [ ] Update `Simulation.ts` to call new systems
+- [x] Update `Simulation.ts` to call new systems
   - Replace monolithic EconomySystem calls with specific system calls
   - Ensure correct tick ordering (payroll weekly, restocking per-tick, etc.)
 
-- [ ] Update tests to verify each system works independently
-- [ ] Remove old EconomySystem.ts once all logic is migrated
+- [x] Update tests to verify each system works independently
+  - 100 ticks (BusinessOpportunityService)
+  - 200 ticks (SupplyChainSystem)
+  - 300 ticks (PayrollSystem)
+  - 500 ticks (AgentEconomicSystem)
+  - 1000 ticks (final integration)
+
+- [x] Remove old EconomySystem.ts once all logic is migrated
+  - Deleted after successful 1000-tick integration test
 
 ## New System Responsibilities
 
