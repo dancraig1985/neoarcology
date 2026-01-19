@@ -247,7 +247,8 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     config.thresholds,
     config.business,
     config.logistics,
-    newTime.currentPhase
+    newTime.currentPhase,
+    context
   );
   updatedOrgs = orgBehaviorResult.orgs;
   updatedLocations = orgBehaviorResult.locations;

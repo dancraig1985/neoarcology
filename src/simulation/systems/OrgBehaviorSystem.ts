@@ -8,11 +8,12 @@
 
 import type { Organization, Location, Building, DeliveryRequest } from '../../types';
 import type { EconomyConfig, ThresholdsConfig, BusinessConfig, LogisticsConfig, LocationTemplate } from '../../config/ConfigLoader';
+import type { SimulationContext } from '../../types/SimulationContext';
 import { ActivityLog } from '../ActivityLog';
 import { createLocation, findBuildingForLocation } from './LocationSystem';
 import { addLocationToOrg } from './OrgSystem';
 import { transferInventory, type GoodsSizes } from './InventorySystem';
-import { trackB2BSale, trackBusinessOpened } from '../Metrics';
+import { recordB2BSale, recordBusinessOpened } from '../Metrics';
 
 // Office name generator
 const OFFICE_NAMES = [
@@ -99,6 +100,7 @@ export function processOrgBehaviors(
   businessConfig: BusinessConfig,
   logisticsConfig: LogisticsConfig,
   phase: number,
+  context: SimulationContext,
   config: OrgBehaviorConfig = DEFAULT_ORG_BEHAVIOR_CONFIG
 ): OrgBehaviorResult {
   let updatedOrgs = [...orgs];
@@ -141,7 +143,8 @@ export function processOrgBehaviors(
       updatedLocations,
       updatedOrgs,
       logisticsConfig,
-      phase
+      phase,
+      context
     );
     updatedLocations = dataRevenueResult.locations;
     updatedOrgs = dataRevenueResult.orgs;
@@ -157,6 +160,7 @@ export function processOrgBehaviors(
         thresholdsConfig,
         businessConfig,
         phase,
+        context,
         config
       );
 
@@ -178,7 +182,8 @@ export function processOrgBehaviors(
       updatedOrgs,
       economyConfig,
       logisticsConfig,
-      phase
+      phase,
+      context
     );
     updatedLocations = procureResult.locations;
     updatedOrgs = procureResult.orgs;
@@ -193,6 +198,7 @@ export function processOrgBehaviors(
         locationTemplates,
         businessConfig,
         phase,
+        context,
         config
       );
 
@@ -213,6 +219,7 @@ export function processOrgBehaviors(
         updatedLocations,
         locationTemplates,
         phase,
+        context,
         config
       );
 
@@ -477,7 +484,8 @@ function trySelllValuableData(
   allLocations: Location[],
   allOrgs: Organization[],
   logisticsConfig: LogisticsConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { locations: Location[]; orgs: Organization[] } {
   // Only process weekly (phase 56, 112, 168, etc.)
   if (phase % 56 !== 0 || phase === 0) {
@@ -549,9 +557,9 @@ function trySelllValuableData(
     org.name
   );
 
-  // Track B2B sale in metrics
+  // Record B2B sale in metrics
   for (let i = 0; i < unitsToSell; i++) {
-    trackB2BSale('valuable_data');
+    recordB2BSale(context.metrics, 'valuable_data');
   }
 
   return { locations: updatedLocations, orgs: updatedOrgs };
@@ -568,7 +576,8 @@ function tryProcureDataStorage(
   allOrgs: Organization[],
   economyConfig: EconomyConfig,
   logisticsConfig: LogisticsConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { locations: Location[]; orgs: Organization[] } {
   // Check if org has any location that produces valuable_data
   const hasDataProduction = orgLocations.some(loc =>
@@ -712,8 +721,8 @@ function tryProcureDataStorage(
     org.name
   );
 
-  // Track B2B sale in metrics
-  trackB2BSale('data_storage');
+  // Record B2B sale in metrics
+  recordB2BSale(context.metrics, 'data_storage');
 
   return { locations: updatedLocations, orgs: updatedOrgs };
 }
@@ -731,6 +740,7 @@ function tryExpandToOffice(
   locationTemplates: Record<string, LocationTemplate>,
   businessConfig: BusinessConfig,
   phase: number,
+  context: SimulationContext,
   config: OrgBehaviorConfig
 ): { org: Organization; newLocation?: Location } {
   // Check if org already has an office or laboratory
@@ -832,8 +842,8 @@ function tryExpandToOffice(
     org.name
   );
 
-  // Track business opening in metrics
-  trackBusinessOpened(locationName);
+  // Record business opening in metrics
+  recordBusinessOpened(context.metrics, locationName);
 
   return { org: updatedOrg, newLocation };
 }
@@ -851,6 +861,7 @@ function tryExpandToWarehouse(
   thresholdsConfig: ThresholdsConfig,
   businessConfig: BusinessConfig,
   phase: number,
+  context: SimulationContext,
   config: OrgBehaviorConfig
 ): { org: Organization; newLocation?: Location } {
   // Check if org has warehouse capacity available
@@ -959,7 +970,7 @@ function tryExpandToWarehouse(
         org.name
       );
 
-      trackBusinessOpened(`${org.name}'s ${targetWarehouse.name}`);
+      recordBusinessOpened(context.metrics,`${org.name}'s ${targetWarehouse.name}`);
 
       return { org: updatedOrg, newLocation: updatedWarehouse };
     }
@@ -1009,7 +1020,7 @@ function tryExpandToWarehouse(
   );
 
   // Track business opening in metrics
-  trackBusinessOpened(locationName);
+  recordBusinessOpened(context.metrics,locationName);
 
   return { org: updatedOrg, newLocation };
 }
@@ -1025,6 +1036,7 @@ function tryExpandToPrototypeFactory(
   allLocations: Location[],
   locationTemplates: Record<string, LocationTemplate>,
   phase: number,
+  context: SimulationContext,
   config: OrgBehaviorConfig
 ): { org: Organization; newLocation?: Location } {
   // Check if org already has a prototype factory
@@ -1119,7 +1131,7 @@ function tryExpandToPrototypeFactory(
   );
 
   // Track business opening in metrics
-  trackBusinessOpened(locationName);
+  recordBusinessOpened(context.metrics,locationName);
 
   return { org: updatedOrg, newLocation };
 }
