@@ -214,7 +214,8 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
       updatedVehicles,
       updatedDeliveryRequests,
       config,
-      newTime.currentPhase
+      newTime.currentPhase,
+      context
     );
 
     updatedAgents[i] = result.agent;

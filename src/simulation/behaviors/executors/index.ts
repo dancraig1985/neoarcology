@@ -9,7 +9,7 @@ import type { Agent, AgentTask, Location, Organization, Vehicle, DeliveryRequest
 import { registerExecutor, type BehaviorContext, type TaskResult } from '../BehaviorRegistry';
 import { isTraveling, startTravel, findNearestLocation, redirectTravel } from '../../systems/TravelSystem';
 import { ActivityLog } from '../../ActivityLog';
-import { trackRetailSale, trackBusinessOpened } from '../../Metrics';
+import { recordRetailSale, recordBusinessOpened } from '../../Metrics';
 import { createOrganization } from '../../systems/OrgSystem';
 import {
   loadCargo,
@@ -419,7 +419,7 @@ function executePurchaseBehavior(
   );
 
   // Track retail sale in metrics
-  trackRetailSale(goodsType);
+  recordRetailSale(ctx.context.metrics,goodsType);
 
   return {
     agent: clearTask(updatedAgent),
@@ -578,7 +578,7 @@ function executeLeisureBehavior(
       );
 
       // Track alcohol retail sale in metrics
-      trackRetailSale('alcohol');
+      recordRetailSale(ctx.context.metrics,'alcohol');
 
       // Full satisfaction when buying alcohol
       leisureReduction = ctx.agentsConfig.leisure.pubSatisfaction;
@@ -1183,7 +1183,7 @@ function executeEntrepreneurBehavior(
     );
 
     // Track business opening in metrics
-    trackBusinessOpened(businessName);
+    recordBusinessOpened(ctx.context.metrics,businessName);
 
     // Add new vehicles to the result if any were created
     const updatedVehicles = result.newVehicles
@@ -1415,7 +1415,7 @@ function executePurchaseOrphanedLocationBehavior(
     agent.name
   );
 
-  trackBusinessOpened(orgName);
+  recordBusinessOpened(ctx.context.metrics,orgName);
 
   return {
     agent: clearTask(updatedAgent),
@@ -2030,7 +2030,8 @@ function executeDeliverGoodsBehavior(
         deliveryRequest!,
         updatedDeliveryRequestsAfterDelivery,
         updatedOrgsAfterDelivery,
-        ctx.phase
+        ctx.phase,
+        ctx.context
       );
       updatedOrgsAfterDelivery = goodsResult.orgs;
       updatedDeliveryRequestsAfterDelivery = goodsResult.orders;

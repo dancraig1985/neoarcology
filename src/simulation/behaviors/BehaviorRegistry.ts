@@ -4,6 +4,7 @@
  */
 
 import type { Agent, Location, Organization, Building, AgentTask, Vehicle, DeliveryRequest } from '../../types/entities';
+import type { SimulationContext } from '../../types/SimulationContext';
 import type {
   BehaviorDefinition,
   EconomyConfig,
@@ -33,6 +34,7 @@ export interface BehaviorContext {
   transportConfig: TransportConfig;
   locationTemplates: Record<string, LocationTemplate>;
   phase: number;
+  context: SimulationContext;
 }
 
 /**

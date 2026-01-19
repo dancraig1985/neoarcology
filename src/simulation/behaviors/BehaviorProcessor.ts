@@ -7,6 +7,7 @@
 
 import type { Agent, Location, Organization, Building, TaskPriority, Vehicle, DeliveryRequest } from '../../types/entities';
 import type { LoadedConfig } from '../../config/ConfigLoader';
+import type { SimulationContext } from '../../types/SimulationContext';
 import { processTravel, isTraveling } from '../systems/TravelSystem';
 import { evaluateConditions, isTaskComplete, type EvaluationContext } from './ConditionEvaluator';
 import { executeBehavior, executeCurrentTask, type BehaviorContext } from './BehaviorRegistry';
@@ -69,7 +70,8 @@ export function processAgentBehavior(
   vehicles: Vehicle[],
   deliveryRequests: DeliveryRequest[],
   config: LoadedConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): BehaviorProcessResult {
   // Skip dead agents
   if (agent.status === 'dead') {
@@ -103,6 +105,7 @@ export function processAgentBehavior(
     transportConfig: config.transport,
     locationTemplates: config.locationTemplates,
     phase,
+    context,
   });
 
   // 1. Process travel tick (if traveling)

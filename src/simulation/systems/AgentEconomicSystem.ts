@@ -11,6 +11,7 @@
 
 import type { Agent, Location, Organization, Building } from '../../types/entities';
 import type { EconomyConfig, AgentsConfig, ThresholdsConfig, BusinessConfig, LocationTemplate, TransportConfig } from '../../config/ConfigLoader';
+import type { SimulationContext } from '../../types/SimulationContext';
 import { ActivityLog } from '../ActivityLog';
 import {
   purchaseFromLocation,
@@ -44,7 +45,8 @@ export function processAgentEconomicDecision(
   _logisticsConfig: any,
   locationTemplates: Record<string, LocationTemplate>,
   transportConfig: TransportConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { agent: Agent; locations: Location[]; orgs: Organization[]; newLocation?: Location; newOrg?: Organization } {
   // Skip dead agents
   if (agent.status === 'dead') {
@@ -179,7 +181,7 @@ export function processAgentEconomicDecision(
 
   // 2. Try to get a job if unemployed
   if (updatedAgent.status === 'available' && !updatedAgent.employedAt) {
-    const result = tryGetJob(updatedAgent, updatedLocations, updatedOrgs, economyConfig, businessConfig, locationTemplates, phase);
+    const result = tryGetJob(updatedAgent, updatedLocations, updatedOrgs, economyConfig, businessConfig, locationTemplates, phase, context);
     updatedAgent = result.agent;
     updatedLocations = result.locations;
   }
@@ -835,7 +837,8 @@ function tryGetJob(
   economyConfig: EconomyConfig,
   businessConfig: BusinessConfig,
   locationTemplates: Record<string, LocationTemplate>,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { agent: Agent; locations: Location[] } {
   const hiringLocations = getHiringLocations(locations);
 
@@ -890,7 +893,7 @@ function tryGetJob(
     }
   }
 
-  const result = hireAgent(location, agent, salary, phase);
+  const result = hireAgent(location, agent, salary, phase, context);
 
   const updatedLocations = locations.map((loc) =>
     loc.id === location.id ? result.location : loc
