@@ -108,7 +108,7 @@ Issues:
 - [x] All systems accept SimulationContext parameter
 - [x] Can instantiate multiple Simulation objects concurrently (each has own metrics instance)
 - [x] Can run tests with mock metrics without affecting global state
-- [~] RNG is seeded and deterministic (infrastructure ready, conversion incomplete)
+- [x] RNG is seeded and deterministic (fully implemented - all Math.random() calls converted)
 
 ## Implementation Notes
 
@@ -139,13 +139,35 @@ Issues:
 **ActivityLog Decision:**
 After analysis of 130+ call sites, determined ActivityLog is already instance-based singleton and requires no changes. Direct access pattern is optimal for logging (always active, no initialization dependencies).
 
-**Testing:**
+**Testing (Phases 1-3):**
 - Compilation: ✓ All TypeScript checks pass
 - 100-tick test: ✓ Passed after fixing internal helper context propagation
 - 1000-tick test: ✓ Passed with 121% survival rate, all systems nominal
 
-**Potential Follow-up Work:**
-The seeded RNG infrastructure is in place but Math.random() calls were not converted to context.rng(). This could be a future enhancement for full reproducibility:
-- 26 Math.random() call sites across 12 files
-- High-priority files: ImmigrationSystem (9 calls), BusinessOpportunityService (3 calls)
-- Would enable identical simulation runs with same seed (currently only city generation is seeded)
+**Phase 4-5 Completed (RNG Conversion):**
+- Converted all 31 Math.random() call sites across 10 files to use context.rng()
+- Files converted:
+  - ImmigrationSystem.ts: 11 calls (name generation, stats, needs)
+  - OrgBehaviorSystem.ts: 4 calls (expansion probability, template choice)
+  - AgentEconomicSystem.ts: 3 calls (apartment/job selection, salary)
+  - BusinessOpportunityService.ts: 3 calls (opening chance, truck count, vehicle IDs)
+  - behaviors/executors/index.ts: 3 calls (salary, purchase chance, org IDs)
+  - SupplyChainSystem.ts: 2 calls (wholesaler/seller selection)
+  - CityGenerator.ts: 2 calls (factory staffing, salary generation)
+  - OrgSystem.ts: 1 call (weeklyPhaseOffset)
+  - LocationSystem.ts: 1 call (building candidate shuffling)
+  - DemandAnalyzer.ts: 1 call (weighted opportunity selection)
+- Added context parameter to 6 additional functions:
+  - createOrganization(), tryFindHousing(), findBuildingForLocation()
+  - tryPlaceGoodsOrder(), chooseBestBusiness(), selectBusinessOpportunity()
+
+**Testing (Phases 4-5):**
+- Compilation: ✓ No new errors introduced
+- Reproducibility test (seed 999, 100 ticks): ✓ IDENTICAL results on two consecutive runs
+- Long test (seed 42, 500 ticks): ✓ Stable, 138% survival, all systems nominal
+
+**Final State:**
+Full simulation reproducibility achieved. Both city generation AND runtime simulation are now deterministic with a given seed. This enables:
+- Debugging: Replay exact scenarios by rerunning with same seed
+- Testing: Create deterministic test cases for specific scenarios
+- Research: Reproducible experiments for economic tuning
