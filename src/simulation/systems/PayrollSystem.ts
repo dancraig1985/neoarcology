@@ -117,7 +117,7 @@ export function processWeeklyEconomy(
       // Release unpaid employees
       let updatedLocation = location;
       for (const unpaidEmp of payrollResult.unpaidEmployees) {
-        const releaseResult = releaseAgent(updatedLocation, unpaidEmp, 'unpaid', phase);
+        const releaseResult = releaseAgent(updatedLocation, unpaidEmp, 'unpaid', phase, context);
         updatedLocation = releaseResult.location;
         const idx = updatedAgents.findIndex((a) => a.id === unpaidEmp.id);
         if (idx !== -1) {

@@ -4,9 +4,10 @@
 
 import type { Location, Agent, Building } from '../../types';
 import type { LocationTemplate, EconomyConfig } from '../../config/ConfigLoader';
+import type { SimulationContext } from '../../types/SimulationContext';
 import { ActivityLog } from '../ActivityLog';
 import { setEmployment, clearEmployment } from './AgentStateHelpers';
-import { trackHire, trackFire } from '../Metrics';
+import { recordHire, recordFire } from '../Metrics';
 
 /**
  * Building placement info for runtime location creation
@@ -211,7 +212,8 @@ export function hireAgent(
   location: Location,
   agent: Agent,
   salary: number,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { location: Location; agent: Agent } {
   ActivityLog.info(
     phase,
@@ -221,8 +223,8 @@ export function hireAgent(
     agent.name
   );
 
-  // Track hire in metrics
-  trackHire();
+  // Record hire in metrics
+  recordHire(context.metrics);
 
   // Set employer to the org that owns the location (if org-owned)
   const employer = location.ownerType === 'org' ? (location.owner ?? '') : '';
@@ -244,7 +246,8 @@ export function releaseAgent(
   location: Location,
   agent: Agent,
   reason: string,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { location: Location; agent: Agent } {
   ActivityLog.info(
     phase,
@@ -254,8 +257,8 @@ export function releaseAgent(
     agent.name
   );
 
-  // Track fire/quit in metrics
-  trackFire();
+  // Record fire/quit in metrics
+  recordFire(context.metrics);
 
   return {
     location: {

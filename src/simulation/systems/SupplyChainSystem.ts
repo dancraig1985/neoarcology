@@ -12,8 +12,9 @@
 
 import type { Agent, Location, Organization, Order } from '../../types/entities';
 import type { EconomyConfig, ThresholdsConfig, LogisticsConfig } from '../../config/ConfigLoader';
+import type { SimulationContext } from '../../types/SimulationContext';
 import { getGoodsCount, getAvailableCapacity, transferInventory, type GoodsSizes } from './InventorySystem';
-import { trackWholesaleSale } from '../Metrics';
+import { recordWholesaleSale } from '../Metrics';
 import { ActivityLog } from '../ActivityLog';
 
 // Order ID counter - maintain sequence for reproducibility
@@ -37,7 +38,8 @@ export function tryRestockFromWholesale(
   orgs: Organization[],
   economyConfig: EconomyConfig,
   thresholdsConfig: ThresholdsConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { locations: Location[]; orgs: Organization[] } {
   const goodsSizes: GoodsSizes = { goods: economyConfig.goods, defaultGoodsSize: economyConfig.defaultGoodsSize };
 
@@ -138,8 +140,8 @@ export function tryRestockFromWholesale(
     buyerOrg.name
   );
 
-  // Track wholesale sale in metrics
-  trackWholesaleSale(goodType);
+  // Record wholesale sale in metrics
+  recordWholesaleSale(context.metrics, goodType);
 
   // Update locations and orgs arrays
   // Add weeklyRevenue to wholesaler (the seller) - transferInventory doesn't track revenue
@@ -430,7 +432,8 @@ export function completeGoodsOrder(
   logisticsOrder: Order,
   allOrders: Order[],
   orgs: Organization[],
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { orders: Order[]; orgs: Organization[] } {
   // Find the parent goods order
   const goodsOrderId = logisticsOrder.parentOrderId;
@@ -518,8 +521,8 @@ export function completeGoodsOrder(
     buyerOrg.name
   );
 
-  // Track wholesale sale in metrics
-  trackWholesaleSale(goodsOrder.good ?? 'provisions');
+  // Record wholesale sale in metrics
+  recordWholesaleSale(context.metrics, goodsOrder.good ?? 'provisions');
 
   return { orders: updatedOrders, orgs: updatedOrgs };
 }

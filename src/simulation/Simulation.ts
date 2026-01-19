@@ -157,7 +157,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
       (loc) => org.locations.includes(loc.id) && loc.tags.includes('retail')
     );
     for (const retailLoc of orgRetailLocations) {
-      const result = tryRestockFromWholesale(org, retailLoc, updatedLocations, updatedOrgs, config.economy, config.thresholds, newTime.currentPhase);
+      const result = tryRestockFromWholesale(org, retailLoc, updatedLocations, updatedOrgs, config.economy, config.thresholds, newTime.currentPhase, context);
       updatedLocations = result.locations;
       updatedOrgs = result.orgs;
     }
