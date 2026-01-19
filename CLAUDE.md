@@ -58,9 +58,10 @@ Other docs: `design/GAME-DESIGN.md` (high-level design), `design/roadmap/plans/`
 - `src/simulation/systems/TravelSystem.ts` - Distance, travel time
 - `src/simulation/systems/ImmigrationSystem.ts` - Population sustainability
 
-**Metrics & Logging:**
+**Metrics, Logging & Validation:**
 - `src/simulation/Metrics.ts` - Singleton metrics tracking (use `track*()` functions)
 - `src/simulation/ActivityLog.ts` - Event logging
+- `src/simulation/validation/InvariantChecker.ts` - Runtime state validation (enable in simulation.json)
 
 **Generation & Config:**
 - `src/generation/CityGenerator.ts` - Procedural city generation
@@ -311,6 +312,33 @@ See the helpers file for full documentation.
 - Directly modifying agent state fields (use `AgentStateHelpers`)
 - Mutations in tick processing (always return new state)
 - Revenue to wrong wallet (always org wallet, not agent)
+
+### Bidirectional Relationships (CRITICAL)
+When entities reference each other bidirectionally, **both sides MUST stay in sync**:
+- `org.locations[]` ↔ `location.owner`
+- `location.employees[]` ↔ `agent.employedAt`
+- `agent.residence` ↔ `location.residents[]`
+
+**REPLACE vs APPEND pitfall**: When updating an entity that might already exist (e.g., orphaned locations being purchased), use `.map()` to REPLACE the existing entry instead of appending:
+
+❌ **Bad (creates duplicates):**
+```typescript
+updatedLocations = [...updatedLocations, purchasedLocation]; // Orphan still in array!
+```
+
+✅ **Good (replaces existing):**
+```typescript
+const exists = updatedLocations.some(loc => loc.id === purchasedLocation.id);
+if (exists) {
+  updatedLocations = updatedLocations.map(loc =>
+    loc.id === purchasedLocation.id ? purchasedLocation : loc
+  );
+} else {
+  updatedLocations = [...updatedLocations, purchasedLocation];
+}
+```
+
+**Use invariant checking** (`simulation.json` → `invariantChecking.enabled`) to catch desync bugs early. The checker validates all bidirectional relationships every tick.
 
 ### Behavior System
 - Using `completionConditions: { never: true }` without escape (blocks all lower-priority behaviors)
