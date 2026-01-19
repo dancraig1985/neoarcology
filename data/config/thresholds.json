@@ -1,0 +1,11 @@
+{
+  "agent": {
+    "emergencyHunger": 80,
+    "maxPurchaseQuantity": 5
+  },
+  "inventory": {
+    "restockThreshold": 15,
+    "desiredRestockAmount": 30,
+    "warehouseTransferThreshold": 80
+  }
+}

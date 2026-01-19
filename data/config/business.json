@@ -1,0 +1,22 @@
+{
+  "entrepreneurship": {
+    "openingChancePerPhase": 0.2,
+    "minCapital": {
+      "production": 500,
+      "retail": 200
+    },
+    "capitalAllocationPercent": 0.7
+  },
+  "payroll": {
+    "ownerWeeklyDividend": 75,
+    "hiringBufferWeeks": 4
+  },
+  "expansion": {
+    "minCreditsRequired": 1000,
+    "expansionChancePerPhase": 0.05,
+    "minStorageForExpansion": 0,
+    "warehouseCostBuffer": 200,
+    "factoryCapacityTrigger": 80,
+    "warehouseAverageCapacityThreshold": 70
+  }
+}

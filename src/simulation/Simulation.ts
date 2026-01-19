@@ -141,7 +141,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
       (loc) => org.locations.includes(loc.id) && loc.tags.includes('retail')
     );
     for (const retailLoc of orgRetailLocations) {
-      const result = tryRestockFromWholesale(org, retailLoc, updatedLocations, updatedOrgs, config.economy, newTime.currentPhase);
+      const result = tryRestockFromWholesale(org, retailLoc, updatedLocations, updatedOrgs, config.economy, config.thresholds, newTime.currentPhase);
       updatedLocations = result.locations;
       updatedOrgs = result.orgs;
     }
@@ -162,6 +162,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
         updatedOrgs,
         state.deliveryRequests, // Check existing orders to avoid duplicates
         config.economy,
+        config.thresholds,
         newTime.currentPhase
       );
       if (order) {
@@ -227,6 +228,9 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     state.buildings,
     config.locationTemplates,
     config.economy,
+    config.thresholds,
+    config.business,
+    config.logistics,
     newTime.currentPhase
   );
   updatedOrgs = orgBehaviorResult.orgs;
@@ -244,6 +248,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     updatedLocations,
     updatedOrgs,
     config.economy,
+    config.logistics,
     newTime.currentPhase
   );
   updatedDeliveryRequests = goodsOrderResult.orders;
@@ -258,6 +263,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     updatedLocations,
     updatedOrgs,
     updatedVehicles,
+    config.business,
     newTime.currentPhase
   );
   updatedAgents = weeklyResult.agents;

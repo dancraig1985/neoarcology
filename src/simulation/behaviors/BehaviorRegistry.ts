@@ -8,6 +8,9 @@ import type {
   BehaviorDefinition,
   EconomyConfig,
   AgentsConfig,
+  ThresholdsConfig,
+  BusinessConfig,
+  LogisticsConfig,
   TransportConfig,
   LocationTemplate,
 } from '../../config/ConfigLoader';
@@ -24,6 +27,9 @@ export interface BehaviorContext {
   deliveryRequests?: DeliveryRequest[];
   economyConfig: EconomyConfig;
   agentsConfig: AgentsConfig;
+  thresholdsConfig: ThresholdsConfig;
+  businessConfig: BusinessConfig;
+  logisticsConfig: LogisticsConfig;
   transportConfig: TransportConfig;
   locationTemplates: Record<string, LocationTemplate>;
   phase: number;

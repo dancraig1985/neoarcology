@@ -3,7 +3,7 @@
  */
 
 import type { Agent, Location, Organization, Building, Vehicle, DeliveryRequest, Order } from '../../types';
-import type { EconomyConfig, AgentsConfig, LocationTemplate, TransportConfig } from '../../config/ConfigLoader';
+import type { EconomyConfig, AgentsConfig, ThresholdsConfig, BusinessConfig, LogisticsConfig, LocationTemplate, TransportConfig } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import {
   purchaseFromLocation,
@@ -111,6 +111,9 @@ export function processAgentEconomicDecision(
   buildings: Building[],
   economyConfig: EconomyConfig,
   agentsConfig: AgentsConfig,
+  thresholdsConfig: ThresholdsConfig,
+  businessConfig: BusinessConfig,
+  logisticsConfig: LogisticsConfig,
   locationTemplates: Record<string, LocationTemplate>,
   transportConfig: TransportConfig,
   phase: number
@@ -125,9 +128,9 @@ export function processAgentEconomicDecision(
   let updatedOrgs = [...orgs];
   let newLocation: Location | undefined;
 
-  // SURVIVAL PRIORITY: Emergency hunger (>80) overrides everything
+  // SURVIVAL PRIORITY: Emergency hunger overrides everything
   // If agent is about to starve, redirect to food source immediately
-  const EMERGENCY_HUNGER = 80;
+  const EMERGENCY_HUNGER = thresholdsConfig.agent.emergencyHunger;
   const hasFood = (updatedAgent.inventory['provisions'] ?? 0) >= agentsConfig.hunger.provisionsPerMeal;
 
   if (updatedAgent.needs.hunger > EMERGENCY_HUNGER && !hasFood) {
@@ -452,12 +455,12 @@ function tryBuyProvisions(
   // Agent is at a shop with provisions - buy enough to fill up inventory
   // Buy as many as possible (up to inventory capacity) while affordable
   const retailPrice = economyConfig.goods['provisions']?.retailPrice ?? 10;
-  const inventoryCapacity = 10; // Match agent config
+  const inventoryCapacity = agentsConfig.inventoryCapacity;
   const currentProvisions = updatedAgent.inventory['provisions'] ?? 0;
   const shopStock = currentShop.inventory['provisions'] ?? 0;
   const maxCanAfford = Math.floor(updatedAgent.wallet.credits / retailPrice);
   const spaceInInventory = inventoryCapacity - currentProvisions;
-  const quantityToBuy = Math.min(shopStock, maxCanAfford, spaceInInventory, 5); // Buy up to 5 at a time
+  const quantityToBuy = Math.min(shopStock, maxCanAfford, spaceInInventory, thresholdsConfig.agent.maxPurchaseQuantity);
 
   if (quantityToBuy <= 0) {
     return { agent: updatedAgent, locations, orgs };
@@ -977,7 +980,7 @@ function tryGetJob(
   // This prevents hiring when the org will immediately fire due to unpaid payroll
   const employerOrg = orgs.find((o) => o.id === location.owner);
   if (employerOrg) {
-    const weeksBuffer = 4;
+    const weeksBuffer = businessConfig.payroll.hiringBufferWeeks;
     const requiredCredits = salary * weeksBuffer;
     if (employerOrg.wallet.credits < requiredCredits) {
       // Can't afford to hire - skip this job opportunity
@@ -1086,14 +1089,17 @@ export function tryOpenBusiness(
   orgs: Organization[],
   agentsConfig: AgentsConfig,
   economyConfig: EconomyConfig,
+  thresholdsConfig: ThresholdsConfig,
+  businessConfig: BusinessConfig,
+  logisticsConfig: LogisticsConfig,
   deliveryRequests: DeliveryRequest[],
   vehicles: Vehicle[], // Used for signature compatibility, not needed internally
   phase: number
 ): { agent: Agent; newLocation?: Location; newOrg?: Organization; newVehicles?: Vehicle[] } {
   void vehicles; // Suppress unused variable warning
 
-  // 20% chance to try opening a business each phase when eligible
-  if (Math.random() > 0.2) {
+  // Chance to try opening a business each phase when eligible
+  if (Math.random() > businessConfig.entrepreneurship.openingChancePerPhase) {
     return { agent };
   }
 
@@ -1151,11 +1157,11 @@ export function tryOpenBusiness(
   }
 
   // Org gets 70% of credits REMAINING after opening cost (not 70% of total)
-  // Minimum capital must cover: owner dividend (75) + some buffer for restocking
+  // Minimum capital must cover: owner dividend + some buffer for restocking
   // Factories/production need more capital for operations
-  const minBusinessCapital = isProduction ? 500 : 200;
+  const minBusinessCapital = isProduction ? businessConfig.entrepreneurship.minCapital.production : businessConfig.entrepreneurship.minCapital.retail;
   const creditsAfterOpeningCost = agent.wallet.credits - openingCost;
-  const calculatedCapital = Math.floor(creditsAfterOpeningCost * 0.7);
+  const calculatedCapital = Math.floor(creditsAfterOpeningCost * businessConfig.entrepreneurship.capitalAllocationPercent);
   const businessCapital = Math.max(calculatedCapital, minBusinessCapital);
 
   // Agent must have enough for opening cost + minimum capital
@@ -1214,7 +1220,7 @@ export function tryOpenBusiness(
   if (isLogistics && buildingPlacement) {
     const building = buildings.find(b => b.id === buildingPlacement.building.id);
     if (building) {
-      const numTrucks = 2 + Math.floor(Math.random() * 3); // 2-4 trucks
+      const numTrucks = logisticsConfig.trucking.minTrucks + Math.floor(Math.random() * (logisticsConfig.trucking.maxTrucks - logisticsConfig.trucking.minTrucks + 1));
       for (let i = 0; i < numTrucks; i++) {
         const vehicleId = `vehicle_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         const truckName = `${lastName} Truck ${i + 1}`;
@@ -1266,6 +1272,7 @@ export function tryRestockFromWholesale(
   locations: Location[],
   orgs: Organization[],
   economyConfig: EconomyConfig,
+  thresholdsConfig: ThresholdsConfig,
   phase: number
 ): { locations: Location[]; orgs: Organization[] } {
   const goodsSizes: GoodsSizes = { goods: economyConfig.goods, defaultGoodsSize: economyConfig.defaultGoodsSize };
@@ -1279,7 +1286,7 @@ export function tryRestockFromWholesale(
       : 'provisions';
 
   const currentStock = getGoodsCount(shop, goodType);
-  const restockThreshold = 15; // Restock when below this
+  const restockThreshold = thresholdsConfig.inventory.restockThreshold;
   const shopCapacity = getAvailableCapacity(shop, goodsSizes);
   const wholesalePrice = economyConfig.goods[goodType]?.wholesalePrice ?? 5;
 
@@ -1319,7 +1326,7 @@ export function tryRestockFromWholesale(
   const goodSize = economyConfig.goods[goodType]?.size ?? economyConfig.defaultGoodsSize;
   const maxItemsThatFit = Math.floor(shopCapacity / goodSize);
   const wholesalerStock = getGoodsCount(wholesaler, goodType);
-  const desiredAmount = Math.min(30, maxItemsThatFit); // Try to buy up to 30
+  const desiredAmount = Math.min(thresholdsConfig.inventory.desiredRestockAmount, maxItemsThatFit);
   const affordableAmount = Math.floor(buyerOrg.wallet.credits / wholesalePrice);
   const amountToBuy = Math.min(desiredAmount, wholesalerStock, affordableAmount);
 
@@ -1458,6 +1465,7 @@ export function tryPlaceGoodsOrder(
   orgs: Organization[],
   existingOrders: Order[],
   economyConfig: EconomyConfig,
+  thresholdsConfig: ThresholdsConfig,
   phase: number
 ): Order | null {
   const goodsSizes: GoodsSizes = { goods: economyConfig.goods, defaultGoodsSize: economyConfig.defaultGoodsSize };
@@ -1470,7 +1478,7 @@ export function tryPlaceGoodsOrder(
       : 'provisions';
 
   const currentStock = getGoodsCount(shop, goodType);
-  const restockThreshold = 15;
+  const restockThreshold = thresholdsConfig.inventory.restockThreshold;
 
   // Only order if inventory is low
   if (currentStock >= restockThreshold) {
@@ -1516,7 +1524,7 @@ export function tryPlaceGoodsOrder(
   const shopCapacity = getAvailableCapacity(shop, goodsSizes);
   const goodSize = economyConfig.goods[goodType]?.size ?? economyConfig.defaultGoodsSize;
   const maxItemsThatFit = Math.floor(shopCapacity / goodSize);
-  const desiredAmount = Math.min(30, maxItemsThatFit);
+  const desiredAmount = Math.min(thresholdsConfig.inventory.desiredRestockAmount, maxItemsThatFit);
   const wholesalePrice = economyConfig.goods[goodType]?.wholesalePrice ?? 5;
   const affordableAmount = Math.floor(buyerOrg.wallet.credits / wholesalePrice);
   const orderQuantity = Math.min(desiredAmount, affordableAmount);
@@ -1547,6 +1555,7 @@ export function processGoodsOrders(
   locations: Location[],
   orgs: Organization[],
   economyConfig: EconomyConfig,
+  logisticsConfig: LogisticsConfig,
   phase: number
 ): { orders: Order[]; newLogisticsOrders: Order[] } {
   const updatedOrders: Order[] = [];
@@ -1622,8 +1631,8 @@ export function processGoodsOrders(
       const distance = Math.abs((pickupLoc.x ?? 0) - (deliveryLoc.x ?? 0)) +
                       Math.abs((pickupLoc.y ?? 0) - (deliveryLoc.y ?? 0));
       const totalGoods = quantity;
-      const payment = totalGoods * 1 + distance * 0.5;
-      const deliveryPayment = Math.max(10, Math.floor(payment));
+      const payment = totalGoods * logisticsConfig.delivery.perGoodRate + distance * logisticsConfig.delivery.perDistanceRate;
+      const deliveryPayment = Math.max(logisticsConfig.delivery.basePayment, Math.floor(payment));
 
       const logisticsOrder: Order = {
         id: `logistics_for_${order.id}`,
@@ -1774,6 +1783,7 @@ export function processWeeklyEconomy(
   locations: Location[],
   orgs: Organization[],
   vehicles: Vehicle[],
+  businessConfig: BusinessConfig,
   phase: number
 ): { agents: Agent[]; locations: Location[]; orgs: Organization[]; vehicles: Vehicle[] } {
   let updatedAgents = [...agents];
@@ -1800,7 +1810,7 @@ export function processWeeklyEconomy(
 
     // Pay owner dividend FIRST (owner survival is priority - they need to eat!)
     // This happens before employee salaries so owner always gets paid if org has funds
-    const ownerDividend = 75; // Owner takes 75 credits/week to cover food (50) + rent (20) + buffer
+    const ownerDividend = businessConfig.payroll.ownerWeeklyDividend;
     const leaderIdx = updatedAgents.findIndex((a) => a.id === orgLeader);
     if (leaderIdx !== -1 && org.wallet.credits >= ownerDividend) {
       const leader = updatedAgents[leaderIdx];

@@ -10,6 +10,9 @@ import type {
   SimulationConfig,
   EconomyConfig,
   AgentsConfig,
+  ThresholdsConfig,
+  BusinessConfig,
+  LogisticsConfig,
   CityConfig,
   TransportConfig,
   BehaviorConfig,
@@ -67,6 +70,9 @@ export function loadConfigSync(): LoadedConfig {
   const simulation = loadJson<SimulationConfig>('data/config/simulation.json');
   const economy = loadJson<EconomyConfig>('data/config/economy.json');
   const agents = loadJson<AgentsConfig>('data/config/agents.json');
+  const thresholds = loadJson<ThresholdsConfig>('data/config/thresholds.json');
+  const business = loadJson<BusinessConfig>('data/config/business.json');
+  const logistics = loadJson<LogisticsConfig>('data/config/logistics.json');
   const city = loadJson<CityConfig>('data/config/city.json');
   const transport = loadJson<TransportConfig>('data/config/transport.json');
   const behaviors = loadJson<BehaviorConfig>('data/config/behaviors.json');
@@ -115,6 +121,9 @@ export function loadConfigSync(): LoadedConfig {
     simulation,
     economy,
     agents,
+    thresholds,
+    business,
+    logistics,
     city,
     transport,
     behaviors,

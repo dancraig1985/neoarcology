@@ -112,6 +112,71 @@ export interface AgentsConfig {
 }
 
 /**
+ * Thresholds configuration from data/config/thresholds.json
+ * Agent behavior thresholds and inventory management
+ */
+export interface ThresholdsConfig {
+  agent: {
+    emergencyHunger: number;
+    maxPurchaseQuantity: number;
+  };
+  inventory: {
+    restockThreshold: number;
+    desiredRestockAmount: number;
+    warehouseTransferThreshold: number;
+  };
+}
+
+/**
+ * Business configuration from data/config/business.json
+ * Business opening, payroll, and expansion parameters
+ */
+export interface BusinessConfig {
+  entrepreneurship: {
+    openingChancePerPhase: number;
+    minCapital: {
+      production: number;
+      retail: number;
+    };
+    capitalAllocationPercent: number;
+  };
+  payroll: {
+    ownerWeeklyDividend: number;
+    hiringBufferWeeks: number;
+  };
+  expansion: {
+    minCreditsRequired: number;
+    expansionChancePerPhase: number;
+    minStorageForExpansion: number;
+    warehouseCostBuffer: number;
+    factoryCapacityTrigger: number;
+    warehouseAverageCapacityThreshold: number;
+  };
+}
+
+/**
+ * Logistics configuration from data/config/logistics.json
+ * Delivery, trucking, and procurement parameters
+ */
+export interface LogisticsConfig {
+  trucking: {
+    minTrucks: number;
+    maxTrucks: number;
+  };
+  delivery: {
+    basePayment: number;
+    perGoodRate: number;
+    perDistanceRate: number;
+  };
+  procurement: {
+    storageCapacityTrigger: number;
+    valuableDataReserveAmount: number;
+    valuableDataMaxSaleUnits: number;
+    valuableDataSalePrice: number;
+  };
+}
+
+/**
  * Zone configuration
  * Defines city zone types and their procedural generation parameters
  */
@@ -335,6 +400,9 @@ export interface LoadedConfig {
   simulation: SimulationConfig;
   economy: EconomyConfig;
   agents: AgentsConfig;
+  thresholds: ThresholdsConfig;
+  business: BusinessConfig;
+  logistics: LogisticsConfig;
   city: CityConfig;
   transport: TransportConfig;
   behaviors: BehaviorConfig;
@@ -394,6 +462,21 @@ export async function loadConfig(): Promise<LoadedConfig> {
   const behaviors = (await behaviorsResponse.json()) as BehaviorConfig;
   console.log(`[ConfigLoader] Loaded behaviors config (${behaviors.behaviors.length} behaviors)`);
 
+  // Load thresholds config
+  const thresholdsResponse = await fetch('/data/config/thresholds.json');
+  const thresholds = (await thresholdsResponse.json()) as ThresholdsConfig;
+  console.log('[ConfigLoader] Loaded thresholds config');
+
+  // Load business config
+  const businessResponse = await fetch('/data/config/business.json');
+  const business = (await businessResponse.json()) as BusinessConfig;
+  console.log('[ConfigLoader] Loaded business config');
+
+  // Load logistics config
+  const logisticsResponse = await fetch('/data/config/logistics.json');
+  const logistics = (await logisticsResponse.json()) as LogisticsConfig;
+  console.log('[ConfigLoader] Loaded logistics config');
+
   // Load templates
   const orgTemplates = (await loadTemplates('/data/templates/orgs')) as OrgTemplate[];
   const agentTemplates = (await loadTemplates('/data/templates/agents')) as AgentTemplate[];
@@ -446,6 +529,9 @@ export async function loadConfig(): Promise<LoadedConfig> {
     simulation,
     economy,
     agents,
+    thresholds,
+    business,
+    logistics,
     city,
     transport,
     behaviors,

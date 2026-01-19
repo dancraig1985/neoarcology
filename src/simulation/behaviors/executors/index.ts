@@ -1162,6 +1162,9 @@ function executeEntrepreneurBehavior(
     ctx.orgs,
     ctx.agentsConfig,
     ctx.economyConfig,
+    ctx.thresholdsConfig,
+    ctx.businessConfig,
+    ctx.logisticsConfig,
     ctx.deliveryRequests ?? [],
     ctx.vehicles ?? [],
     ctx.phase

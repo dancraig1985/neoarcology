@@ -1,0 +1,17 @@
+{
+  "trucking": {
+    "minTrucks": 2,
+    "maxTrucks": 4
+  },
+  "delivery": {
+    "basePayment": 10,
+    "perGoodRate": 1,
+    "perDistanceRate": 0.5
+  },
+  "procurement": {
+    "storageCapacityTrigger": 80,
+    "valuableDataReserveAmount": 100,
+    "valuableDataMaxSaleUnits": 5,
+    "valuableDataSalePrice": 200
+  }
+}

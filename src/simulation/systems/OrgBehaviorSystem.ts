@@ -7,7 +7,7 @@
  */
 
 import type { Organization, Location, Building, DeliveryRequest } from '../../types';
-import type { EconomyConfig, LocationTemplate } from '../../config/ConfigLoader';
+import type { EconomyConfig, ThresholdsConfig, BusinessConfig, LogisticsConfig, LocationTemplate } from '../../config/ConfigLoader';
 import { ActivityLog } from '../ActivityLog';
 import { createLocation, findBuildingForLocation } from './LocationSystem';
 import { addLocationToOrg } from './OrgSystem';
@@ -95,6 +95,9 @@ export function processOrgBehaviors(
   buildings: Building[],
   locationTemplates: Record<string, LocationTemplate>,
   economyConfig: EconomyConfig,
+  thresholdsConfig: ThresholdsConfig,
+  businessConfig: BusinessConfig,
+  logisticsConfig: LogisticsConfig,
   phase: number,
   config: OrgBehaviorConfig = DEFAULT_ORG_BEHAVIOR_CONFIG
 ): OrgBehaviorResult {
@@ -125,6 +128,7 @@ export function processOrgBehaviors(
       updatedLocations,
       locationTemplates,
       economyConfig,
+      thresholdsConfig,
       phase
     );
     updatedLocations = warehouseTransferResult.locations;
@@ -136,6 +140,7 @@ export function processOrgBehaviors(
       orgLocations,
       updatedLocations,
       updatedOrgs,
+      logisticsConfig,
       phase
     );
     updatedLocations = dataRevenueResult.locations;
@@ -149,6 +154,8 @@ export function processOrgBehaviors(
         buildings,
         updatedLocations,
         locationTemplates,
+        thresholdsConfig,
+        businessConfig,
         phase,
         config
       );
@@ -170,6 +177,7 @@ export function processOrgBehaviors(
       updatedLocations,
       updatedOrgs,
       economyConfig,
+      logisticsConfig,
       phase
     );
     updatedLocations = procureResult.locations;
@@ -183,6 +191,7 @@ export function processOrgBehaviors(
         buildings,
         updatedLocations,
         locationTemplates,
+        businessConfig,
         phase,
         config
       );
@@ -327,6 +336,7 @@ function tryTransferToWarehouse(
   allLocations: Location[],
   locationTemplates: Record<string, LocationTemplate>,
   economyConfig: EconomyConfig,
+  thresholdsConfig: ThresholdsConfig,
   phase: number
 ): { locations: Location[] } {
   // Construct goodsSizes for inventory transfers
@@ -350,7 +360,7 @@ function tryTransferToWarehouse(
     const currentInventory = Object.values(loc.inventory).reduce((sum, amount) => sum + amount, 0);
     const capacityUsedPercent = (currentInventory / capacity) * 100;
 
-    return capacityUsedPercent > 80;
+    return capacityUsedPercent > thresholdsConfig.inventory.warehouseTransferThreshold;
   });
 
   // No transfers needed
@@ -466,6 +476,7 @@ function trySelllValuableData(
   orgLocations: Location[],
   allLocations: Location[],
   allOrgs: Organization[],
+  logisticsConfig: LogisticsConfig,
   phase: number
 ): { locations: Location[]; orgs: Organization[] } {
   // Only process weekly (phase 56, 112, 168, etc.)
@@ -479,18 +490,17 @@ function trySelllValuableData(
     0
   );
 
-  // Reserve 100 valuable_data for prototype production (don't sell strategic reserves)
-  const reserveAmount = 100;
+  // Reserve valuable_data for prototype production (don't sell strategic reserves)
+  const reserveAmount = logisticsConfig.procurement.valuableDataReserveAmount;
   const availableForSale = Math.max(0, totalValuableData - reserveAmount);
 
   if (availableForSale === 0) {
     return { locations: allLocations, orgs: allOrgs };
   }
 
-  // Sell up to 5 units per week at 200 credits each
-  // (temporary B2B market - models selling research/consulting services)
-  const unitsToSell = Math.min(5, availableForSale);
-  const pricePerUnit = 200;
+  // Sell valuable_data to B2B market (models selling research/consulting services)
+  const unitsToSell = Math.min(logisticsConfig.procurement.valuableDataMaxSaleUnits, availableForSale);
+  const pricePerUnit = logisticsConfig.procurement.valuableDataSalePrice;
   const totalRevenue = unitsToSell * pricePerUnit;
 
   // Find location(s) with valuable_data and deduct from inventory
@@ -557,6 +567,7 @@ function tryProcureDataStorage(
   allLocations: Location[],
   allOrgs: Organization[],
   economyConfig: EconomyConfig,
+  logisticsConfig: LogisticsConfig,
   phase: number
 ): { locations: Location[]; orgs: Organization[] } {
   // Check if org has any location that produces valuable_data
@@ -588,7 +599,7 @@ function tryProcureDataStorage(
     ? (totalValuableData / totalStorageCapacity) * 100
     : 100; // No storage = effectively 100% used
 
-  if (totalStorageUnits > 0 && capacityUsedPercent < 80) {
+  if (totalStorageUnits > 0 && capacityUsedPercent < logisticsConfig.procurement.storageCapacityTrigger) {
     return { locations: allLocations, orgs: allOrgs };
   }
 
@@ -718,6 +729,7 @@ function tryExpandToOffice(
   buildings: Building[],
   allLocations: Location[],
   locationTemplates: Record<string, LocationTemplate>,
+  businessConfig: BusinessConfig,
   phase: number,
   config: OrgBehaviorConfig
 ): { org: Organization; newLocation?: Location } {
@@ -743,12 +755,12 @@ function tryExpandToOffice(
   }
 
   // Check if org has enough credits for expansion
-  if (org.wallet.credits < config.expansionThreshold) {
+  if (org.wallet.credits < businessConfig.expansion.minCreditsRequired) {
     return { org };
   }
 
   // Random chance to expand (don't spam expansions)
-  if (Math.random() > config.expansionChance) {
+  if (Math.random() > businessConfig.expansion.expansionChancePerPhase) {
     return { org };
   }
 
@@ -758,7 +770,7 @@ function tryExpandToOffice(
     0
   );
 
-  if (totalStorage < config.minStorageForExpansion) {
+  if (totalStorage < businessConfig.expansion.minStorageForExpansion) {
     // Try to buy storage first (will be handled in next cycle)
     return { org };
   }
@@ -774,7 +786,7 @@ function tryExpandToOffice(
   const openingCost = template.balance?.openingCost ?? 600;
 
   // Double-check affordability with opening cost
-  if (org.wallet.credits < openingCost + 200) {
+  if (org.wallet.credits < openingCost + businessConfig.expansion.warehouseCostBuffer) {
     return { org };
   }
 
@@ -836,6 +848,8 @@ function tryExpandToWarehouse(
   buildings: Building[],
   allLocations: Location[],
   locationTemplates: Record<string, LocationTemplate>,
+  thresholdsConfig: ThresholdsConfig,
+  businessConfig: BusinessConfig,
   phase: number,
   config: OrgBehaviorConfig
 ): { org: Organization; newLocation?: Location } {
@@ -851,8 +865,8 @@ function tryExpandToWarehouse(
       return sum + (inventory / capacity);
     }, 0) / warehouses.length;
 
-    // If average warehouse capacity is < 70%, we have enough warehouse space
-    if (averageCapacityUsed < 0.7) {
+    // If average warehouse capacity is below threshold, we have enough warehouse space
+    if (averageCapacityUsed < (businessConfig.expansion.warehouseAverageCapacityThreshold / 100)) {
       return { org }; // Existing warehouses have space
     }
   }
@@ -876,7 +890,7 @@ function tryExpandToWarehouse(
     const capacity = template?.balance?.inventoryCapacity ?? 100;
     const currentInventory = Object.values(loc.inventory).reduce((sum, amount) => sum + amount, 0);
     const capacityUsedPercent = (currentInventory / capacity) * 100;
-    return capacityUsedPercent > 80;
+    return capacityUsedPercent > thresholdsConfig.inventory.warehouseTransferThreshold;
   });
 
   if (!hasCapacityIssue) {

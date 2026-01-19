@@ -89,11 +89,58 @@ npm run sim:test -- --verbose      # Weekly details
 
 ## Configuration
 
-All tunable values live in JSON, no hardcoded constants:
-- `data/config/` - simulation.json, economy.json, zones.json, transport.json
-- `data/templates/` - orgs/, agents/, locations/
+**All tunable values live in JSON, no hardcoded constants (magic numbers).**
+
+### Config Files (`data/config/`)
+
+Configuration is split by concern:
+
+- **Core Simulation:**
+  - `simulation.json` - Time structure, phases, population limits
+  - `economy.json` - Goods catalog, prices, production rates
+  - `zones.json` - City zone types and densities
+  - `transport.json` - Vehicle types, speeds, costs
+
+- **Agent Tuning:**
+  - `agents.json` - Hunger rates, inventory capacity, spawn values
+  - `thresholds.json` - Decision thresholds (emergency hunger level, restock triggers)
+
+- **Business & Economy:**
+  - `business.json` - Entrepreneurship rates, capital requirements, expansion parameters
+  - `logistics.json` - Delivery costs, trucking fleets, procurement triggers
+
+- **Behavior System:**
+  - `behaviors.json` - Data-driven behavior definitions (conditions, priorities, executors)
+
+### Templates (`data/templates/`)
+
+Entity templates define types through data:
+- `orgs/` - Organization templates (corporations, shops, factories)
+- `agents/` - Agent templates (civilians, workers)
+- `locations/` - Location templates (retail, wholesale, offices)
+- `buildings/` - Building templates (residential, commercial, industrial)
 
 **Adding new entity types = adding new template JSON files.**
+
+### No Magic Numbers Policy
+
+**NEVER hardcode numeric constants in system code.** All tunable values must live in config files:
+
+❌ **Bad:**
+```typescript
+if (agent.hunger > 80) { // Magic number!
+  seekFood();
+}
+```
+
+✅ **Good:**
+```typescript
+if (agent.hunger > thresholdsConfig.agent.emergencyHunger) {
+  seekFood();
+}
+```
+
+This makes economic tuning possible without code changes and prevents scattered constants from becoming maintenance nightmares.
 
 ## Development Principles
 
