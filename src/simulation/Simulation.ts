@@ -8,7 +8,7 @@ import type { LoadedConfig } from '../config/ConfigLoader';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
 import { processAgentPhase, countLivingAgents, countDeadAgents } from './systems/AgentSystem';
-import { fixHomelessAgents } from './systems/EconomySystem';
+import { fixHomelessAgents } from './systems/AgentEconomicSystem';
 import { tryRestockFromWholesale, tryPlaceGoodsOrder, processGoodsOrders } from './systems/SupplyChainSystem';
 import { processWeeklyEconomy } from './systems/PayrollSystem';
 import { processAgentBehavior } from './behaviors/BehaviorProcessor';
