@@ -303,8 +303,56 @@ function analyzeLogisticsDemand(
 }
 
 /**
+ * Calculate market saturation for retail businesses
+ * Returns a saturation multiplier based on shops-per-capita ratio
+ */
+function calculateRetailSaturation(
+  agents: Agent[],
+  locations: Location[]
+): number {
+  const livingAgents = agents.filter(a => a.status !== 'dead').length;
+  const retailShops = locations.filter(loc => loc.tags.includes('retail')).length;
+
+  if (livingAgents === 0) return 0;
+
+  // Target: 1 shop per 15 agents (healthy market)
+  const shopsPerAgent = retailShops / livingAgents;
+  const targetRatio = 1 / 15; // 0.0667
+
+  // Saturation: 0 = undersaturated, 1+ = oversaturated
+  const saturation = shopsPerAgent / targetRatio;
+
+  return saturation;
+}
+
+/**
+ * Calculate market saturation for wholesale/production businesses
+ * Returns a saturation multiplier based on factories per retail shop ratio
+ */
+function calculateWholesaleSaturation(
+  locations: Location[]
+): number {
+  const retailShops = locations.filter(loc => loc.tags.includes('retail')).length;
+  const productionFacilities = locations.filter(loc =>
+    loc.tags.includes('production') && loc.tags.includes('wholesale')
+  ).length;
+
+  if (retailShops === 0) return 0;
+
+  // Target: 1 factory per 3 retail shops (healthy supply chain)
+  const factoriesPerShop = productionFacilities / retailShops;
+  const targetRatio = 1 / 3; // 0.333
+
+  // Saturation: 0 = undersaturated, 1+ = oversaturated
+  const saturation = factoriesPerShop / targetRatio;
+
+  return saturation;
+}
+
+/**
  * Get best business opportunities based on current market conditions
  * Returns sorted list of opportunities with scores
+ * Can return empty array if market is oversaturated (no good opportunities)
  */
 export function getBestBusinessOpportunities(
   agents: Agent[],
@@ -322,6 +370,10 @@ export function getBestBusinessOpportunities(
   const wholesaleShortages = analyzeWholesaleShortage(locations, economyConfig);
   const housingDemand = analyzeHousingDemand(agents, locations, agentsConfig);
 
+  // Calculate market saturation for retail and wholesale
+  const retailSaturation = calculateRetailSaturation(agents, locations);
+  const wholesaleSaturation = calculateWholesaleSaturation(locations);
+
   // Convert demand signals to business opportunities
   for (const signal of demandSignals) {
     if (signal.score < 3) {
@@ -335,26 +387,46 @@ export function getBestBusinessOpportunities(
         (loc.inventory[signal.good] !== undefined || loc.tags.includes(signal.good.replace('_goods', '')))
       ).length;
 
-      opportunities.push({
-        templateId: signal.retailTemplate,
-        demandScore: signal.score,
-        competitionScore: competition,
-        finalScore: signal.score - (competition * 2),
-        reason: `${signal.consumerCount} ${signal.demandType === 'consumer' ? 'agents' : 'orgs'} want ${signal.good}`,
-      });
+      // Calculate finalScore with proper competition penalty and saturation factor
+      // Base: demandScore (how many want it)
+      // Penalty 1: Existing competition (each competitor reduces score by 2)
+      // Penalty 2: Market saturation (if oversaturated, further reduce score)
+      const competitionPenalty = competition * 2;
+      const saturationPenalty = retailSaturation > 1 ? (retailSaturation - 1) * 10 : 0;
+      const finalScore = signal.score - competitionPenalty - saturationPenalty;
+
+      // Only add if opportunity is positive (market not oversaturated)
+      if (finalScore > 0) {
+        opportunities.push({
+          templateId: signal.retailTemplate,
+          demandScore: signal.score,
+          competitionScore: competition,
+          finalScore,
+          reason: `${signal.consumerCount} ${signal.demandType === 'consumer' ? 'agents' : 'orgs'} want ${signal.good}`,
+        });
+      }
     }
   }
 
   // Add wholesale opportunities from shortages
   for (const shortage of wholesaleShortages) {
     if (shortage.productionTemplate && locationTemplates[shortage.productionTemplate]) {
-      opportunities.push({
-        templateId: shortage.productionTemplate,
-        demandScore: shortage.score,
-        competitionScore: shortage.supplierCount,
-        finalScore: shortage.score * 2, // High priority for supply chain
-        reason: `Supply chain gap: ${shortage.consumerCount} retail locations need ${shortage.good}`,
-      });
+      // Calculate finalScore with saturation penalty
+      // Base: demandScore (supply chain gap urgency)
+      // Penalty: Wholesale market saturation (if oversaturated, reduce score)
+      const saturationPenalty = wholesaleSaturation > 1 ? (wholesaleSaturation - 1) * 10 : 0;
+      const finalScore = (shortage.score * 2) - saturationPenalty;
+
+      // Only add if opportunity is positive (wholesale market not oversaturated)
+      if (finalScore > 0) {
+        opportunities.push({
+          templateId: shortage.productionTemplate,
+          demandScore: shortage.score,
+          competitionScore: shortage.supplierCount,
+          finalScore,
+          reason: `Supply chain gap: ${shortage.consumerCount} retail locations need ${shortage.good}`,
+        });
+      }
     }
   }
 
@@ -374,29 +446,26 @@ export function getBestBusinessOpportunities(
     const logisticsDemand = analyzeLogisticsDemand(deliveryRequests, locations, orgs);
     if (logisticsDemand >= 3) {
       const existingDepots = locations.filter(loc => loc.tags.includes('depot')).length;
-      opportunities.push({
-        templateId: 'depot',
-        demandScore: logisticsDemand,
-        competitionScore: existingDepots,
-        finalScore: logisticsDemand - (existingDepots * 2),
-        reason: `${logisticsDemand} unmet delivery requests, ${existingDepots} existing logistics companies`,
-      });
+      const finalScore = logisticsDemand - (existingDepots * 2);
+
+      // Only add if opportunity is positive
+      if (finalScore > 0) {
+        opportunities.push({
+          templateId: 'depot',
+          demandScore: logisticsDemand,
+          competitionScore: existingDepots,
+          finalScore,
+          reason: `${logisticsDemand} unmet delivery requests, ${existingDepots} existing logistics companies`,
+        });
+      }
     }
   }
 
-  // Always include retail_shop as fallback (food is always needed)
-  if (locationTemplates['retail_shop']) {
-    const foodDemand = demandSignals.find(s => s.good === 'provisions');
-    opportunities.push({
-      templateId: 'retail_shop',
-      demandScore: foodDemand?.score ?? 1,
-      competitionScore: foodDemand?.supplierCount ?? 0,
-      finalScore: Math.max(foodDemand?.score ?? 1, 1),
-      reason: 'Food retail (base demand)',
-    });
-  }
+  // REMOVED: No longer include guaranteed retail_shop fallback
+  // Market analysis can now return "no opportunity" if market is oversaturated
 
   // Sort by final score descending
+  // Note: Can return empty array if no viable opportunities exist
   return opportunities.sort((a, b) => b.finalScore - a.finalScore);
 }
 
