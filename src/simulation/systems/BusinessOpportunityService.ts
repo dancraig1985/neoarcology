@@ -320,6 +320,7 @@ export function tryOpenBusiness(
     ...agent,
     status: 'employed', // Now running their own business
     employer: orgId,
+    employedAt: locationId, // Owner works at their business location
     wallet: {
       ...agent.wallet,
       credits: agent.wallet.credits - totalCost,

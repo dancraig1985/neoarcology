@@ -130,14 +130,25 @@ export function checkEmploymentInvariants(state: SimulationState): InvariantViol
     }
 
     // Agents claiming to work for this org should match location employee lists
-    if (actualEmployees.length !== locationEmployees) {
-      violations.push({
-        severity: 'warning',
-        category: 'employment',
-        message: `Org ${org.name} employment mismatch: ${actualEmployees.length} agents claim employment but locations list ${locationEmployees} employees`,
-        entityId: org.id,
-        phase: currentPhase,
-      });
+    // EXCEPTION: Org leaders (business owners, property managers) may be employed
+    // but not in any location's employees array if all locations have 0 employee slots
+    const mismatch = actualEmployees.length !== locationEmployees;
+    if (mismatch) {
+      // Check if this is the leader-only exception
+      const isLeaderOnlyException =
+        actualEmployees.length === 1 &&
+        locationEmployees === 0 &&
+        actualEmployees[0] === org.leader;
+
+      if (!isLeaderOnlyException) {
+        violations.push({
+          severity: 'warning',
+          category: 'employment',
+          message: `Org ${org.name} employment mismatch: ${actualEmployees.length} agents claim employment but locations list ${locationEmployees} employees`,
+          entityId: org.id,
+          phase: currentPhase,
+        });
+      }
     }
   }
 

@@ -1319,6 +1319,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
       if (apartmentOrgTemplate.generation?.leaderBecomesEmployed) {
         owner.status = 'employed';
         owner.employer = apartmentOrg.id;
+        // Property managers will have their employedAt set to first apartment after distribution
       }
 
       landlordOrgs.push(apartmentOrg);
@@ -1371,6 +1372,18 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           apartment.residents = [];
           locations.push(apartment);
           landlordOrg.locations.push(apartment.id);
+        }
+      }
+    }
+
+    // Fix property manager employment: set their employedAt to first apartment
+    for (const landlordOrg of landlordOrgs) {
+      const owner = agents.find(a => a.id === landlordOrg.leader);
+      if (owner && owner.status === 'employed' && owner.employer === landlordOrg.id) {
+        // Set employedAt to first apartment in their portfolio
+        const firstApartment = landlordOrg.locations[0];
+        if (firstApartment) {
+          owner.employedAt = firstApartment;
         }
       }
     }

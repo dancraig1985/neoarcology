@@ -5,19 +5,30 @@
 
 import type { SimulationState } from '../Simulation';
 import type { InvariantViolation } from '../../types/InvariantViolation';
+import type { EconomyConfig } from '../../config/ConfigLoader';
+import { getInventorySpaceUsed } from '../systems/InventorySystem';
 
-export function checkLocationInvariants(state: SimulationState): InvariantViolation[] {
+export function checkLocationInvariants(
+  state: SimulationState,
+  economyConfig: EconomyConfig
+): InvariantViolation[] {
   const violations: InvariantViolation[] = [];
   const currentPhase = state.time.currentPhase;
 
+  // Get goods sizes from config for proper inventory calculation
+  const goodsSizes = {
+    goods: economyConfig.goods,
+    defaultGoodsSize: economyConfig.defaultGoodsSize,
+  };
+
   for (const location of state.locations) {
-    // Inventory can't exceed capacity
-    const totalGoods = Object.values(location.inventory).reduce((sum, qty) => sum + qty, 0);
-    if (totalGoods > location.inventoryCapacity) {
+    // Inventory can't exceed capacity (size-weighted calculation)
+    const spaceUsed = getInventorySpaceUsed(location, goodsSizes);
+    if (spaceUsed > location.inventoryCapacity) {
       violations.push({
         severity: 'warning',
         category: 'inventory',
-        message: `Location ${location.name} exceeds capacity: ${totalGoods}/${location.inventoryCapacity}`,
+        message: `Location ${location.name} exceeds capacity: ${spaceUsed.toFixed(1)}/${location.inventoryCapacity} space`,
         entityId: location.id,
         phase: currentPhase,
       });

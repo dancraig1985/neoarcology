@@ -5,6 +5,7 @@
 
 import type { SimulationState } from '../Simulation';
 import type { InvariantViolation } from '../../types/InvariantViolation';
+import type { EconomyConfig } from '../../config/ConfigLoader';
 import { checkAgentInvariants } from './AgentInvariants';
 import { checkLocationInvariants } from './LocationInvariants';
 import { checkOrgInvariants, checkEmploymentInvariants } from './OrgInvariants';
@@ -20,9 +21,11 @@ export interface InvariantCheckConfig {
 
 export class InvariantChecker {
   private config: InvariantCheckConfig;
+  private economyConfig: EconomyConfig;
 
-  constructor(config: InvariantCheckConfig) {
+  constructor(config: InvariantCheckConfig, economyConfig: EconomyConfig) {
     this.config = config;
+    this.economyConfig = economyConfig;
   }
 
   /**
@@ -41,7 +44,7 @@ export class InvariantChecker {
     const violations: InvariantViolation[] = [];
 
     violations.push(...checkAgentInvariants(state));
-    violations.push(...checkLocationInvariants(state));
+    violations.push(...checkLocationInvariants(state, this.economyConfig));
     violations.push(...checkOrgInvariants(state));
     violations.push(...checkEmploymentInvariants(state));
     violations.push(...checkOrderInvariants(state));
@@ -108,7 +111,10 @@ export class InvariantChecker {
 /**
  * Create default invariant checker with sensible defaults
  */
-export function createInvariantChecker(overrides?: Partial<InvariantCheckConfig>): InvariantChecker {
+export function createInvariantChecker(
+  economyConfig: EconomyConfig,
+  overrides?: Partial<InvariantCheckConfig>
+): InvariantChecker {
   const defaultConfig: InvariantCheckConfig = {
     enabled: true,
     failOnErrors: false,
@@ -117,5 +123,5 @@ export function createInvariantChecker(overrides?: Partial<InvariantCheckConfig>
     checkEveryNPhases: 1,
   };
 
-  return new InvariantChecker({ ...defaultConfig, ...overrides });
+  return new InvariantChecker({ ...defaultConfig, ...overrides }, economyConfig);
 }

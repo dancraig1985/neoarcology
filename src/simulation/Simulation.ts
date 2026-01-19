@@ -345,7 +345,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
 
   // Run invariant checks if enabled (PLAN-036)
   if (config.simulation.invariantChecking) {
-    const checker = new InvariantChecker(config.simulation.invariantChecking);
+    const checker = new InvariantChecker(config.simulation.invariantChecking, config.economy);
     const shouldFail = checker.checkAndLog(updatedState);
 
     if (shouldFail) {
