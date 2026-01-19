@@ -103,7 +103,7 @@ export function processWeeklyEconomy(
         .filter((e): e is Agent => e !== undefined);
 
       // Process payroll from org wallet
-      const payrollResult = processOrgPayroll(org, employees, phase);
+      const payrollResult = processOrgPayroll(org, employees, phase, context);
       org = payrollResult.org;
 
       // Update paid employees
@@ -289,7 +289,8 @@ export function processWeeklyEconomy(
 function processOrgPayroll(
   org: Organization,
   employees: Agent[],
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { org: Organization; employees: Agent[]; unpaidEmployees: Agent[] } {
   let updatedOrg = org;
   const paidEmployees: Agent[] = [];
