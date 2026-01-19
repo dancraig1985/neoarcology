@@ -2,36 +2,11 @@
  * Metrics - Track simulation metrics for analysis
  * Collects population, economy, business, and supply data
  *
- * Uses a singleton pattern (like ActivityLog) for easy instrumentation.
- * Call setActiveMetrics() at simulation start to enable tracking.
+ * Uses instance-based pattern with explicit metrics parameter.
+ * Systems receive metrics through SimulationContext.
  */
 
 import type { SimulationState } from './Simulation';
-
-// Module-level active metrics reference for easy instrumentation
-let activeMetrics: SimulationMetrics | null = null;
-
-/**
- * Set the active metrics object for the current simulation
- * Call this at simulation creation
- */
-export function setActiveMetrics(metrics: SimulationMetrics): void {
-  activeMetrics = metrics;
-}
-
-/**
- * Get the active metrics (or null if not set)
- */
-export function getActiveMetrics(): SimulationMetrics | null {
-  return activeMetrics;
-}
-
-/**
- * Clear active metrics (call when simulation ends)
- */
-export function clearActiveMetrics(): void {
-  activeMetrics = null;
-}
 
 /**
  * Snapshot of simulation state at a point in time
@@ -405,106 +380,3 @@ export function finalizeMetrics(
   metrics.finalSnapshot = takeSnapshot(state, tick);
 }
 
-// =============================================================================
-// Convenience functions using active metrics (for easy instrumentation)
-// These allow systems to record metrics without passing metrics object around
-// =============================================================================
-
-/**
- * Track a retail sale (uses active metrics)
- */
-export function trackRetailSale(good: string): void {
-  if (activeMetrics) {
-    recordRetailSale(activeMetrics, good);
-  }
-}
-
-/**
- * Track a wholesale sale (uses active metrics)
- */
-export function trackWholesaleSale(good: string): void {
-  if (activeMetrics) {
-    recordWholesaleSale(activeMetrics, good);
-  }
-}
-
-/**
- * Track a B2B sale (uses active metrics)
- */
-export function trackB2BSale(good: string): void {
-  if (activeMetrics) {
-    recordB2BSale(activeMetrics, good);
-  }
-}
-
-/**
- * Track a wage payment (uses active metrics)
- */
-export function trackWagePayment(amount: number): void {
-  if (activeMetrics) {
-    recordWagePayment(activeMetrics, amount);
-  }
-}
-
-/**
- * Track a dividend payment (uses active metrics)
- */
-export function trackDividendPayment(amount: number): void {
-  if (activeMetrics) {
-    recordDividendPayment(activeMetrics, amount);
-  }
-}
-
-/**
- * Track a death (uses active metrics)
- */
-export function trackDeath(agentName: string, cause: string): void {
-  if (activeMetrics) {
-    recordDeath(activeMetrics, agentName, cause);
-  }
-}
-
-/**
- * Track a business opening (uses active metrics)
- */
-export function trackBusinessOpened(businessName: string): void {
-  if (activeMetrics) {
-    recordBusinessOpened(activeMetrics, businessName);
-  }
-}
-
-/**
- * Track a business closing (uses active metrics)
- */
-export function trackBusinessClosed(businessName: string): void {
-  if (activeMetrics) {
-    recordBusinessClosed(activeMetrics, businessName);
-  }
-}
-
-/**
- * Track a hire (uses active metrics)
- */
-export function trackHire(): void {
-  if (activeMetrics) {
-    recordHire(activeMetrics);
-  }
-}
-
-/**
- * Track a fire/quit (uses active metrics)
- */
-export function trackFire(): void {
-  if (activeMetrics) {
-    recordFire(activeMetrics);
-  }
-}
-
-/**
- * Track an immigrant (uses active metrics)
- */
-export function trackImmigrant(): void {
-  if (activeMetrics) {
-    recordImmigrant(activeMetrics);
-  }
-}

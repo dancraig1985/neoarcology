@@ -5,7 +5,7 @@
 
 import type { Agent, Location, Organization, Building, Vehicle, Order, DeliveryRequest } from '../types';
 import type { LoadedConfig } from '../config/ConfigLoader';
-import type { SeededRNG } from '../types/SimulationContext';
+import type { SeededRNG, SimulationContext } from '../types/SimulationContext';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
 import { createSeededRNG } from './SeededRandom';
@@ -20,7 +20,7 @@ import { cleanupDeadEmployees } from './systems/LocationSystem';
 import { checkImmigration } from './systems/ImmigrationSystem';
 import { processVehicleTravel, cleanupAllVehicles } from './systems/VehicleSystem';
 import { generateCity } from '../generation/CityGenerator';
-import { createMetrics, takeSnapshot, startNewWeek, setActiveMetrics, type SimulationMetrics, type MetricsSnapshot } from './Metrics';
+import { createMetrics, takeSnapshot, startNewWeek, type SimulationMetrics, type MetricsSnapshot } from './Metrics';
 
 export interface SimulationState {
   time: TimeState;
@@ -89,9 +89,6 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
   metrics.startingBusinesses = city.organizations.length;
   startNewWeek(metrics, 1);
 
-  // Set active metrics for easy instrumentation
-  setActiveMetrics(metrics);
-
   const initialState: SimulationState = {
     time,
     agents: city.agents,
@@ -120,6 +117,14 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
 export function tick(state: SimulationState, config: LoadedConfig): SimulationState {
   // Advance time (uses simulation config for time structure)
   const { time: newTime, dayRollover, weekRollover } = advancePhase(state.time, config.simulation);
+
+  // Create simulation context for this tick (dependency injection container)
+  const context: SimulationContext = {
+    metrics: state.metrics,
+    rng: state.rng,
+    config,
+    phase: newTime.currentPhase,
+  };
 
   // Log time progression on day rollover
   if (dayRollover) {
