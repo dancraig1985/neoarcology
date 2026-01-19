@@ -49,7 +49,10 @@ Other docs: `design/GAME-DESIGN.md` (high-level design), `design/roadmap/plans/`
 **Systems:**
 - `src/simulation/systems/AgentStateHelpers.ts` - Centralized state transitions (use this!)
 - `src/simulation/systems/AgentSystem.ts` - Hunger, eating, death
-- `src/simulation/systems/EconomySystem.ts` - Transactions, payroll, business
+- `src/simulation/systems/AgentEconomicSystem.ts` - Agent purchasing, job seeking, housing
+- `src/simulation/systems/BusinessOpportunityService.ts` - Business creation, entrepreneurship
+- `src/simulation/systems/SupplyChainSystem.ts` - Restocking, order fulfillment, B2B commerce
+- `src/simulation/systems/PayrollSystem.ts` - Weekly payroll, rent, org dissolution
 - `src/simulation/systems/OrgBehaviorSystem.ts` - Org-level procurement, expansion
 - `src/simulation/systems/DemandAnalyzer.ts` - Market demand analysis for entrepreneurs
 - `src/simulation/systems/TravelSystem.ts` - Distance, travel time
@@ -158,6 +161,87 @@ This makes economic tuning possible without code changes and prevents scattered 
 - Template files are self-contained (all data for a type in one file).
 - Code reads from config, never hardcodes tunable values.
 
+## System Organization & Architecture
+
+### Single Responsibility Principle
+
+**Each system should have ONE clear, focused responsibility.** If a system handles multiple domains, split it.
+
+**File size limit: 800 lines max per system.** Large files are unmaintainable and indicate mixed responsibilities.
+
+Example (PLAN-032):
+- ❌ `EconomySystem.ts` (2243 lines) - handled payroll, restocking, agent decisions, business creation
+- ✅ Split into:
+  - `AgentEconomicSystem.ts` (~940 LOC) - agent decisions only
+  - `PayrollSystem.ts` (~420 LOC) - weekly financial operations only
+  - `SupplyChainSystem.ts` (~560 LOC) - B2B commerce only
+  - `BusinessOpportunityService.ts` (~370 LOC) - business creation only
+
+### Breaking Circular Dependencies
+
+When splitting systems, watch for circular imports:
+- System A calls System B
+- System B calls System A
+- TypeScript import cycle error
+
+**Solution: Extract to shared service**
+
+Example from PLAN-032:
+- Problem: `AgentEconomicSystem` → `tryOpenBusiness()` → needs agent data → circular
+- Solution: Create `BusinessOpportunityService.ts` as neutral ground
+- Both `AgentEconomicSystem` and behavior executors can import from service
+
+**Don't use callbacks or dependency injection for simple cases** - adds complexity. Prefer extracting to a shared module.
+
+### Module State Preservation
+
+When migrating code between files, preserve module-level state carefully:
+
+```typescript
+// OLD FILE (EconomySystem.ts)
+let locationIdCounter = 1;
+let orgIdCounter = 100;
+
+// NEW FILE (BusinessOpportunityService.ts)
+let locationIdCounter = 1;  // ✅ Same initial value
+let orgIdCounter = 100;     // ✅ Preserves reproducibility
+```
+
+**Why this matters**: Seeded tests must produce identical results before/after migration.
+
+### Incremental Migration Strategy
+
+When refactoring large systems:
+
+1. **Plan the split** - identify domains and dependencies first
+2. **Create empty files** with exports
+3. **Migrate one domain at a time** (not all at once)
+4. **Test after each migration** with increasing tick counts:
+   - 100 ticks (basic functionality)
+   - 200 ticks (interactions)
+   - 500 ticks (stability)
+   - 1000 ticks (integration)
+5. **Use git commits** - one commit per system migration for easy rollback
+6. **Delete old file last** - only after full integration test passes
+
+Example test progression from PLAN-032:
+```bash
+npm run sim:test -- --seed 42 --ticks 100  # BusinessOpportunityService
+npm run sim:test -- --seed 42 --ticks 200  # + SupplyChainSystem
+npm run sim:test -- --seed 42 --ticks 300  # + PayrollSystem
+npm run sim:test -- --seed 42 --ticks 500  # + AgentEconomicSystem
+npm run sim:test -- --seed 42 --ticks 1000 # Final integration
+```
+
+### System Naming Conventions
+
+- **Systems**: End in `System.ts` (e.g., `PayrollSystem.ts`, `AgentSystem.ts`)
+- **Services**: End in `Service.ts` (e.g., `BusinessOpportunityService.ts`)
+- **Helpers**: End in `Helpers.ts` (e.g., `AgentStateHelpers.ts`)
+- **Analyzers**: End in `Analyzer.ts` (e.g., `DemandAnalyzer.ts`)
+
+**Systems** are called by the main simulation loop. **Services** are shared utilities called by multiple systems. **Helpers** provide pure functions for state transformations. **Analyzers** compute derived data.
+
 ## Behavior System
 
 Agent decisions are **data-driven** via `data/config/behaviors.json`. Each behavior has:
@@ -233,6 +317,13 @@ See the helpers file for full documentation.
 - Forgetting that entry conditions aren't re-checked after task starts
 - Behavior order in JSON matters - first matching behavior wins at same priority
 - Not returning updated locations/orgs from executors (state gets lost)
+
+### System Organization
+- Letting systems grow beyond 800 lines (split before they become unmaintainable)
+- Mixing multiple responsibilities in one system (payroll + restocking + agent decisions = bad)
+- Creating circular dependencies between systems (extract to shared service instead)
+- Not testing after each migration step (incremental testing catches errors early)
+- Changing module-level state initial values during migration (breaks reproducibility)
 
 ### General
 - Using hardcoded types instead of tags
