@@ -5,6 +5,8 @@
 
 import type { Agent, Organization, Location, Vehicle, Order } from '../types';
 import type { DetailSection } from './components/DetailView';
+import type { TransactionHistory } from '../types/Transaction';
+import { calculateLocationMetrics } from '../simulation/analytics/MetricsCalculator';
 
 /**
  * Column definition for tables
@@ -62,6 +64,7 @@ export const AGENT_COLUMNS: ColumnDef<Agent>[] = [
     label: 'Credits',
     width: 80,
     align: 'right',
+    sortValue: (a) => a.wallet.credits,
   },
   {
     key: 'needs.hunger',
@@ -69,6 +72,7 @@ export const AGENT_COLUMNS: ColumnDef<Agent>[] = [
     width: 70,
     align: 'right',
     render: (a) => `${Math.round(a.needs.hunger)}%`,
+    sortValue: (a) => a.needs.hunger,
   },
   {
     key: 'needs.fatigue',
@@ -76,6 +80,7 @@ export const AGENT_COLUMNS: ColumnDef<Agent>[] = [
     width: 70,
     align: 'right',
     render: (a) => `${Math.round(a.needs.fatigue ?? 0)}%`,
+    sortValue: (a) => a.needs.fatigue ?? 0,
   },
   {
     key: 'inventory.provisions',
@@ -83,6 +88,7 @@ export const AGENT_COLUMNS: ColumnDef<Agent>[] = [
     width: 60,
     align: 'right',
     render: (a) => (a.inventory['provisions'] ?? 0).toString(),
+    sortValue: (a) => a.inventory['provisions'] ?? 0,
   },
   {
     key: 'employerName',
@@ -120,6 +126,7 @@ export const ORG_COLUMNS: ColumnDef<Organization>[] = [
     label: 'Credits',
     width: 80,
     align: 'right',
+    sortValue: (o) => o.wallet.credits,
   },
   {
     key: 'locations',
@@ -137,53 +144,80 @@ export const ORG_COLUMNS: ColumnDef<Organization>[] = [
 ];
 
 /**
- * Location table columns
+ * Location table columns (factory function for PLAN-035 metrics)
  */
-export const LOCATION_COLUMNS: ColumnDef<Location>[] = [
-  {
-    key: 'name',
-    label: 'Location',
-    width: 150,
-  },
-  {
-    key: 'template',
-    label: 'Type',
-    width: 100,
-  },
-  {
-    key: 'tags',
-    label: 'Tags',
-    width: 120,
-    render: (l) => l.tags.slice(0, 2).join(', '),
-  },
-  {
-    key: 'inventory.provisions',
-    label: 'Stock',
-    width: 60,
-    align: 'right',
-    render: (l) => (l.inventory['provisions'] ?? 0).toString(),
-  },
-  {
-    key: 'employees',
-    label: 'Staff',
-    width: 50,
-    align: 'right',
-    render: (l) => l.employees.length.toString(),
-    sortValue: (l) => l.employees.length,
-  },
-  {
-    key: 'weeklyRevenue',
-    label: 'Revenue',
-    width: 70,
-    align: 'right',
-    render: (l) => l.weeklyRevenue.toString(),
-  },
-];
+export function createLocationColumns(
+  transactionHistory: TransactionHistory,
+  currentPhase: number
+): ColumnDef<Location>[] {
+  return [
+    {
+      key: 'name',
+      label: 'Location',
+      width: 150,
+    },
+    {
+      key: 'template',
+      label: 'Type',
+      width: 100,
+    },
+    {
+      key: 'tags',
+      label: 'Tags',
+      width: 120,
+      render: (l) => l.tags.slice(0, 2).join(', '),
+    },
+    {
+      key: 'inventory.provisions',
+      label: 'Stock',
+      width: 60,
+      align: 'right',
+      render: (l) => (l.inventory['provisions'] ?? 0).toString(),
+      sortValue: (l) => l.inventory['provisions'] ?? 0,
+    },
+    {
+      key: 'employees',
+      label: 'Staff',
+      width: 50,
+      align: 'right',
+      render: (l) => l.employees.length.toString(),
+      sortValue: (l) => l.employees.length,
+    },
+    {
+      key: 'weeklyRevenue',
+      label: 'Revenue',
+      width: 70,
+      align: 'right',
+      render: (l) => {
+        const metrics = calculateLocationMetrics(l.id, transactionHistory, currentPhase);
+        return metrics.weeklyRevenue.toString();
+      },
+      sortValue: (l) => calculateLocationMetrics(l.id, transactionHistory, currentPhase).weeklyRevenue,
+    },
+  ];
+}
+
+/**
+ * Location table columns (backward compatibility - uses empty transaction history)
+ * @deprecated Use createLocationColumns() with actual transaction history
+ */
+export const LOCATION_COLUMNS: ColumnDef<Location>[] = createLocationColumns(
+  { transactions: [], windowSize: 56 },
+  0
+);
+
+/**
+ * Enriched vehicle type with names for display
+ */
+export type VehicleWithNames = Vehicle & {
+  operatorName: string;
+  locationName: string;
+};
 
 /**
  * Vehicle table columns
  */
-export const VEHICLE_COLUMNS: ColumnDef<Vehicle>[] = [
+export const VEHICLE_COLUMNS: ColumnDef<VehicleWithNames>[] = [
   {
     key: 'name',
     label: 'Vehicle',
@@ -195,21 +229,14 @@ export const VEHICLE_COLUMNS: ColumnDef<Vehicle>[] = [
     width: 100,
   },
   {
-    key: 'operator',
+    key: 'operatorName',
     label: 'Operator',
     width: 120,
-    render: (v) => v.operator ?? 'Parked',
   },
   {
-    key: 'location',
+    key: 'locationName',
     label: 'Location',
     width: 120,
-    render: (v) => {
-      if (v.travelingToBuilding) {
-        return 'In Transit';
-      }
-      return v.currentBuilding ?? '-';
-    },
   },
   {
     key: 'passengers',
@@ -231,13 +258,22 @@ export const VEHICLE_COLUMNS: ColumnDef<Vehicle>[] = [
       const total = Object.values(v.cargo).reduce((sum, amt) => sum + amt, 0);
       return total.toString();
     },
+    sortValue: (v) => Object.values(v.cargo).reduce((sum, amt) => sum + amt, 0),
   },
 ];
 
 /**
+ * Enriched order type with names for display
+ */
+export type OrderWithNames = Order & {
+  buyerName: string;
+  sellerName: string;
+};
+
+/**
  * Order table columns
  */
-export const ORDER_COLUMNS: ColumnDef<Order>[] = [
+export const ORDER_COLUMNS: ColumnDef<OrderWithNames>[] = [
   {
     key: 'id',
     label: 'Order ID',
@@ -256,15 +292,14 @@ export const ORDER_COLUMNS: ColumnDef<Order>[] = [
     render: (o) => o.status,
   },
   {
-    key: 'buyer',
+    key: 'buyerName',
     label: 'Buyer',
     width: 120,
   },
   {
-    key: 'seller',
+    key: 'sellerName',
     label: 'Seller',
     width: 120,
-    render: (o) => o.seller || 'Unassigned',
   },
   {
     key: 'good',
@@ -456,111 +491,142 @@ export const ORG_DETAILS: DetailSection[] = [
 /**
  * Location detail sections
  */
-export const LOCATION_DETAILS: DetailSection[] = [
-  {
-    title: 'Identity',
-    fields: [
-      { key: 'id', label: 'ID' },
-      { key: 'name', label: 'Name' },
-      { key: 'template', label: 'Type' },
-      { key: 'tags', label: 'Tags' },
-    ],
-  },
-  {
-    title: 'Ownership',
-    fields: [
-      { key: 'owner', label: 'Owner ID' },
-      { key: 'ownerType', label: 'Owner Type' },
-    ],
-  },
-  {
-    title: 'Operations',
-    fields: [
-      {
-        key: 'employees',
-        label: 'Employees',
-        render: (l) => `${(l as Location).employees.length} / ${(l as Location).employeeSlots}`,
-      },
-      { key: 'operatingCost', label: 'Operating Cost' },
-      { key: 'weeklyRevenue', label: 'Weekly Revenue' },
-      { key: 'weeklyCosts', label: 'Weekly Costs' },
-    ],
-  },
-  {
-    title: 'Residential',
-    fields: [
-      {
-        key: 'residents',
-        label: 'Residents',
-        render: (l) => {
-          const loc = l as Location;
-          const residents = loc.residents ?? [];
-          const max = loc.maxResidents ?? 0;
-          if (max === 0) return '-';
-          return `${residents.length} / ${max}`;
+/**
+ * Location detail sections (factory function for PLAN-035 metrics)
+ */
+export function createLocationDetails(
+  transactionHistory: TransactionHistory,
+  currentPhase: number
+): DetailSection[] {
+  return [
+    {
+      title: 'Identity',
+      fields: [
+        { key: 'id', label: 'ID' },
+        { key: 'name', label: 'Name' },
+        { key: 'template', label: 'Type' },
+        { key: 'tags', label: 'Tags' },
+      ],
+    },
+    {
+      title: 'Ownership',
+      fields: [
+        { key: 'owner', label: 'Owner ID' },
+        { key: 'ownerType', label: 'Owner Type' },
+      ],
+    },
+    {
+      title: 'Operations',
+      fields: [
+        {
+          key: 'employees',
+          label: 'Employees',
+          render: (l) => `${(l as Location).employees.length} / ${(l as Location).employeeSlots}`,
         },
-      },
-      {
-        key: 'rentCost',
-        label: 'Rent/week',
-        render: (l) => {
-          const loc = l as Location;
-          return loc.rentCost !== undefined ? loc.rentCost.toString() : '-';
+        { key: 'operatingCost', label: 'Operating Cost' },
+        {
+          key: 'weeklyRevenue',
+          label: 'Weekly Revenue',
+          render: (l) => {
+            const metrics = calculateLocationMetrics((l as Location).id, transactionHistory, currentPhase);
+            return metrics.weeklyRevenue.toString();
+          },
         },
-      },
-    ],
-  },
-  {
-    title: 'Inventory',
-    fields: [
-      {
-        key: 'inventory',
-        label: 'Stock',
-        render: (l) => {
-          const inv = (l as Location).inventory;
-          const items = Object.entries(inv)
-            .filter(([, v]) => v > 0)
-            .map(([k, v]) => `${k}: ${v}`);
-          return items.length > 0 ? items.join(', ') : 'Empty';
+        {
+          key: 'weeklyCosts',
+          label: 'Weekly Costs',
+          render: (l) => {
+            const metrics = calculateLocationMetrics((l as Location).id, transactionHistory, currentPhase);
+            return metrics.weeklyCosts.toString();
+          },
         },
-      },
-      { key: 'inventoryCapacity', label: 'Capacity' },
-    ],
-  },
-  {
-    title: 'Position',
-    fields: [
-      {
-        key: 'building',
-        label: 'Building',
-        render: (l) => {
-          const loc = l as Location;
-          if (loc.building) {
-            return loc.building;
-          }
-          return 'Outdoor';
+      ],
+    },
+    {
+      title: 'Residential',
+      fields: [
+        {
+          key: 'residents',
+          label: 'Residents',
+          render: (l) => {
+            const loc = l as Location;
+            const residents = loc.residents ?? [];
+            const max = loc.maxResidents ?? 0;
+            if (max === 0) return '-';
+            return `${residents.length} / ${max}`;
+          },
         },
-      },
-      {
-        key: 'position',
-        label: 'Coordinates',
-        render: (l) => `(${(l as Location).x}, ${(l as Location).y})`,
-      },
-      { key: 'floor', label: 'Floor' },
-      {
-        key: 'unit',
-        label: 'Unit',
-        render: (l) => {
-          const loc = l as Location;
-          if (loc.unit !== undefined) {
-            return loc.unit.toString();
-          }
-          return '-';
+        {
+          key: 'rentCost',
+          label: 'Rent/week',
+          render: (l) => {
+            const loc = l as Location;
+            return loc.rentCost !== undefined ? loc.rentCost.toString() : '-';
+          },
         },
-      },
-    ],
-  },
-];
+      ],
+    },
+    {
+      title: 'Inventory',
+      fields: [
+        {
+          key: 'inventory',
+          label: 'Stock',
+          render: (l) => {
+            const inv = (l as Location).inventory;
+            const items = Object.entries(inv)
+              .filter(([, v]) => v > 0)
+              .map(([k, v]) => `${k}: ${v}`);
+            return items.length > 0 ? items.join(', ') : 'Empty';
+          },
+        },
+        { key: 'inventoryCapacity', label: 'Capacity' },
+      ],
+    },
+    {
+      title: 'Position',
+      fields: [
+        {
+          key: 'building',
+          label: 'Building',
+          render: (l) => {
+            const loc = l as Location;
+            if (loc.building) {
+              return loc.building;
+            }
+            return 'Outdoor';
+          },
+        },
+        {
+          key: 'position',
+          label: 'Coordinates',
+          render: (l) => `(${(l as Location).x}, ${(l as Location).y})`,
+        },
+        { key: 'floor', label: 'Floor' },
+        {
+          key: 'unit',
+          label: 'Unit',
+          render: (l) => {
+            const loc = l as Location;
+            if (loc.unit !== undefined) {
+              return loc.unit.toString();
+            }
+            return '-';
+          },
+        },
+      ],
+    },
+  ];
+}
+
+/**
+ * Location detail sections (backward compatibility - uses empty transaction history)
+ * @deprecated Use createLocationDetails() with actual transaction history
+ */
+export const LOCATION_DETAILS: DetailSection[] = createLocationDetails(
+  { transactions: [], windowSize: 56 },
+  0
+);
 
 /**
  * Vehicle detail sections

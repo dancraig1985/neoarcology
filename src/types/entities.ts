@@ -266,8 +266,6 @@ export interface Location extends Entity {
   // Economics
   baseIncome: number;
   operatingCost: number;
-  weeklyRevenue: number; // Tracks sales this week
-  weeklyCosts: number; // Tracks costs this week
 
   // Capacity
   agentCapacity: number;

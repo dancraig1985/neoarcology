@@ -19,6 +19,10 @@ import {
   LOCATION_DETAILS,
   VEHICLE_DETAILS,
   ORDER_DETAILS,
+  createLocationColumns,
+  createLocationDetails,
+  type VehicleWithNames,
+  type OrderWithNames,
 } from '../UIConfig';
 import type { EntityType } from './NavPanel';
 import type { SimulationState } from '../../simulation/Simulation';
@@ -47,8 +51,8 @@ export class MainPanel extends Panel {
   private agentTable: Table<AgentWithNames>;
   private orgTable: Table<OrgWithLeaderName>;
   private locationTable: Table<Location>;
-  private vehicleTable: Table<Vehicle>;
-  private orderTable: Table<Order>;
+  private vehicleTable: Table<VehicleWithNames>;
+  private orderTable: Table<OrderWithNames>;
 
   // Detail views for each entity type
   private agentDetail: DetailView;
@@ -99,12 +103,12 @@ export class MainPanel extends Panel {
       onRowClick: (loc) => this.handleRowClick('locations', loc),
     });
 
-    this.vehicleTable = new Table<Vehicle>(tableWidth, contentHeight, {
+    this.vehicleTable = new Table<VehicleWithNames>(tableWidth, contentHeight, {
       columns: VEHICLE_COLUMNS,
       onRowClick: (vehicle) => this.handleRowClick('vehicles', vehicle),
     });
 
-    this.orderTable = new Table<Order>(tableWidth, contentHeight, {
+    this.orderTable = new Table<OrderWithNames>(tableWidth, contentHeight, {
       columns: ORDER_COLUMNS,
       onRowClick: (order) => this.handleRowClick('orders', order),
     });
@@ -153,12 +157,65 @@ export class MainPanel extends Panel {
    */
   update(state: SimulationState): void {
     this.currentState = state;
+
+    // Update location table columns with current transaction history (PLAN-035)
+    if (this.currentEntityType === 'locations') {
+      this.updateLocationTableColumns(state);
+    }
+
     this.updateTable();
 
     // Update detail view if something is selected
     if (this.selectedEntityId) {
       this.updateDetailView();
     }
+  }
+
+  /**
+   * Update location table columns with current transaction history (PLAN-035)
+   */
+  private updateLocationTableColumns(state: SimulationState): void {
+    const newColumns = createLocationColumns(state.transactionHistory, state.time.currentPhase);
+    // Recreate the table with new columns
+    const tableWidth = this.width - DETAIL_WIDTH;
+    const contentHeight = this.height;
+
+    // Remove old table
+    this.tableContainer.removeChild(this.locationTable);
+
+    // Create new table with updated columns
+    this.locationTable = new Table<Location>(tableWidth, contentHeight, {
+      columns: newColumns,
+      onRowClick: (loc) => this.handleRowClick('locations', loc),
+    });
+    this.tableContainer.addChild(this.locationTable);
+
+    // Restore selection if any
+    if (this.selectedEntityId) {
+      this.locationTable.setSelected(this.selectedEntityId);
+    }
+  }
+
+  /**
+   * Update location detail sections with current transaction history (PLAN-035)
+   */
+  private updateLocationDetail(): void {
+    if (!this.currentState) return;
+
+    const newSections = createLocationDetails(
+      this.currentState.transactionHistory,
+      this.currentState.time.currentPhase
+    );
+
+    // Recreate the detail view with new sections
+    const contentHeight = this.height;
+
+    // Remove old detail view
+    this.detailContainer.removeChild(this.locationDetail);
+
+    // Create new detail view with updated sections
+    this.locationDetail = new DetailView(DETAIL_WIDTH, contentHeight, newSections);
+    this.detailContainer.addChild(this.locationDetail);
   }
 
   /**
@@ -179,7 +236,7 @@ export class MainPanel extends Panel {
     this.updateDetailView();
   }
 
-  private getCurrentTable(): Table<AgentWithNames> | Table<OrgWithLeaderName> | Table<Location> | Table<Vehicle> | Table<Order> {
+  private getCurrentTable(): Table<AgentWithNames> | Table<OrgWithLeaderName> | Table<Location> | Table<VehicleWithNames> | Table<OrderWithNames> {
     switch (this.currentEntityType) {
       case 'agents':
         return this.agentTable;
@@ -266,13 +323,47 @@ export class MainPanel extends Panel {
       case 'locations':
         this.locationTable.setData(this.currentState.locations);
         break;
-      case 'vehicles':
-        this.vehicleTable.setData(this.currentState.vehicles);
+      case 'vehicles': {
+        // Enrich vehicles with operator and location names
+        const enrichedVehicles: VehicleWithNames[] = this.currentState.vehicles.map((vehicle) => {
+          // Look up operator name from agents
+          const operator = vehicle.operator
+            ? this.currentState!.agents.find((a) => a.id === vehicle.operator)
+            : null;
+          const operatorName = operator?.name ?? 'Parked';
+
+          // Look up location name
+          let locationName = '-';
+          if (vehicle.travelingToBuilding) {
+            locationName = 'In Transit';
+          } else if (vehicle.currentBuilding) {
+            const building = this.currentState!.buildings?.find((b) => b.id === vehicle.currentBuilding);
+            locationName = building?.name ?? vehicle.currentBuilding;
+          }
+
+          return { ...vehicle, operatorName, locationName };
+        });
+        this.vehicleTable.setData(enrichedVehicles);
         break;
-      case 'orders':
-        // deliveryRequests now holds all orders (goods + logistics)
-        this.orderTable.setData(this.currentState.deliveryRequests);
+      }
+      case 'orders': {
+        // Enrich orders with buyer and seller names
+        const enrichedOrders: OrderWithNames[] = this.currentState.deliveryRequests.map((order) => {
+          // Look up buyer org name
+          const buyer = this.currentState!.organizations.find((o) => o.id === order.buyer);
+          const buyerName = buyer?.name ?? order.buyer;
+
+          // Look up seller org name
+          const seller = order.seller
+            ? this.currentState!.organizations.find((o) => o.id === order.seller)
+            : null;
+          const sellerName = seller?.name ?? (order.seller || 'Unassigned');
+
+          return { ...order, buyerName, sellerName };
+        });
+        this.orderTable.setData(enrichedOrders);
         break;
+      }
     }
   }
 
@@ -328,6 +419,8 @@ export class MainPanel extends Panel {
       case 'locations': {
         const loc = this.currentState.locations.find((l) => l.id === this.selectedEntityId);
         if (loc) {
+          // Update location detail with current transaction history (PLAN-035)
+          this.updateLocationDetail();
           this.locationDetail.setData(loc.name, loc, loc.id);
         }
         break;

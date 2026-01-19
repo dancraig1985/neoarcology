@@ -11,11 +11,12 @@
 import type { Agent, Location, Organization, Vehicle } from '../../types/entities';
 import type { BusinessConfig } from '../../config/ConfigLoader';
 import type { SimulationContext } from '../../types/SimulationContext';
-import { releaseAgent, resetWeeklyTracking } from './LocationSystem';
+import { releaseAgent } from './LocationSystem';
 import { onOrgDissolvedOrphanLocations } from './AgentStateHelpers';
 import { onOrgDissolved as onOrgDissolvedVehicles } from './VehicleSystem';
 import { recordWagePayment, recordDividendPayment, recordBusinessClosed } from '../Metrics';
 import { ActivityLog } from '../ActivityLog';
+import { createTransaction, recordTransaction } from '../../types/Transaction';
 
 /**
  * Process weekly economy for all orgs (STAGGERED)
@@ -141,10 +142,17 @@ export function processWeeklyEconomy(
             credits: org.wallet.credits - updatedLocation.operatingCost,
           },
         };
-        updatedLocation = {
-          ...updatedLocation,
-          weeklyCosts: updatedLocation.weeklyCosts + updatedLocation.operatingCost,
-        };
+
+        // Record transaction for metrics (PLAN-035)
+        const operatingTransaction = createTransaction(
+          phase,
+          'operating',
+          org.id,
+          updatedLocation.id,
+          updatedLocation.operatingCost,
+          updatedLocation.id
+        );
+        recordTransaction(context.transactionHistory, operatingTransaction);
       } else {
         ActivityLog.warning(
           phase,
@@ -162,9 +170,6 @@ export function processWeeklyEconomy(
         updatedLocation = rentResult.location;
         updatedAgents = rentResult.agents;
       }
-
-      // Reset weekly tracking
-      updatedLocation = resetWeeklyTracking(updatedLocation);
 
       // Update location in array
       const locIndex = updatedLocations.findIndex((l) => l.id === location.id);

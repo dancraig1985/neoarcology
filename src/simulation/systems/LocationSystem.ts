@@ -9,6 +9,7 @@ import { ActivityLog } from '../ActivityLog';
 import { shuffleArray } from '../SeededRandom';
 import { setEmployment, clearEmployment } from './AgentStateHelpers';
 import { recordHire, recordFire } from '../Metrics';
+import { createTransaction, recordTransaction } from '../../types/Transaction';
 
 /**
  * Building placement info for runtime location creation
@@ -128,8 +129,6 @@ export function createLocation(
     employeeSlots: locationConfig.employeeSlots ?? 0,
     baseIncome: 0,
     operatingCost: locationConfig.operatingCost ?? 0,
-    weeklyRevenue: 0,
-    weeklyCosts: 0,
     agentCapacity: 10,
     vehicleCapacity: 0,
     vehicles: [],
@@ -150,7 +149,8 @@ export function purchaseFromLocation(
   goodsType: string,
   quantity: number,
   economyConfig: EconomyConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { location: Location; buyer: Agent; success: boolean } {
   const goodsConfig = economyConfig.goods[goodsType];
   if (!goodsConfig) {
@@ -188,11 +188,22 @@ export function purchaseFromLocation(
     buyer.name
   );
 
+  // Record transaction for metrics (PLAN-035)
+  const transaction = createTransaction(
+    phase,
+    'sale',
+    buyer.id,
+    location.owner ?? 'system',
+    totalCost,
+    location.id,
+    { type: goodsType, quantity }
+  );
+  recordTransaction(context.transactionHistory, transaction);
+
   return {
     location: {
       ...location,
       inventory: newLocationInventory,
-      weeklyRevenue: location.weeklyRevenue + totalCost,
     },
     buyer: {
       ...buyer,
@@ -334,7 +345,8 @@ export function processPayroll(
 export function processOperatingCosts(
   location: Location,
   owner: Agent,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { location: Location; owner: Agent } {
   const cost = location.operatingCost;
 
@@ -347,10 +359,20 @@ export function processOperatingCosts(
       owner.name
     );
 
+    // Record transaction for metrics (PLAN-035)
+    const transaction = createTransaction(
+      phase,
+      'operating',
+      owner.id,
+      location.id,
+      cost,
+      location.id
+    );
+    recordTransaction(context.transactionHistory, transaction);
+
     return {
       location: {
         ...location,
-        weeklyCosts: location.weeklyCosts + cost,
       },
       owner: {
         ...owner,
@@ -377,17 +399,6 @@ export function processOperatingCosts(
  */
 export function shouldDissolve(owner: Agent): boolean {
   return owner.wallet.credits < 0;
-}
-
-/**
- * Reset weekly tracking for a location
- */
-export function resetWeeklyTracking(location: Location): Location {
-  return {
-    ...location,
-    weeklyRevenue: 0,
-    weeklyCosts: 0,
-  };
 }
 
 /**

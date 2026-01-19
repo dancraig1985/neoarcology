@@ -16,6 +16,7 @@ import type { SimulationContext } from '../../types/SimulationContext';
 import { getGoodsCount, getAvailableCapacity, transferInventory, type GoodsSizes } from './InventorySystem';
 import { recordWholesaleSale } from '../Metrics';
 import { ActivityLog } from '../ActivityLog';
+import { createTransaction, recordTransaction } from '../../types/Transaction';
 
 
 /**
@@ -137,15 +138,21 @@ export function tryRestockFromWholesale(
   // Record wholesale sale in metrics
   recordWholesaleSale(context.metrics, goodType);
 
-  // Update locations and orgs arrays
-  // Add weeklyRevenue to wholesaler (the seller) - transferInventory doesn't track revenue
-  const wholesalerWithRevenue: Location = {
-    ...(updatedWholesaler as Location),
-    weeklyRevenue: (wholesaler.weeklyRevenue ?? 0) + totalCost,
-  };
+  // Record transaction for metrics (PLAN-035)
+  const transaction = createTransaction(
+    phase,
+    'sale',
+    buyerOrg.id,
+    sellerOrg.id,
+    totalCost,
+    wholesaler.id,
+    { type: goodType, quantity: transferred }
+  );
+  recordTransaction(context.transactionHistory, transaction);
 
+  // Update locations and orgs arrays
   const updatedLocations = locations.map((loc) => {
-    if (loc.id === wholesaler.id) return wholesalerWithRevenue;
+    if (loc.id === wholesaler.id) return updatedWholesaler as Location;
     if (loc.id === shop.id) return updatedShop as Location;
     return loc;
   });

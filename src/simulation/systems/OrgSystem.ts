@@ -8,6 +8,7 @@ import type { LocationTemplate, ProductionConfig } from '../../config/ConfigLoad
 import type { SimulationContext } from '../../types/SimulationContext';
 import { ActivityLog } from '../ActivityLog';
 import { addToInventory, getAvailableCapacity, getInventorySpaceUsed, type GoodsSizes } from './InventorySystem';
+import { createTransaction, recordTransaction } from '../../types/Transaction';
 
 /**
  * Create a new organization
@@ -87,8 +88,6 @@ export function createFactoryLocation(
     employeeSlots: locationConfig.employeeSlots ?? 0,
     baseIncome: 0,
     operatingCost: locationConfig.operatingCost ?? 0,
-    weeklyRevenue: 0,
-    weeklyCosts: 0,
     agentCapacity: 50,
     vehicleCapacity: 10,
     vehicles: [],
@@ -315,7 +314,8 @@ export function processFactoryProduction(
 export function processOrgWeeklyCosts(
   org: Organization,
   locations: Location[],
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { org: Organization; locations: Location[] } {
   let updatedOrg = { ...org };
   const updatedLocations = [...locations];
@@ -344,10 +344,16 @@ export function processOrgWeeklyCosts(
         },
       };
 
-      updatedLocations[i] = {
-        ...location,
-        weeklyCosts: location.weeklyCosts + cost,
-      };
+      // Record transaction for metrics (PLAN-035)
+      const transaction = createTransaction(
+        phase,
+        'operating',
+        org.id,
+        location.id,
+        cost,
+        location.id
+      );
+      recordTransaction(context.transactionHistory, transaction);
     } else {
       ActivityLog.warning(
         phase,

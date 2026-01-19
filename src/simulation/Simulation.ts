@@ -7,7 +7,9 @@ import type { Agent, Location, Organization, Building, Vehicle, Order, DeliveryR
 import type { LoadedConfig } from '../config/ConfigLoader';
 import type { SeededRNG, SimulationContext } from '../types/SimulationContext';
 import type { IdState } from './IdGenerator';
+import type { TransactionHistory } from '../types/Transaction';
 import { IdGenerator, createInitialIdState } from './IdGenerator';
+import { createTransactionHistory } from '../types/Transaction';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
 import { createSeededRNG } from './SeededRandom';
@@ -42,6 +44,8 @@ export interface SimulationState {
   rng: SeededRNG;
   // ID generation state for reproducible simulations
   idState: IdState;
+  // Transaction history for event-sourced metrics (PLAN-035)
+  transactionHistory: TransactionHistory;
 }
 
 /**
@@ -108,6 +112,7 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
     currentSnapshot: null,
     rng, // Seeded RNG for reproducible simulation runs
     idState: createInitialIdState(), // ID generation state for reproducible simulations
+    transactionHistory: createTransactionHistory(56), // Track last week of transactions (PLAN-035)
   };
 
   // Take initial snapshot
@@ -131,6 +136,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     config,
     phase: newTime.currentPhase,
     idGen,
+    transactionHistory: state.transactionHistory,
   };
 
   // Log time progression on day rollover

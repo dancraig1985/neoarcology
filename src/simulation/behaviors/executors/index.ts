@@ -19,6 +19,7 @@ import {
   startVehicleTravel
 } from '../../systems/VehicleSystem';
 import { assignDeliveryToDriver, startDelivery, completeDelivery, failDelivery, findAvailableVehicle } from '../../systems/DeliverySystem';
+import { createTransaction, recordTransaction } from '../../../types/Transaction';
 
 // ============================================
 // Task State Helpers
@@ -392,12 +393,28 @@ function executePurchaseBehavior(
   const updatedLocation = {
     ...currentShop,
     inventory: { ...currentShop.inventory, [goodsType]: shopStock - quantityToBuy },
-    weeklyRevenue: currentShop.weeklyRevenue + totalCost,
   };
 
   const updatedLocations = ctx.locations.map(loc =>
     loc.id === currentShop.id ? updatedLocation : loc
   );
+
+  // Find shop owner org for transaction recording
+  const shopOwnerOrg = ctx.orgs.find(org => org.locations.includes(currentShop.id));
+
+  // Record transaction for metrics (PLAN-035)
+  if (shopOwnerOrg) {
+    const transaction = createTransaction(
+      ctx.context.phase,
+      'sale',
+      agent.id,
+      shopOwnerOrg.id,
+      totalCost,
+      currentShop.id,
+      { type: goodsType, quantity: quantityToBuy }
+    );
+    recordTransaction(ctx.context.transactionHistory, transaction);
+  }
 
   // Transfer revenue to shop owner org
   const updatedOrgs = ctx.orgs.map(org => {
@@ -548,15 +565,28 @@ function executeLeisureBehavior(
         wallet: { ...agent.wallet, credits: agent.wallet.credits - alcoholPrice },
       };
 
-      // Update pub inventory and revenue
+      // Update pub inventory
       const updatedPub: Location = {
         ...currentLoc,
         inventory: { ...currentLoc.inventory, alcohol: alcoholStock - 1 },
-        weeklyRevenue: currentLoc.weeklyRevenue + alcoholPrice,
       };
       updatedLocations = ctx.locations.map(loc =>
         loc.id === currentLoc.id ? updatedPub : loc
       );
+
+      // Record transaction for metrics (PLAN-035)
+      if (pubOrg) {
+        const transaction = createTransaction(
+          ctx.context.phase,
+          'sale',
+          agent.id,
+          pubOrg.id,
+          alcoholPrice,
+          currentLoc.id,
+          { type: 'alcohol', quantity: 1 }
+        );
+        recordTransaction(ctx.context.transactionHistory, transaction);
+      }
 
       // Update pub org wallet (receive payment)
       if (pubOrg) {

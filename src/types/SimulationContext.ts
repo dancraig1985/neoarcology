@@ -8,6 +8,7 @@
 import type { SimulationMetrics } from '../simulation/Metrics';
 import type { LoadedConfig } from '../config/ConfigLoader';
 import type { IdGenerator } from '../simulation/IdGenerator';
+import type { TransactionHistory } from './Transaction';
 
 /**
  * Seeded random number generator function
@@ -34,4 +35,7 @@ export interface SimulationContext {
 
   /** ID generator for deterministic ID creation */
   idGen: IdGenerator;
+
+  /** Transaction history for event-sourced metrics (PLAN-035) */
+  transactionHistory: TransactionHistory;
 }

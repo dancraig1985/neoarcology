@@ -21,6 +21,7 @@ import {
 import { findNearestLocation, isTraveling, startTravel, redirectTravel } from './TravelSystem';
 import { setLocation, clearEmployment } from './AgentStateHelpers';
 import { needsRest, processRest } from './AgentSystem';
+import { createTransaction, recordTransaction } from '../../types/Transaction';
 
 /**
  * Check if an agent leads any organization
@@ -139,7 +140,7 @@ export function processAgentEconomicDecision(
 
   // 1. Try to buy provisions if hungry and no food
   if (isHungry && hasNoFood && hasCredits) {
-    const result = tryBuyProvisions(updatedAgent, updatedLocations, updatedOrgs, economyConfig, agentsConfig, thresholdsConfig, transportConfig, phase);
+    const result = tryBuyProvisions(updatedAgent, updatedLocations, updatedOrgs, economyConfig, agentsConfig, thresholdsConfig, transportConfig, phase, context);
     updatedAgent = result.agent;
     updatedLocations = result.locations;
     updatedOrgs = result.orgs;
@@ -214,7 +215,8 @@ export function processAgentEconomicDecision(
       economyConfig,
       agentsConfig,
       transportConfig,
-      phase
+      phase,
+      context
     );
     updatedAgent = leisureResult.agent;
     updatedLocations = leisureResult.locations;
@@ -290,7 +292,8 @@ function tryBuyProvisions(
   agentsConfig: AgentsConfig,
   thresholdsConfig: ThresholdsConfig,
   transportConfig: TransportConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { agent: Agent; locations: Location[]; orgs: Organization[] } {
   // If already traveling, can't start another action
   if (isTraveling(agent)) {
@@ -362,7 +365,7 @@ function tryBuyProvisions(
     return { agent: updatedAgent, locations, orgs };
   }
 
-  const result = purchaseFromLocation(currentShop, updatedAgent, 'provisions', quantityToBuy, economyConfig, phase);
+  const result = purchaseFromLocation(currentShop, updatedAgent, 'provisions', quantityToBuy, economyConfig, phase, context);
 
   if (result.success) {
     // Update the location in the array
@@ -681,14 +684,15 @@ function trySeekLeisure(
   economyConfig: EconomyConfig,
   agentsConfig: AgentsConfig,
   transportConfig: TransportConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { agent: Agent; locations: Location[]; orgs: Organization[] } {
   const alcoholPrice = economyConfig.goods['alcohol']?.retailPrice ?? 15;
   const canAffordPub = agent.wallet.credits >= alcoholPrice;
 
   if (canAffordPub) {
     // Try to go to a pub and buy a drink
-    return tryVisitPub(agent, locations, orgs, economyConfig, agentsConfig, transportConfig, phase);
+    return tryVisitPub(agent, locations, orgs, economyConfig, agentsConfig, transportConfig, phase, context);
   } else {
     // Go to a park (free leisure, handled by existing idle behavior)
     // Just let them naturally flow to parks via the idle check
@@ -706,7 +710,8 @@ function tryVisitPub(
   economyConfig: EconomyConfig,
   agentsConfig: AgentsConfig,
   transportConfig: TransportConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { agent: Agent; locations: Location[]; orgs: Organization[] } {
   // Check if already at a pub
   const currentLoc = locations.find((l) => l.id === agent.currentLocation);
@@ -714,7 +719,7 @@ function tryVisitPub(
 
   if (isAtPub && currentLoc) {
     // At a pub - buy a drink
-    return buyDrinkAtPub(agent, currentLoc, locations, orgs, economyConfig, agentsConfig, phase);
+    return buyDrinkAtPub(agent, currentLoc, locations, orgs, economyConfig, agentsConfig, phase, context);
   }
 
   // Find nearest pub with alcohol
@@ -765,7 +770,8 @@ function buyDrinkAtPub(
   orgs: Organization[],
   economyConfig: EconomyConfig,
   agentsConfig: AgentsConfig,
-  phase: number
+  phase: number,
+  context: SimulationContext
 ): { agent: Agent; locations: Location[]; orgs: Organization[] } {
   const alcoholStock = pub.inventory['alcohol'] ?? 0;
   const alcoholPrice = economyConfig.goods['alcohol']?.retailPrice ?? 15;
@@ -781,12 +787,25 @@ function buyDrinkAtPub(
       ...pub.inventory,
       alcohol: alcoholStock - 1,
     },
-    weeklyRevenue: pub.weeklyRevenue + alcoholPrice,
   };
 
   // Find pub owner org and credit them
   const ownerOrg = orgs.find((org) => org.locations.includes(pub.id));
   let updatedOrgs = orgs;
+
+  // Record transaction for metrics (PLAN-035)
+  if (ownerOrg) {
+    const transaction = createTransaction(
+      phase,
+      'sale',
+      agent.id,
+      ownerOrg.id,
+      alcoholPrice,
+      pub.id,
+      { type: 'alcohol', quantity: 1 }
+    );
+    recordTransaction(context.transactionHistory, transaction);
+  }
   if (ownerOrg) {
     const updatedOwnerOrg: Organization = {
       ...ownerOrg,
