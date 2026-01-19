@@ -1131,7 +1131,8 @@ function executeWanderBehavior(
 // Entrepreneur Executor
 // ============================================
 
-import { tryOpenBusiness, completeGoodsOrder } from '../../systems/EconomySystem';
+import { tryOpenBusiness } from '../../systems/BusinessOpportunityService';
+import { completeGoodsOrder } from '../../systems/EconomySystem';
 
 /**
  * Entrepreneur executor - handles business creation
