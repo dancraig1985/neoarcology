@@ -17,7 +17,7 @@
     "inventoryCapacity": 40
   },
   "generation": {
-    "count": { "min": 1, "max": 2 },
+    "count": { "min": 1, "max": 1 },
     "spawnAtStart": true,
     "ownerOrgTemplate": "small_business"
   }

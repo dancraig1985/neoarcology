@@ -79,10 +79,10 @@
   },
   "defaultGoodsSize": 1,
   "salary": {
-    "unskilled": { "min": 70, "max": 90 },
+    "unskilled": { "min": 50, "max": 70 },
     "skilled": { "min": 90, "max": 110 },
     "professional": { "min": 120, "max": 160 }
   },
-  "entrepreneurThreshold": 500,
+  "entrepreneurThreshold": 1000,
   "resaleDiscount": 0.6
 }
