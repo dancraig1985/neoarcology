@@ -96,6 +96,13 @@ export interface Agent extends Entity {
     shiftStartPhase: number; // When current shift started
   };
 
+  // Delivery shift state (only present when employed at depot)
+  deliveryShiftState?: {
+    phasesDelivered: number; // Phases worked on deliveries in current shift
+    lastShiftEndPhase: number; // When last shift ended (for cooldown)
+    shiftStartPhase: number; // When current shift started
+  };
+
   // Personal finances
   wallet: Wallet;
 

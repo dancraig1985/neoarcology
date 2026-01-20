@@ -1578,6 +1578,79 @@ function executeDeliverGoodsBehavior(
   task: AgentTask,
   ctx: BehaviorContext
 ): TaskResult {
+  // Initialize delivery shift state if first time (like work behavior)
+  if (!agent.deliveryShiftState) {
+    const shiftDuration = 16; // Same as work shifts
+    const randomOffset = randomInt(0, shiftDuration / 2, ctx.context.rng);
+
+    const newAgent = {
+      ...agent,
+      deliveryShiftState: {
+        phasesDelivered: randomOffset,
+        lastShiftEndPhase: 0,
+        shiftStartPhase: ctx.phase,
+      },
+    };
+
+    ActivityLog.info(
+      ctx.phase,
+      'employment',
+      `started delivery shift (first shift reduced by ${randomOffset} phases)`,
+      agent.id,
+      agent.name
+    );
+
+    return {
+      agent: newAgent.currentTask ? newAgent : setTask(newAgent, task),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: false,
+    };
+  }
+
+  // Increment phases delivered (track shift progress)
+  const agentWithIncrementedShift = {
+    ...agent,
+    deliveryShiftState: {
+      ...agent.deliveryShiftState!,
+      phasesDelivered: agent.deliveryShiftState!.phasesDelivered + 1,
+    },
+  };
+
+  // Check if shift should end (only if no active delivery in progress)
+  const shiftDuration = 16;
+  const hasActiveDelivery = task.params?.deliveryId && task.params?.deliveryPhase !== 'assigning';
+
+  if (agentWithIncrementedShift.deliveryShiftState!.phasesDelivered >= shiftDuration && !hasActiveDelivery) {
+    // Shift complete - end behavior
+    const finishedAgent = {
+      ...agentWithIncrementedShift,
+      deliveryShiftState: {
+        ...agentWithIncrementedShift.deliveryShiftState!,
+        lastShiftEndPhase: ctx.phase,
+        phasesDelivered: 0,
+      },
+    };
+
+    ActivityLog.info(
+      ctx.phase,
+      'employment',
+      `completed delivery shift (${shiftDuration} phases)`,
+      agent.id,
+      agent.name
+    );
+
+    return {
+      agent: clearTask(finishedAgent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // Continue with delivery logic using agent with incremented shift counter
+  agent = agentWithIncrementedShift;
+
   // Find the logistics company this agent works for
   const logisticsCompany = ctx.orgs.find(org => org.id === agent.employer);
 
@@ -1612,12 +1685,12 @@ function executeDeliverGoodsBehavior(
     );
 
     if (pendingDeliveries.length === 0) {
-      // No deliveries available - task complete
+      // No deliveries available - wait at depot (don't end shift)
       return {
-        agent: clearTask(agent),
+        agent,
         locations: ctx.locations,
         orgs: ctx.orgs,
-        complete: true,
+        complete: false, // Keep shift going - just idle until new orders arrive
       };
     }
 
@@ -2179,14 +2252,46 @@ function executeDeliverGoodsBehavior(
     const updatedOrgs = updatedOrgsAfterDelivery;
     const updatedDeliveryRequests = updatedDeliveryRequestsAfterDelivery;
 
-    // Task complete - vehicle is parked at delivery building
+    // Delivery complete - agent variable already has incremented shift counter
+    // Check if shift is also complete
+    const shiftDuration = 16;
+    if (agent.deliveryShiftState!.phasesDelivered >= shiftDuration) {
+      const finishedAgent = {
+        ...agent,
+        deliveryShiftState: {
+          ...agent.deliveryShiftState!,
+          lastShiftEndPhase: ctx.phase,
+          phasesDelivered: 0,
+        },
+      };
+
+      ActivityLog.info(
+        ctx.phase,
+        'employment',
+        `completed delivery shift after finishing delivery (${shiftDuration} phases)`,
+        agent.id,
+        agent.name
+      );
+
+      // Shift complete - clear task and end behavior
+      return {
+        agent: clearTask(finishedAgent),
+        locations: updatedLocations,
+        orgs: updatedOrgs,
+        vehicles: updatedVehicles,
+        deliveryRequests: updatedDeliveryRequests,
+        complete: true,
+      };
+    }
+
+    // Delivery done but shift continues - look for next delivery
     return {
       agent: clearTask(agent),
       locations: updatedLocations,
       orgs: updatedOrgs,
       vehicles: updatedVehicles,
       deliveryRequests: updatedDeliveryRequests,
-      complete: true,
+      complete: false, // Keep going - more shift time left
     };
   }
 

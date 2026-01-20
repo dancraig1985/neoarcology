@@ -94,10 +94,14 @@
         "hasEmployment": true,
         "atWorkplace": true,
         "atLocationWithTag": "depot",
-        "needsBelow": { "hunger": 50 }
+        "needsBelow": { "hunger": 80 },
+        "phasesSinceDeliveryShift": 8
       },
       "completionConditions": {
-        "needsAbove": { "hunger": 50 }
+        "or": [
+          { "phasesDeliveredThisShift": 16 },
+          { "needsAbove": { "hunger": 80 } }
+        ]
       },
       "params": {}
     },
@@ -109,6 +113,7 @@
       "conditions": {
         "hasEmployment": true,
         "atWorkplace": true,
+        "notAtLocationWithTag": "depot",
         "needsBelow": { "hunger": 80, "fatigue": 90 },
         "phasesSinceWorkShift": 8
       },

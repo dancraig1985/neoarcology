@@ -210,6 +210,13 @@ export function evaluateConditions(
     if (!hasTag) return false;
   }
 
+  // notAtLocationWithTag: "depot" → current location does NOT have 'depot' tag
+  if (conditions.notAtLocationWithTag !== undefined) {
+    const currentLoc = ctx.locations.find(l => l.id === agent.currentLocation);
+    const hasTag = currentLoc?.tags.includes(conditions.notAtLocationWithTag) ?? false;
+    if (hasTag) return false; // Fail if location HAS the tag
+  }
+
   // phasesSinceWorkShift: 8 → (currentPhase - agent.shiftState?.lastShiftEndPhase) >= 8
   if (conditions.phasesSinceWorkShift !== undefined) {
     const lastShiftEnd = agent.shiftState?.lastShiftEndPhase ?? 0;
@@ -228,6 +235,27 @@ export function evaluateConditions(
     const phasesWorked = agent.shiftState?.phasesWorked ?? 0;
     if (phasesWorked < conditions.phasesWorkedThisShift) {
       return false; // Haven't worked long enough yet
+    }
+  }
+
+  // phasesSinceDeliveryShift: 8 → (currentPhase - agent.deliveryShiftState?.lastShiftEndPhase) >= 8
+  if (conditions.phasesSinceDeliveryShift !== undefined) {
+    const lastShiftEnd = agent.deliveryShiftState?.lastShiftEndPhase ?? 0;
+    const phasesSinceShift = ctx.currentPhase - lastShiftEnd;
+
+    // Special case: never delivered before (allow immediate start)
+    if (lastShiftEnd === 0) {
+      // No previous shift - condition passes
+    } else if (phasesSinceShift < conditions.phasesSinceDeliveryShift) {
+      return false; // Still in cooldown period
+    }
+  }
+
+  // phasesDeliveredThisShift: 16 → agent.deliveryShiftState.phasesDelivered >= 16
+  if (conditions.phasesDeliveredThisShift !== undefined) {
+    const phasesDelivered = agent.deliveryShiftState?.phasesDelivered ?? 0;
+    if (phasesDelivered < conditions.phasesDeliveredThisShift) {
+      return false; // Haven't delivered long enough yet
     }
   }
 
