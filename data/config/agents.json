@@ -25,5 +25,11 @@
   "housing": {
     "bufferWeeks": 4
   },
+  "work": {
+    "shiftDuration": 16,
+    "shiftCooldown": 8,
+    "emergencyExitHunger": 80,
+    "emergencyExitFatigue": 90
+  },
   "inventoryCapacity": 10
 }

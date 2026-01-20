@@ -25,6 +25,7 @@ function getNeedValue(agent: Agent, need: string): number {
 export interface EvaluationContext {
   locations: Location[];
   orgs: Organization[];
+  currentPhase: number; // Needed for phase-based conditions
 }
 
 /**
@@ -207,6 +208,27 @@ export function evaluateConditions(
     const currentLoc = ctx.locations.find(l => l.id === agent.currentLocation);
     const hasTag = currentLoc?.tags.includes(conditions.atLocationWithTag) ?? false;
     if (!hasTag) return false;
+  }
+
+  // phasesSinceWorkShift: 8 → (currentPhase - agent.shiftState?.lastShiftEndPhase) >= 8
+  if (conditions.phasesSinceWorkShift !== undefined) {
+    const lastShiftEnd = agent.shiftState?.lastShiftEndPhase ?? 0;
+    const phasesSinceShift = ctx.currentPhase - lastShiftEnd;
+
+    // Special case: never worked before (allow immediate start)
+    if (lastShiftEnd === 0) {
+      // No previous shift - condition passes
+    } else if (phasesSinceShift < conditions.phasesSinceWorkShift) {
+      return false; // Still in cooldown period
+    }
+  }
+
+  // phasesWorkedThisShift: 16 → agent.shiftState.phasesWorked >= 16
+  if (conditions.phasesWorkedThisShift !== undefined) {
+    const phasesWorked = agent.shiftState?.phasesWorked ?? 0;
+    if (phasesWorked < conditions.phasesWorkedThisShift) {
+      return false; // Haven't worked long enough yet
+    }
   }
 
   // All conditions passed

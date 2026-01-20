@@ -88,6 +88,7 @@ export function processAgentBehavior(
   const evalCtx: EvaluationContext = {
     locations: currentLocations,
     orgs: currentOrgs,
+    currentPhase: phase,
   };
 
   const getBehaviorCtx = (): BehaviorContext => ({

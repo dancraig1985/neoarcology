@@ -120,6 +120,12 @@ export interface AgentsConfig {
   housing: {
     bufferWeeks: number;
   };
+  work: {
+    shiftDuration: number;
+    shiftCooldown: number;
+    emergencyExitHunger: number;
+    emergencyExitFatigue: number;
+  };
   inventoryCapacity: number;
 }
 
@@ -364,6 +370,8 @@ export interface BehaviorConditions {
   atLocationWithTag?: string;               // e.g., "depot", "retail", "public"
   or?: BehaviorConditions[];                // OR logic for conditions
   never?: boolean;                          // Never completes (for continuous tasks)
+  phasesSinceWorkShift?: number;            // Phases since last shift ended (cooldown)
+  phasesWorkedThisShift?: number;           // Phases worked in current shift
 }
 
 /**

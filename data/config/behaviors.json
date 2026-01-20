@@ -59,7 +59,8 @@
         "hasEmployment": true,
         "notAtWorkplace": true,
         "notTraveling": true,
-        "needsBelow": { "hunger": 50 }
+        "needsBelow": { "hunger": 50 },
+        "phasesSinceWorkShift": 8
       },
       "completionConditions": {
         "or": [
@@ -95,10 +96,15 @@
       "conditions": {
         "hasEmployment": true,
         "atWorkplace": true,
-        "needsBelow": { "hunger": 50 }
+        "needsBelow": { "hunger": 80, "fatigue": 90 },
+        "phasesSinceWorkShift": 8
       },
       "completionConditions": {
-        "needsAbove": { "hunger": 50 }
+        "or": [
+          { "phasesWorkedThisShift": 16 },
+          { "needsAbove": { "hunger": 80 } },
+          { "needsAbove": { "fatigue": 90 } }
+        ]
       },
       "params": {}
     },

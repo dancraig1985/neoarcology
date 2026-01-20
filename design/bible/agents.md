@@ -176,6 +176,61 @@ Key distinction:
 - If employer can't pay, you're fired (back to `available`)
 - Can quit to start your own business (if wealthy enough)
 
+### Work Shifts
+Employed agents work in structured shifts with mandatory breaks, preventing burnout and starvation.
+
+**Shift Structure**:
+- **Duration**: 16 phases (2 sim-days) of continuous work
+- **Cooldown**: 8 phases (1 sim-day) mandatory break
+- **Pattern**: Work 16 → Break 8 → Repeat
+
+**Agent State** (`agent.shiftState`):
+```typescript
+{
+  phasesWorked: number;      // Current shift progress (0-16)
+  lastShiftEndPhase: number; // When last shift ended
+  shiftStartPhase: number;   // When current shift started
+}
+```
+
+**Shift Lifecycle**:
+1. Agent at workplace, cooldown expired → starts shift
+2. Each working phase increments `phasesWorked`
+3. After 16 phases → shift completes, sets `lastShiftEndPhase`
+4. Agent can't work again until 8 phases pass (cooldown)
+5. During break: free to eat, rest, seek housing, leisure
+
+**Emergency Exits**:
+- Hunger > 80 or fatigue > 90 forces early shift end
+- Cooldown still applies after emergency exit
+- Prevents agents from working themselves to death
+
+**Staggering**:
+First shift duration is randomized to prevent synchronization:
+- New workers start with `phasesWorked = random(0-8)`
+- First shift completes after (16 - offset) phases
+- Agents complete shifts at different times (phases 9-17)
+- Natural staggering persists throughout simulation
+- Ensures factories have workers present during most cycles
+
+**Configuration** (`data/config/agents.json`):
+```json
+{
+  "work": {
+    "shiftDuration": 16,
+    "shiftCooldown": 8,
+    "emergencyExitHunger": 80,
+    "emergencyExitFatigue": 90
+  }
+}
+```
+
+**Implementation Notes**:
+- Use `setEmployment()` / `clearEmployment()` - they handle shift state cleanup
+- Shift state only exists when employed (`shiftState?: ...`)
+- Condition: `phasesSinceWorkShift: 8` enforces cooldown
+- Completion: `phasesWorkedThisShift: 16` triggers shift end
+
 ## Entrepreneurship
 
 When an agent starts a business:

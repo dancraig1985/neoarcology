@@ -10,6 +10,7 @@ import { registerExecutor, type BehaviorContext, type TaskResult } from '../Beha
 import { isTraveling, startTravel, findNearestLocation, redirectTravel } from '../../systems/TravelSystem';
 import { ActivityLog } from '../../ActivityLog';
 import { recordRetailSale, recordBusinessOpened } from '../../Metrics';
+import { randomInt } from '../../SeededRandom';
 import { createOrganization } from '../../systems/OrgSystem';
 import {
   loadCargo,
@@ -162,13 +163,82 @@ function executeWorkBehavior(
   task: AgentTask,
   ctx: BehaviorContext
 ): TaskResult {
-  // Working is a continuous task - never completes on its own
-  // It gets interrupted by higher priority needs
+  // Initialize shift state if first time working
+  if (!agent.shiftState) {
+    // Stagger shift start times by giving first shift a random shortened duration
+    // This makes agents complete at different times and stay staggered thereafter
+    const shiftDuration = ctx.agentsConfig.work.shiftDuration;
+    const randomOffset = randomInt(0, shiftDuration / 2, ctx.context.rng);
+
+    const newAgent = {
+      ...agent,
+      shiftState: {
+        phasesWorked: randomOffset, // Start partway through first shift
+        lastShiftEndPhase: 0,
+        shiftStartPhase: ctx.phase,
+      },
+    };
+
+    ActivityLog.info(
+      ctx.phase,
+      'employment',
+      `started work shift (first shift reduced by ${randomOffset} phases)`,
+      agent.id,
+      agent.name
+    );
+
+    return {
+      agent: newAgent.currentTask ? newAgent : setTask(newAgent, task),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: false,
+    };
+  }
+
+  // Increment phases worked
+  const updatedAgent = {
+    ...agent,
+    shiftState: {
+      ...agent.shiftState,
+      phasesWorked: agent.shiftState.phasesWorked + 1,
+    },
+  };
+
+  // Check if shift should end (completion conditions handle this, but we log)
+  const shiftDuration = ctx.agentsConfig.work.shiftDuration;
+  if (updatedAgent.shiftState.phasesWorked >= shiftDuration) {
+    // Shift completed - record end time
+    const finishedAgent = {
+      ...updatedAgent,
+      shiftState: {
+        ...updatedAgent.shiftState,
+        lastShiftEndPhase: ctx.phase,
+        phasesWorked: 0, // Reset for next shift
+      },
+    };
+
+    ActivityLog.info(
+      ctx.phase,
+      'employment',
+      `completed work shift (${shiftDuration} phases)`,
+      agent.id,
+      agent.name
+    );
+
+    return {
+      agent: clearTask(finishedAgent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true, // Signal shift is over
+    };
+  }
+
+  // Continue working
   return {
-    agent: agent.currentTask ? agent : setTask(agent, task),
+    agent: updatedAgent.currentTask ? updatedAgent : setTask(updatedAgent, task),
     locations: ctx.locations,
     orgs: ctx.orgs,
-    complete: false, // Never completes naturally
+    complete: false,
   };
 }
 

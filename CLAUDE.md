@@ -268,6 +268,23 @@ Agent decisions are **data-driven** via `data/config/behaviors.json`. Each behav
 - When adding specialized worker behaviors (truckers, security guards, etc.), gate them with location tag conditions
 - Remember: `hasEmployment: true` matches ALL employed agents, not just specific job types
 
+**Work Shift Best Practices**:
+- Work shifts prevent agent burnout by enforcing breaks (16 phases work, 8 phases rest)
+- Shifts are automatically staggered via randomized first shift duration
+- Always use `setEmployment()` / `clearEmployment()` - they manage shift state cleanup
+- Use `phasesSinceWorkShift` condition to enforce cooldown between shifts
+- Use `phasesWorkedThisShift` completion condition to end shifts after duration
+- Emergency exits (hunger > 80, fatigue > 90) force early shift end but cooldown still applies
+- Commuting behavior should respect cooldown to prevent wandering loops during breaks
+
+**Shift Staggering Pattern (Reusable)**:
+When adding scheduled behaviors (patrols, training, missions), use this pattern:
+1. Add state tracker to agent: `{ phasesInActivity, lastEndPhase, ...params }`
+2. Entry cooldown condition: `phasesSince<Activity>`
+3. Duration completion: `phases<Activity>ThisSession`
+4. Stagger first cycle: Initialize with `phasesInActivity = random(0, duration/2)`
+5. Config-driven: All durations/cooldowns in JSON
+
 ## Economic Verticals
 
 The economy has separate supply chains (verticals):

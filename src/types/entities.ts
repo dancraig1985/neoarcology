@@ -89,6 +89,13 @@ export interface Agent extends Entity {
   employedAt?: LocationRef; // Location where agent works
   salary: number; // Per week
 
+  // Work shift state (only present when employed)
+  shiftState?: {
+    phasesWorked: number; // Phases worked in current shift
+    lastShiftEndPhase: number; // When last shift ended (for cooldown)
+    shiftStartPhase: number; // When current shift started
+  };
+
   // Personal finances
   wallet: Wallet;
 

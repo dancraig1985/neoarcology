@@ -27,6 +27,7 @@ export function setEmployment(
     employer: orgId,
     employedAt: locationId,
     salary,
+    shiftState: undefined, // Clear shift state on new job
   };
 }
 
@@ -41,6 +42,7 @@ export function clearEmployment(agent: Agent): Agent {
     employer: undefined,
     employedAt: undefined,
     salary: 0,
+    shiftState: undefined, // Clear shift state on job loss
   };
 }
 
