@@ -376,6 +376,20 @@ export function processGoodsOrders(
     }
 
     if (pickupLoc) {
+      // Defensive check: ensure location IDs are valid
+      if (!pickupLoc.id || !deliveryLoc.id) {
+        ActivityLog.warning(
+          phase,
+          'order',
+          `Cannot create logistics order for ${order.id} - invalid location IDs: pickup=${pickupLoc.id}, delivery=${deliveryLoc.id}`,
+          order.seller,
+          sellerOrg.name
+        );
+        // Keep order pending - will retry next phase
+        updatedOrders.push(order);
+        continue;
+      }
+
       // Order is ready! Assign pickup location and create logistics order
       const updatedOrder: Order = {
         ...order,

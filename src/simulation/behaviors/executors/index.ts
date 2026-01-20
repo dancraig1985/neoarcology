@@ -1606,9 +1606,9 @@ function executeDeliverGoodsBehavior(
 
   // Phase 1: Assign delivery if not already assigned
   if (!deliveryId || deliveryPhase === 'assigning') {
-    // Find a pending delivery request to assign
+    // Find a pending LOGISTICS order to assign (not goods orders!)
     const pendingDeliveries = (ctx.deliveryRequests ?? []).filter(
-      req => req.status === 'pending'
+      req => req.orderType === 'logistics' && req.status === 'pending'
     );
 
     if (pendingDeliveries.length === 0) {
@@ -1678,7 +1678,19 @@ function executeDeliverGoodsBehavior(
   const toLocation = ctx.locations.find(loc => loc.id === deliveryRequest!.toLocation);
 
   if (!fromLocation || !toLocation) {
-    // Locations don't exist - fail delivery
+    // Locations don't exist - fail delivery with detailed logging
+    const missingFrom = !fromLocation ? `from=${deliveryRequest!.fromLocation}` : '';
+    const missingTo = !toLocation ? `to=${deliveryRequest!.toLocation}` : '';
+    const missing = [missingFrom, missingTo].filter(Boolean).join(', ');
+
+    ActivityLog.warning(
+      ctx.phase,
+      'delivery',
+      `order ${deliveryRequest!.id} failed - location not found: ${missing}`,
+      agent.id,
+      agent.name
+    );
+
     const failedDelivery = failDelivery(deliveryRequest!, 'location not found', ctx.phase);
     const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
       req.id === deliveryRequest!.id ? failedDelivery : req
