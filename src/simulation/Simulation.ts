@@ -15,7 +15,7 @@ import { ActivityLog } from './ActivityLog';
 import { createSeededRNG } from './SeededRandom';
 import { processAgentPhase, countLivingAgents, countDeadAgents } from './systems/AgentSystem';
 import { fixHomelessAgents } from './systems/AgentEconomicSystem';
-import { tryRestockFromWholesale, tryPlaceGoodsOrder, processGoodsOrders } from './systems/SupplyChainSystem';
+import { tryPlaceGoodsOrder, processGoodsOrders } from './systems/SupplyChainSystem';
 import { processWeeklyEconomy } from './systems/PayrollSystem';
 import { processAgentBehavior } from './behaviors/BehaviorProcessor';
 import { processFactoryProduction } from './systems/OrgSystem';
@@ -171,20 +171,7 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     return processFactoryProduction(loc, template?.balance.production, newTime.currentPhase, goodsSizes, updatedAgents);
   });
 
-  // 1b. Automatic restocking: All retail shops restock from wholesale
-  // This is an org-level process, not an agent behavior - runs every phase
-  for (const org of updatedOrgs) {
-    const orgRetailLocations = updatedLocations.filter(
-      (loc) => org.locations.includes(loc.id) && loc.tags.includes('retail')
-    );
-    for (const retailLoc of orgRetailLocations) {
-      const result = tryRestockFromWholesale(org, retailLoc, updatedLocations, updatedOrgs, config.economy, config.thresholds, newTime.currentPhase, context);
-      updatedLocations = result.locations;
-      updatedOrgs = result.orgs;
-    }
-  }
-
-  // 1c. Goods Order Placement: Retail shops place orders for restocking (parallel system)
+  // 1b. Goods Order Placement: Retail shops place orders for restocking
   // Creates Order entities with orderType='goods' for B2B commerce
   let newGoodsOrders: Order[] = [];
   for (const org of updatedOrgs) {
