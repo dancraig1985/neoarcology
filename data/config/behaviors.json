@@ -51,6 +51,20 @@
       }
     },
     {
+      "id": "seeking_job",
+      "name": "Look for Work",
+      "priority": "high",
+      "executor": "seek_job",
+      "conditions": {
+        "unemployed": true,
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "hasEmployment": true
+      },
+      "params": {}
+    },
+    {
       "id": "commuting",
       "name": "Commute to Work",
       "priority": "normal",
@@ -58,14 +72,13 @@
       "conditions": {
         "hasEmployment": true,
         "notAtWorkplace": true,
-        "notTraveling": true,
-        "needsBelow": { "hunger": 50 },
+        "needsBelow": { "hunger": 80 },
         "phasesSinceWorkShift": 8
       },
       "completionConditions": {
         "or": [
           { "atWorkplace": true },
-          { "needsAbove": { "hunger": 50 } }
+          { "needsAbove": { "hunger": 80 } }
         ]
       },
       "params": {
@@ -117,7 +130,8 @@
         "needsAbove": { "hunger": 25 },
         "inventoryBelow": { "provisions": 1 },
         "hasCreditsAbove": 9,
-        "notTraveling": true
+        "notTraveling": true,
+        "marketHasGoods": "provisions"
       },
       "completionConditions": {
         "inventoryAbove": { "provisions": 0 }
@@ -214,20 +228,6 @@
       "conditions": {
         "unemployed": true,
         "hasCreditsAbove": 149,
-        "notTraveling": true
-      },
-      "completionConditions": {
-        "hasEmployment": true
-      },
-      "params": {}
-    },
-    {
-      "id": "seeking_job",
-      "name": "Look for Work",
-      "priority": "normal",
-      "executor": "seek_job",
-      "conditions": {
-        "unemployed": true,
         "notTraveling": true
       },
       "completionConditions": {

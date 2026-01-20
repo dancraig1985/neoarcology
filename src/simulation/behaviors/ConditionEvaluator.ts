@@ -231,6 +231,15 @@ export function evaluateConditions(
     }
   }
 
+  // marketHasGoods: "provisions" → at least one retail location has this good in stock
+  if (conditions.marketHasGoods !== undefined) {
+    const goodType = conditions.marketHasGoods;
+    const hasMarketSupply = ctx.locations.some(loc =>
+      loc.tags.includes('retail') && (loc.inventory[goodType] ?? 0) > 0
+    );
+    if (!hasMarketSupply) return false; // Skip behavior if no market supply
+  }
+
   // All conditions passed
   return true;
 }

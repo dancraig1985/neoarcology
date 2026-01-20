@@ -133,7 +133,58 @@ export function processAgentBehavior(
       }
     }
 
-    // No critical interrupt - process normal travel
+    // Check if higher priority behaviors can interrupt/redirect travel
+    const currentTask = currentAgent.currentTask;
+    if (currentTask) {
+      const highBehaviors = config.behaviorsByPriority['high'] ?? [];
+      for (const behavior of highBehaviors) {
+        if (
+          canInterrupt(behavior.priority, currentTask.priority) &&
+          evaluateConditions(currentAgent, behavior.conditions, evalCtx)
+        ) {
+          // Interrupt and execute (may redirect travel)
+          currentAgent = clearTask(currentAgent);
+          const result = executeBehavior(currentAgent, behavior, getBehaviorCtx());
+          currentVehicles = result.vehicles ?? currentVehicles;
+          currentDeliveryRequests = result.deliveryRequests ?? currentDeliveryRequests;
+          return {
+            agent: result.agent,
+            locations: result.locations,
+            orgs: result.orgs,
+            vehicles: currentVehicles,
+            deliveryRequests: currentDeliveryRequests,
+            newLocation: result.newLocation,
+            newOrg: result.newOrg,
+          };
+        }
+      }
+
+      // Check normal priority behaviors (for redirect scenarios like commuting)
+      const normalBehaviors = config.behaviorsByPriority['normal'] ?? [];
+      for (const behavior of normalBehaviors) {
+        if (
+          canInterrupt(behavior.priority, currentTask.priority) &&
+          evaluateConditions(currentAgent, behavior.conditions, evalCtx)
+        ) {
+          // Interrupt and execute (may redirect travel)
+          currentAgent = clearTask(currentAgent);
+          const result = executeBehavior(currentAgent, behavior, getBehaviorCtx());
+          currentVehicles = result.vehicles ?? currentVehicles;
+          currentDeliveryRequests = result.deliveryRequests ?? currentDeliveryRequests;
+          return {
+            agent: result.agent,
+            locations: result.locations,
+            orgs: result.orgs,
+            vehicles: currentVehicles,
+            deliveryRequests: currentDeliveryRequests,
+            newLocation: result.newLocation,
+            newOrg: result.newOrg,
+          };
+        }
+      }
+    }
+
+    // No interrupt - process normal travel
     currentAgent = processTravel(currentAgent);
 
     // If still traveling after tick, we're done for this phase

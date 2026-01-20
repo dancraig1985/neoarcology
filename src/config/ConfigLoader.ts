@@ -368,6 +368,7 @@ export interface BehaviorConditions {
   shopHasStock?: boolean;
   atLocation?: string;                      // e.g., "employedAt", "residence"
   atLocationWithTag?: string;               // e.g., "depot", "retail", "public"
+  marketHasGoods?: string;                  // e.g., "provisions" - checks if any retail location has stock
   or?: BehaviorConditions[];                // OR logic for conditions
   never?: boolean;                          // Never completes (for continuous tasks)
   phasesSinceWorkShift?: number;            // Phases since last shift ended (cooldown)

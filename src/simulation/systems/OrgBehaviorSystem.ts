@@ -154,15 +154,9 @@ export function processOrgBehaviors(
 
       if (warehouseExpandResult.newLocation) {
         newLocations.push(warehouseExpandResult.newLocation);
-        // Replace if exists (orphaned purchase), otherwise add (new warehouse)
-        const locationExists = updatedLocations.some(loc => loc.id === warehouseExpandResult.newLocation!.id);
-        if (locationExists) {
-          updatedLocations = updatedLocations.map(loc =>
-            loc.id === warehouseExpandResult.newLocation!.id ? warehouseExpandResult.newLocation! : loc
-          );
-        } else {
-          updatedLocations = [...updatedLocations, warehouseExpandResult.newLocation];
-        }
+        // Add the new location to the array
+        // (ID collisions prevented by unified IdGenerator - no need to check/replace)
+        updatedLocations = [...updatedLocations, warehouseExpandResult.newLocation];
         // Update the org in our list
         updatedOrgs = updatedOrgs.map(o =>
           o.id === org.id ? warehouseExpandResult.org : o
@@ -200,15 +194,9 @@ export function processOrgBehaviors(
 
       if (expandResult.newLocation) {
         newLocations.push(expandResult.newLocation);
-        // Replace if exists (orphaned purchase), otherwise add (new office)
-        const locationExists = updatedLocations.some(loc => loc.id === expandResult.newLocation!.id);
-        if (locationExists) {
-          updatedLocations = updatedLocations.map(loc =>
-            loc.id === expandResult.newLocation!.id ? expandResult.newLocation! : loc
-          );
-        } else {
-          updatedLocations = [...updatedLocations, expandResult.newLocation];
-        }
+        // Add the new location to the array
+        // (ID collisions prevented by unified IdGenerator - no need to check/replace)
+        updatedLocations = [...updatedLocations, expandResult.newLocation];
         // Update the org in our list
         updatedOrgs = updatedOrgs.map(o =>
           o.id === org.id ? expandResult.org : o
@@ -229,15 +217,9 @@ export function processOrgBehaviors(
 
       if (prototypeExpandResult.newLocation) {
         newLocations.push(prototypeExpandResult.newLocation);
-        // Replace if exists (orphaned purchase), otherwise add (new prototype lab)
-        const locationExists = updatedLocations.some(loc => loc.id === prototypeExpandResult.newLocation!.id);
-        if (locationExists) {
-          updatedLocations = updatedLocations.map(loc =>
-            loc.id === prototypeExpandResult.newLocation!.id ? prototypeExpandResult.newLocation! : loc
-          );
-        } else {
-          updatedLocations = [...updatedLocations, prototypeExpandResult.newLocation];
-        }
+        // Add the new location to the array
+        // (ID collisions prevented by unified IdGenerator - no need to check/replace)
+        updatedLocations = [...updatedLocations, prototypeExpandResult.newLocation];
         // Update the org in our list
         updatedOrgs = updatedOrgs.map(o =>
           o.id === org.id ? prototypeExpandResult.org : o

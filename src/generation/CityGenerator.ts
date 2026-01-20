@@ -22,6 +22,7 @@ import { Agent, Location, Organization, Wallet, Building, Vehicle } from '../typ
 import { CityGrid, GRID_SIZE } from './types';
 import { generateZones } from './ZoneGenerator';
 import { createVehicle } from '../simulation/systems/VehicleSystem';
+import { IdGenerator } from '../simulation/IdGenerator';
 
 const CENTER = GRID_SIZE / 2;
 
@@ -39,19 +40,11 @@ export interface GeneratedCity {
 
 /**
  * Generation counters for unique IDs
+ * Location and org IDs are managed by IdGenerator (passed in)
+ * Agent and building IDs are local to city generation (never created at runtime)
  */
-let locationIdCounter = 0;
-let orgIdCounter = 0;
 let agentIdCounter = 0;
 let buildingIdCounter = 0;
-
-function nextLocationId(): string {
-  return `loc_${++locationIdCounter}`;
-}
-
-function nextOrgId(): string {
-  return `org_${++orgIdCounter}`;
-}
 
 function nextAgentId(): string {
   return `agent_${++agentIdCounter}`;
@@ -65,8 +58,6 @@ function nextBuildingId(): string {
  * Reset ID counters (for testing)
  */
 export function resetIdCounters(): void {
-  locationIdCounter = 0;
-  orgIdCounter = 0;
   agentIdCounter = 0;
   buildingIdCounter = 0;
 }
@@ -465,10 +456,11 @@ function createOrgFromTemplate(
   leaderId: string,
   credits: number,
   phase: number,
-  rand: () => number
+  rand: () => number,
+  idGen: IdGenerator
 ): Organization {
   return {
-    id: nextOrgId(),
+    id: idGen.nextOrgId(),
     name,
     template: template.id,
     tags: template.tags ?? ['corporation'],
@@ -504,6 +496,7 @@ function createLocationFromTemplate(
   floor: number,
   ownerId: string,
   phase: number,
+  idGen: IdGenerator,
   buildingPlacement?: BuildingPlacement
 ): Location {
   const balance = template.balance;
@@ -514,7 +507,7 @@ function createLocationFromTemplate(
   const finalFloor = buildingPlacement?.floor ?? floor;
 
   return {
-    id: nextLocationId(),
+    id: idGen.nextLocationId(),
     name,
     template: template.id,
     tags: template.tags ?? [],
@@ -556,6 +549,7 @@ function createPublicLocation(
   y: number,
   floor: number,
   phase: number,
+  idGen: IdGenerator,
   buildingPlacement?: BuildingPlacement
 ): Location {
   // Use building coords if placed in a building
@@ -564,7 +558,7 @@ function createPublicLocation(
   const finalFloor = buildingPlacement?.floor ?? floor;
 
   return {
-    id: nextLocationId(),
+    id: idGen.nextLocationId(),
     name,
     template: template.id,
     tags: template.tags ?? [],
@@ -594,8 +588,11 @@ function createPublicLocation(
 
 /**
  * Generate a complete city using templates from config
+ * @param config Loaded configuration
+ * @param idGen ID generator for locations and orgs (shared with simulation runtime)
+ * @param seed Random seed for reproducible generation
  */
-export function generateCity(config: LoadedConfig, seed: number = Date.now()): GeneratedCity {
+export function generateCity(config: LoadedConfig, idGen: IdGenerator, seed: number = Date.now()): GeneratedCity {
   const rand = seededRandom(seed);
 
   // Generate zone grid
@@ -719,7 +716,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         : randomInt(2000, 5000, rand);
 
       const corpName = `${pickRandom(lastNames, rand)} Industries`;
-      const corp = createOrgFromTemplate(corpName, corpTemplate, leader.id, credits, 0, rand);
+      const corp = createOrgFromTemplate(corpName, corpTemplate, leader.id, credits, 0, rand, idGen);
 
       if (corpTemplate.generation.leaderBecomesEmployed) {
         leader.status = 'employed';
@@ -766,6 +763,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           0,
           corp.id,
           0,
+          idGen,
           buildingPlacement
         );
       } else {
@@ -779,7 +777,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
             placement.y,
             placement.floor,
             corp.id,
-            0
+            0,
+            idGen
           );
         }
       }
@@ -879,7 +878,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         owner.id,
         orgCredits,
         0,
-        rand
+        rand,
+        idGen
       );
 
       // Set owner as employed if template specifies
@@ -905,6 +905,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           0, 0, 0,
           shopOrg.id,
           0,
+          idGen,
           buildingPlacement
         );
         // Add owner as employee if template specifies (for workforce tracking, not salary)
@@ -928,7 +929,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
             placement.y,
             placement.floor,
             shopOrg.id,
-            0
+            0,
+            idGen
           );
           // Add owner as employee if template specifies (for workforce tracking, not salary)
           if (shopOrgTemplate.generation?.leaderBecomesEmployed && owner) {
@@ -977,7 +979,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         owner.id,
         orgCredits,
         0,
-        rand
+        rand,
+        idGen
       );
 
       // Set owner as employed if template specifies
@@ -1003,6 +1006,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           0, 0, 0,
           restaurantOrg.id,
           0,
+          idGen,
           buildingPlacement
         );
         // Add owner as employee if template specifies (for workforce tracking, not salary)
@@ -1026,7 +1030,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
             placement.y,
             placement.floor,
             restaurantOrg.id,
-            0
+            0,
+            idGen
           );
           // Add owner as employee if template specifies (for workforce tracking, not salary)
           if (restaurantOrgTemplate.generation?.leaderBecomesEmployed && owner) {
@@ -1075,7 +1080,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         owner.id,
         orgCredits,
         0,
-        rand
+        rand,
+        idGen
       );
 
       // Set owner as employed if template specifies
@@ -1101,6 +1107,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           0, 0, 0,
           pubOrg.id,
           0,
+          idGen,
           buildingPlacement
         );
         // Add owner as employee if template specifies (for workforce tracking, not salary)
@@ -1124,7 +1131,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
             placement.y,
             placement.floor,
             pubOrg.id,
-            0
+            0,
+            idGen
           );
           // Add owner as employee if template specifies (for workforce tracking, not salary)
           if (pubOrgTemplate.generation?.leaderBecomesEmployed && owner) {
@@ -1173,7 +1181,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         owner.id,
         orgCredits,
         0,
-        rand
+        rand,
+        idGen
       );
 
       // Set owner as employed if template specifies
@@ -1199,6 +1208,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           0, 0, 0,
           boutiqueOrg.id,
           0,
+          idGen,
           buildingPlacement
         );
         // Add owner as employee if template specifies (for workforce tracking, not salary)
@@ -1221,7 +1231,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
             placement.y,
             placement.floor,
             boutiqueOrg.id,
-            0
+            0,
+            idGen
           );
           // Add owner as employee if template specifies (for workforce tracking, not salary)
           if (boutiqueOrgTemplate.generation?.leaderBecomesEmployed && owner) {
@@ -1260,7 +1271,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
             placement.x,
             placement.y,
             placement.floor,
-            0
+            0,
+            idGen
           );
           locations.push(publicSpace);
         }
@@ -1314,7 +1326,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         owner.id,
         orgCredits,
         0,
-        rand
+        rand,
+        idGen
       );
 
       if (apartmentOrgTemplate.generation?.leaderBecomesEmployed) {
@@ -1349,6 +1362,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           0, 0, 0,
           landlordOrg.id,
           0,
+          idGen,
           buildingPlacement
         );
         apartment.maxResidents = apartmentTemplate.balance.maxResidents ?? 1;
@@ -1366,7 +1380,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
             placement.y,
             placement.floor,
             landlordOrg.id,
-            0
+            0,
+            idGen
           );
           apartment.maxResidents = apartmentTemplate.balance.maxResidents ?? 1;
           apartment.rentCost = apartmentTemplate.balance.rentCost ?? 20;
@@ -1422,6 +1437,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           buildingPlacement.building.y,
           buildingPlacement.floor,
           0,
+          idGen,
           buildingPlacement
         );
         shelter.maxResidents = shelterTemplate.balance.maxResidents ?? 20;
@@ -1438,7 +1454,8 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
             placement.x,
             placement.y,
             placement.floor,
-            0
+            0,
+            idGen
           );
           shelter.maxResidents = shelterTemplate.balance.maxResidents ?? 20;
           shelter.rentCost = 0;
@@ -1466,12 +1483,21 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
   // First pass: assign locations to agents
   for (const agent of agents) {
     if (agent.employer) {
-      // Agent is employed (owner) - find the org's first location
+      // Agent is employed - find the org
       const org = organizations.find((o) => o.id === agent.employer);
-      if (org && org.locations.length > 0) {
+
+      // Only set employedAt for LEADERS, not regular workers
+      // Workers already have employedAt set during hiring (sections 2-7)
+      if (org && org.leader === agent.id && org.locations.length > 0) {
         const firstLocationId = org.locations[0];
         agent.currentLocation = firstLocationId;
         agent.employedAt = firstLocationId;
+      } else if (org && org.leader === agent.id && publicSpaces.length > 0) {
+        // Leader but no locations yet - place at public space
+        agent.currentLocation = pickRandom(publicSpaces, rand).id;
+      } else if (agent.employedAt) {
+        // Regular worker - set currentLocation to their workplace
+        agent.currentLocation = agent.employedAt;
       } else if (publicSpaces.length > 0) {
         // Fallback to a public space
         agent.currentLocation = pickRandom(publicSpaces, rand).id;
@@ -1551,7 +1577,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
         : randomInt(3000, 6000, rand);
 
       const companyName = `${pickRandom(lastNames, rand)} Logistics`;
-      const company = createOrgFromTemplate(companyName, logisticsTemplate, leader.id, credits, 0, rand);
+      const company = createOrgFromTemplate(companyName, logisticsTemplate, leader.id, credits, 0, rand, idGen);
 
       // Leader becomes employed at their own company
       if (logisticsTemplate.generation?.leaderBecomesEmployed) {
@@ -1581,6 +1607,7 @@ export function generateCity(config: LoadedConfig, seed: number = Date.now()): G
           buildingPlacement.floor,
           company.id,
           0,
+          idGen,
           buildingPlacement
         );
 

@@ -60,8 +60,14 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
   const actualSeed = seed ?? Date.now();
   const rng = createSeededRNG(actualSeed);
 
+  // Create ID generation state BEFORE city generation
+  // City generator will use these counters, then simulation continues from where it left off
+  const idState = createInitialIdState();
+  const idGen = new IdGenerator(idState);
+
   // Generate the city with zones, locations, agents, and orgs
-  const city = generateCity(config, seed);
+  // City generation uses idGen, so idState will be updated with the next available IDs
+  const city = generateCity(config, idGen, actualSeed);
 
   // Log spawns for all agents
   for (const agent of city.agents) {
@@ -112,7 +118,7 @@ export function createSimulationWithCity(config: LoadedConfig, seed?: number): S
     metrics,
     currentSnapshot: null,
     rng, // Seeded RNG for reproducible simulation runs
-    idState: createInitialIdState(), // ID generation state for reproducible simulations
+    idState, // ID generation state (already used by city generator, continues from there)
     transactionHistory: createTransactionHistory(56), // Track last week of transactions (PLAN-035)
   };
 

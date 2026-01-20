@@ -9,8 +9,9 @@ import type { Agent, AgentTask, Location, Organization, Vehicle, DeliveryRequest
 import { registerExecutor, type BehaviorContext, type TaskResult } from '../BehaviorRegistry';
 import { isTraveling, startTravel, findNearestLocation, redirectTravel } from '../../systems/TravelSystem';
 import { ActivityLog } from '../../ActivityLog';
-import { recordRetailSale, recordBusinessOpened } from '../../Metrics';
+import { recordRetailSale, recordBusinessOpened, recordHire } from '../../Metrics';
 import { randomInt } from '../../SeededRandom';
+import { setEmployment } from '../../systems/AgentStateHelpers';
 import { createOrganization } from '../../systems/OrgSystem';
 import {
   loadCargo,
@@ -53,8 +54,34 @@ function executeTravelBehavior(
   task: AgentTask,
   ctx: BehaviorContext
 ): TaskResult {
-  // If already traveling, let travel system handle it
+  // If already traveling, check if we need to redirect for commuting
   if (isTraveling(agent)) {
+    // If this is a commuting task, redirect to workplace
+    if (task.type === 'commuting' || task.params?.destination === 'employedAt') {
+      const workplace = ctx.locations.find(l => l.id === agent.employedAt);
+
+      // Only redirect if not already heading to workplace
+      if (workplace && agent.travelingTo !== workplace.id) {
+        const redirectedAgent = redirectTravel(agent, workplace, ctx.locations, ctx.transportConfig);
+
+        ActivityLog.info(
+          ctx.phase,
+          'travel',
+          `redirecting to ${workplace.name} (work shift ready)`,
+          agent.id,
+          agent.name
+        );
+
+        return {
+          agent: setTask(redirectedAgent, { ...task, targetId: workplace.id, targetName: workplace.name }),
+          locations: ctx.locations,
+          orgs: ctx.orgs,
+          complete: false,
+        };
+      }
+    }
+
+    // Otherwise, continue current travel
     return {
       agent,
       locations: ctx.locations,
@@ -787,13 +814,8 @@ function executeSeekJobBehavior(
   const salary = ctx.economyConfig.salary.unskilled.min +
     Math.floor(ctx.context.rng() * (ctx.economyConfig.salary.unskilled.max - ctx.economyConfig.salary.unskilled.min));
 
-  const updatedAgent = {
-    ...agent,
-    status: 'employed' as const,
-    employer: ownerOrg.id,
-    employedAt: nearestJob.id,
-    salary,
-  };
+  // Use setEmployment helper to ensure proper state initialization
+  const updatedAgent = setEmployment(agent, nearestJob.id, ownerOrg.id, salary);
 
   const updatedLocation = {
     ...nearestJob,
@@ -811,6 +833,9 @@ function executeSeekJobBehavior(
     agent.id,
     agent.name
   );
+
+  // Record hire in metrics
+  recordHire(ctx.context.metrics);
 
   return {
     agent: clearTask(updatedAgent),

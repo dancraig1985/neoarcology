@@ -63,8 +63,14 @@ Other docs: `design/GAME-DESIGN.md` (high-level design), `design/roadmap/plans/`
 - `src/simulation/ActivityLog.ts` - Event logging
 - `src/simulation/validation/InvariantChecker.ts` - Runtime state validation (enable in simulation.json)
 
+**ID Generation (CRITICAL):**
+- `src/simulation/IdGenerator.ts` - Unified ID generation for reproducible sims
+- **IMPORTANT**: Never create location/org IDs manually - always use `idGen.nextLocationId()` / `idGen.nextOrgId()`
+- CityGenerator and runtime share the same IdGenerator to prevent ID collisions
+- IdState is part of SimulationState for serialization/reproducibility
+
 **Generation & Config:**
-- `src/generation/CityGenerator.ts` - Procedural city generation
+- `src/generation/CityGenerator.ts` - Procedural city generation (receives IdGenerator parameter)
 - `src/config/ConfigLoader.ts` - Config/template loading
 - `src/types/*.ts` - Type definitions
 
@@ -325,6 +331,28 @@ See the helpers file for full documentation.
 
 ## Common Pitfalls
 
+### ID Generation (CRITICAL)
+**Never create location/org IDs manually** - always use IdGenerator:
+
+❌ **Bad (causes ID collisions):**
+```typescript
+let locationIdCounter = 0;
+function createLocation() {
+  return { id: `loc_${++locationIdCounter}`, ... };
+}
+```
+
+✅ **Good (unified ID generation):**
+```typescript
+function createLocation(idGen: IdGenerator) {
+  return { id: idGen.nextLocationId(), ... };
+}
+```
+
+**Why this matters**: CityGenerator and runtime both create entities. If they use separate counters, IDs will collide, causing runtime entities to replace city-gen entities, breaking all references and corrupting state.
+
+**Historical bug**: Before fix, Office 0 (created at runtime) got ID `loc_2`, which was already assigned to Grid Works (created during city gen). Office 0 replaced Grid Works in the locations array, but agents still referenced `loc_2`, causing workers to commute to the wrong workplace. This caused catastrophic business failures (0-33% survival rate). After unifying IdGenerator, success rate improved to 100%.
+
 ### State Management
 - Directly modifying agent state fields (use `AgentStateHelpers`)
 - Mutations in tick processing (always return new state)
@@ -336,23 +364,14 @@ When entities reference each other bidirectionally, **both sides MUST stay in sy
 - `location.employees[]` ↔ `agent.employedAt`
 - `agent.residence` ↔ `location.residents[]`
 
-**REPLACE vs APPEND pitfall**: When updating an entity that might already exist (e.g., orphaned locations being purchased), use `.map()` to REPLACE the existing entry instead of appending:
-
-❌ **Bad (creates duplicates):**
+**Always update both sides** when modifying relationships:
 ```typescript
-updatedLocations = [...updatedLocations, purchasedLocation]; // Orphan still in array!
-```
+// ❌ Bad: Only updates one side
+agent.employedAt = locationId;
 
-✅ **Good (replaces existing):**
-```typescript
-const exists = updatedLocations.some(loc => loc.id === purchasedLocation.id);
-if (exists) {
-  updatedLocations = updatedLocations.map(loc =>
-    loc.id === purchasedLocation.id ? purchasedLocation : loc
-  );
-} else {
-  updatedLocations = [...updatedLocations, purchasedLocation];
-}
+// ✅ Good: Updates both sides
+agent = setEmployment(agent, locationId, orgId, salary);
+location.employees = [...location.employees, agentId];
 ```
 
 **Use invariant checking** (`simulation.json` → `invariantChecking.enabled`) to catch desync bugs early. The checker validates all bidirectional relationships every tick.
