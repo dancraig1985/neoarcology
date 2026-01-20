@@ -1608,25 +1608,47 @@ function executeDeliverGoodsBehavior(
     };
   }
 
-  // Increment phases delivered (track shift progress)
-  const agentWithIncrementedShift = {
-    ...agent,
-    deliveryShiftState: {
-      ...agent.deliveryShiftState!,
-      phasesDelivered: agent.deliveryShiftState!.phasesDelivered + 1,
-    },
-  };
+  // Increment shift counter when actively working (has assigned delivery)
+  const hasActiveDelivery = task.params?.deliveryId;
+  const currentDeliveryPhase = (task.params?.deliveryPhase as string) ?? 'assigning';
+  let currentAgent = agent;
 
-  // Check if shift should end (only if no active delivery in progress)
-  const shiftDuration = 16;
-  const hasActiveDelivery = task.params?.deliveryId && task.params?.deliveryPhase !== 'assigning';
+  if (hasActiveDelivery) {
+    // Actively working on delivery - increment shift time
+    currentAgent = {
+      ...agent,
+      deliveryShiftState: {
+        ...agent.deliveryShiftState!,
+        phasesDelivered: agent.deliveryShiftState!.phasesDelivered + 1,
+      },
+    };
 
-  if (agentWithIncrementedShift.deliveryShiftState!.phasesDelivered >= shiftDuration && !hasActiveDelivery) {
+    // Log delivery progress every 5 ticks
+    if (currentAgent.deliveryShiftState!.phasesDelivered % 5 === 0) {
+      ActivityLog.info(
+        ctx.phase,
+        'delivery',
+        `shift progress: ${currentAgent.deliveryShiftState!.phasesDelivered} phases, current phase: ${currentDeliveryPhase}, delivery: ${hasActiveDelivery}`,
+        agent.id,
+        agent.name
+      );
+    }
+  }
+
+  // Check if shift should end (only when NOT mid-delivery AND no assigned delivery)
+  const shiftDuration = 64;
+  const deliveryPhaseParam = task.params?.deliveryPhase as string | undefined;
+  const hasAssignedDelivery = task.params?.deliveryId;
+
+  // Don't end shift if: (1) mid-delivery OR (2) just assigned a delivery
+  const canEndShift = !hasAssignedDelivery;
+
+  if (currentAgent.deliveryShiftState!.phasesDelivered >= shiftDuration && canEndShift) {
     // Shift complete - end behavior
     const finishedAgent = {
-      ...agentWithIncrementedShift,
+      ...currentAgent,
       deliveryShiftState: {
-        ...agentWithIncrementedShift.deliveryShiftState!,
+        ...currentAgent.deliveryShiftState!,
         lastShiftEndPhase: ctx.phase,
         phasesDelivered: 0,
       },
@@ -1648,8 +1670,8 @@ function executeDeliverGoodsBehavior(
     };
   }
 
-  // Continue with delivery logic using agent with incremented shift counter
-  agent = agentWithIncrementedShift;
+  // Continue with delivery logic
+  agent = currentAgent;
 
   // Find the logistics company this agent works for
   const logisticsCompany = ctx.orgs.find(org => org.id === agent.employer);
@@ -1686,6 +1708,15 @@ function executeDeliverGoodsBehavior(
 
     if (pendingDeliveries.length === 0) {
       // No deliveries available - wait at depot (don't end shift)
+      if (ctx.phase % 10 === 0) {
+        ActivityLog.info(
+          ctx.phase,
+          'delivery',
+          `no pending logistics orders available, idling at depot (shift: ${agent.deliveryShiftState?.phasesDelivered ?? 0}/64)`,
+          agent.id,
+          agent.name
+        );
+      }
       return {
         agent,
         locations: ctx.locations,
@@ -1712,6 +1743,14 @@ function executeDeliverGoodsBehavior(
     const assignedDelivery = assignDeliveryToDriver(deliveryRequest, agent, availableVehicle, ctx.phase);
     const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
       req.id === deliveryRequest!.id ? assignedDelivery : req
+    );
+
+    ActivityLog.info(
+      ctx.phase,
+      'delivery',
+      `assigned to delivery ${assignedDelivery.id}, vehicle ${availableVehicle.id}`,
+      agent.id,
+      agent.name
     );
 
     // Update task with delivery ID and next phase
@@ -2252,46 +2291,15 @@ function executeDeliverGoodsBehavior(
     const updatedOrgs = updatedOrgsAfterDelivery;
     const updatedDeliveryRequests = updatedDeliveryRequestsAfterDelivery;
 
-    // Delivery complete - agent variable already has incremented shift counter
-    // Check if shift is also complete
-    const shiftDuration = 16;
-    if (agent.deliveryShiftState!.phasesDelivered >= shiftDuration) {
-      const finishedAgent = {
-        ...agent,
-        deliveryShiftState: {
-          ...agent.deliveryShiftState!,
-          lastShiftEndPhase: ctx.phase,
-          phasesDelivered: 0,
-        },
-      };
-
-      ActivityLog.info(
-        ctx.phase,
-        'employment',
-        `completed delivery shift after finishing delivery (${shiftDuration} phases)`,
-        agent.id,
-        agent.name
-      );
-
-      // Shift complete - clear task and end behavior
-      return {
-        agent: clearTask(finishedAgent),
-        locations: updatedLocations,
-        orgs: updatedOrgs,
-        vehicles: updatedVehicles,
-        deliveryRequests: updatedDeliveryRequests,
-        complete: true,
-      };
-    }
-
-    // Delivery done but shift continues - look for next delivery
+    // Delivery complete - shift counter already incremented above
+    // Just clear task and continue (shift might have more time or might end naturally)
     return {
       agent: clearTask(agent),
       locations: updatedLocations,
       orgs: updatedOrgs,
       vehicles: updatedVehicles,
       deliveryRequests: updatedDeliveryRequests,
-      complete: false, // Keep going - more shift time left
+      complete: false, // Keep behavior running - let normal flow check shift completion
     };
   }
 

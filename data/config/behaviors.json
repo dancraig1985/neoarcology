@@ -99,7 +99,7 @@
       },
       "completionConditions": {
         "or": [
-          { "phasesDeliveredThisShift": 16 },
+          { "phasesDeliveredThisShift": 64 },
           { "needsAbove": { "hunger": 80 } }
         ]
       },
