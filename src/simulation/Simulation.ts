@@ -23,7 +23,7 @@ import { processOrgBehaviors } from './systems/OrgBehaviorSystem';
 import { cleanupDeadEmployees, cleanupDeadResidents } from './systems/LocationSystem';
 import { checkImmigration } from './systems/ImmigrationSystem';
 import { processVehicleTravel, cleanupAllVehicles } from './systems/VehicleSystem';
-import { cleanupOldDeliveries } from './systems/DeliverySystem';
+import { cleanupOldDeliveries, cleanupOrphanedDeliveries, cancelStaleGoodsOrders } from './systems/DeliverySystem';
 import { generateCity } from '../generation/CityGenerator';
 import { createMetrics, takeSnapshot, startNewWeek, type SimulationMetrics, type MetricsSnapshot } from './Metrics';
 import { InvariantChecker } from './validation/InvariantChecker';
@@ -225,6 +225,17 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
 
   // 2e. Clean up old completed/failed delivery requests (keep for ~10 weeks)
   let updatedDeliveryRequests = cleanupOldDeliveries(state.deliveryRequests, newTime.currentPhase);
+
+  // 2f. Fail orphaned in_transit/assigned logistics orders (dead driver, missing vehicle, timeout)
+  updatedDeliveryRequests = cleanupOrphanedDeliveries(
+    updatedDeliveryRequests,
+    updatedAgents,
+    updatedVehicles,
+    newTime.currentPhase
+  );
+
+  // 2g. Cancel stale pending goods orders (seller can't fulfill after 10 weeks)
+  updatedDeliveryRequests = cancelStaleGoodsOrders(updatedDeliveryRequests, newTime.currentPhase);
 
   // 3. Process behavior-based decisions for each agent
 

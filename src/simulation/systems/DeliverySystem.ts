@@ -240,3 +240,110 @@ export function cleanupOldDeliveries(
     return age < maxAge;
   });
 }
+
+/**
+ * Fail logistics orders that have been stuck in_transit or assigned for too long
+ * OR where the assigned driver/vehicle no longer exists
+ */
+export function cleanupOrphanedDeliveries(
+  requests: Order[],
+  agents: Agent[],
+  vehicles: Vehicle[],
+  currentPhase: number,
+  maxPhasesInTransit: number = 560 // 10 weeks - way too long for any delivery
+): Order[] {
+  return requests.map((req) => {
+    // Only check logistics orders that are in progress
+    if (req.orderType !== 'logistics') {
+      return req;
+    }
+
+    if (req.status !== 'in_transit' && req.status !== 'assigned') {
+      return req;
+    }
+
+    // Check if driver still exists and is alive
+    if (req.assignedDriver) {
+      const driver = agents.find((a) => a.id === req.assignedDriver);
+      if (!driver || driver.status === 'dead') {
+        ActivityLog.warning(
+          currentPhase,
+          'delivery',
+          `failing ${req.id} - assigned driver ${req.assignedDriver} no longer exists`,
+          'system',
+          'DeliveryCleanup'
+        );
+        return failDelivery(req, 'driver no longer exists', currentPhase);
+      }
+    }
+
+    // Check if vehicle still exists
+    if (req.assignedVehicle) {
+      const vehicle = vehicles.find((v) => v.id === req.assignedVehicle);
+      if (!vehicle) {
+        ActivityLog.warning(
+          currentPhase,
+          'delivery',
+          `failing ${req.id} - assigned vehicle ${req.assignedVehicle} no longer exists`,
+          'system',
+          'DeliveryCleanup'
+        );
+        return failDelivery(req, 'vehicle no longer exists', currentPhase);
+      }
+    }
+
+    // Check if delivery has been in progress for too long
+    const assignedPhase = req.assignedAt ?? req.created;
+    const phasesInProgress = currentPhase - assignedPhase;
+
+    if (phasesInProgress > maxPhasesInTransit) {
+      ActivityLog.warning(
+        currentPhase,
+        'delivery',
+        `failing ${req.id} - stuck in ${req.status} for ${phasesInProgress} phases`,
+        req.assignedDriver ?? 'system',
+        'DeliveryCleanup'
+      );
+      return failDelivery(req, `timeout after ${phasesInProgress} phases`, currentPhase);
+    }
+
+    return req;
+  });
+}
+
+/**
+ * Cancel goods orders that have been pending for too long
+ * Seller likely can't fulfill (out of business, no production, etc.)
+ */
+export function cancelStaleGoodsOrders(
+  orders: Order[],
+  currentPhase: number,
+  maxPendingPhases: number = 560 // 10 weeks
+): Order[] {
+  return orders.map((order) => {
+    // Only check goods orders that are still pending
+    if (order.orderType !== 'goods' || order.status !== 'pending') {
+      return order;
+    }
+
+    const pendingDuration = currentPhase - order.created;
+
+    if (pendingDuration > maxPendingPhases) {
+      ActivityLog.warning(
+        currentPhase,
+        'order',
+        `cancelling ${order.id} - pending for ${pendingDuration} phases (seller unable to fulfill)`,
+        order.buyer,
+        'OrderCleanup'
+      );
+
+      return {
+        ...order,
+        status: 'cancelled' as const,
+        fulfilled: currentPhase,
+      };
+    }
+
+    return order;
+  });
+}
