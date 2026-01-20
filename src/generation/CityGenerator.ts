@@ -1564,7 +1564,7 @@ export function generateCity(config: LoadedConfig, idGen: IdGenerator, seed: num
   const depotTemplate = config.locationTemplates['depot'];
 
   if (logisticsTemplate && depotTemplate) {
-    const numLogisticsCompanies = 1; // Only 1 initial logistics company, demand-driven expansion
+    const numLogisticsCompanies = 3; // Start with 3 logistics companies for faster bootstrap
 
     for (let i = 0; i < numLogisticsCompanies; i++) {
       // Create logistics company leader (hire from unemployed agents)
