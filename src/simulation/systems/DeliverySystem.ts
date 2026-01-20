@@ -224,20 +224,32 @@ export function calculateDeliveryPayment(
 }
 
 /**
- * Remove completed/failed deliveries older than a certain age
+ * Remove old failed/cancelled orders, but keep successful deliveries for history
  */
 export function cleanupOldDeliveries(
   requests: DeliveryRequest[],
   currentPhase: number,
-  maxAge: number = 560 // Keep for ~10 weeks at 8 phases/day
+  maxAge: number = 560 // Keep failed orders for ~10 weeks at 8 phases/day
 ): DeliveryRequest[] {
   return requests.filter((req) => {
+    // Keep all active orders
     if (req.status === 'pending' || req.status === 'assigned' || req.status === 'in_transit') {
-      return true; // Keep active deliveries
+      return true;
     }
-    // Remove completed/failed deliveries older than maxAge
-    const age = currentPhase - (req.fulfilled ?? req.created);
-    return age < maxAge;
+
+    // Keep all successful deliveries (for browsing history)
+    if (req.status === 'delivered') {
+      return true;
+    }
+
+    // Remove old failed/cancelled orders after maxAge
+    if (req.status === 'failed' || req.status === 'cancelled') {
+      const age = currentPhase - (req.fulfilled ?? req.created);
+      return age < maxAge;
+    }
+
+    // Default: keep
+    return true;
   });
 }
 
