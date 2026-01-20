@@ -63,20 +63,12 @@ Other docs: `design/GAME-DESIGN.md` (high-level design), `design/roadmap/plans/`
 - `src/simulation/ActivityLog.ts` - Event logging
 - `src/simulation/validation/InvariantChecker.ts` - Runtime state validation (enable in simulation.json)
 
-**ID Generation (CRITICAL):**
-- `src/simulation/IdGenerator.ts` - Unified ID generation for reproducible sims
-- **IMPORTANT**: Never create location/org IDs manually - always use `idGen.nextLocationId()` / `idGen.nextOrgId()`
-- CityGenerator and runtime share the same IdGenerator to prevent ID collisions
-- IdState is part of SimulationState for serialization/reproducibility
+**ID Generation:**
+- `src/simulation/IdGenerator.ts` - Unified ID generation (use `idGen.next*()`, never manual IDs)
 
 **Generation & Config:**
-- `src/generation/CityGenerator.ts` - Procedural city generation (receives IdGenerator parameter)
+- `src/generation/CityGenerator.ts` - Procedural city generation
 - `src/config/ConfigLoader.ts` - Config/template loading
-- `src/types/*.ts` - Type definitions
-
-**Planned:**
-- Agent AI: `src/simulation/ai/AgentAI.ts` (advanced decision making)
-- Encounter system: `src/simulation/systems/EncounterSystem.ts`
 
 ## UI (Observer Mode)
 
@@ -132,25 +124,14 @@ Entity templates define types through data:
 
 **Adding new entity types = adding new template JSON files.**
 
-### No Magic Numbers Policy
+### No Magic Numbers
 
-**NEVER hardcode numeric constants in system code.** All tunable values must live in config files:
+Never hardcode numeric constants. All tunable values in config files.
 
-❌ **Bad:**
 ```typescript
-if (agent.hunger > 80) { // Magic number!
-  seekFood();
-}
+// ❌ if (agent.hunger > 80)
+// ✅ if (agent.hunger > thresholdsConfig.agent.emergencyHunger)
 ```
-
-✅ **Good:**
-```typescript
-if (agent.hunger > thresholdsConfig.agent.emergencyHunger) {
-  seekFood();
-}
-```
-
-This makes economic tuning possible without code changes and prevents scattered constants from becoming maintenance nightmares.
 
 ## Development Principles
 
@@ -168,158 +149,41 @@ This makes economic tuning possible without code changes and prevents scattered 
 - Template files are self-contained (all data for a type in one file).
 - Code reads from config, never hardcodes tunable values.
 
-## System Organization & Architecture
+## System Organization
 
-### Single Responsibility Principle
+**Rules:**
+- One responsibility per system. If handling multiple domains, split it.
+- 800 lines max per file. Large files indicate mixed responsibilities.
+- Circular dependencies? Extract to shared service/helper module.
+- Preserve module-level state initial values when migrating code (seeded test reproducibility).
+- Test incrementally when refactoring: 100 → 200 → 500 → 1000 ticks.
 
-**Each system should have ONE clear, focused responsibility.** If a system handles multiple domains, split it.
-
-**File size limit: 800 lines max per system.** Large files are unmaintainable and indicate mixed responsibilities.
-
-Example (PLAN-032):
-- ❌ `EconomySystem.ts` (2243 lines) - handled payroll, restocking, agent decisions, business creation
-- ✅ Split into:
-  - `AgentEconomicSystem.ts` (~940 LOC) - agent decisions only
-  - `PayrollSystem.ts` (~420 LOC) - weekly financial operations only
-  - `SupplyChainSystem.ts` (~560 LOC) - B2B commerce only
-  - `BusinessOpportunityService.ts` (~370 LOC) - business creation only
-
-### Breaking Circular Dependencies
-
-When splitting systems, watch for circular imports:
-- System A calls System B
-- System B calls System A
-- TypeScript import cycle error
-
-**Solution: Extract to shared service**
-
-Example from PLAN-032:
-- Problem: `AgentEconomicSystem` → `tryOpenBusiness()` → needs agent data → circular
-- Solution: Create `BusinessOpportunityService.ts` as neutral ground
-- Both `AgentEconomicSystem` and behavior executors can import from service
-
-**Don't use callbacks or dependency injection for simple cases** - adds complexity. Prefer extracting to a shared module.
-
-### Module State Preservation
-
-When migrating code between files, preserve module-level state carefully:
-
-```typescript
-// OLD FILE (EconomySystem.ts)
-let locationIdCounter = 1;
-let orgIdCounter = 100;
-
-// NEW FILE (BusinessOpportunityService.ts)
-let locationIdCounter = 1;  // ✅ Same initial value
-let orgIdCounter = 100;     // ✅ Preserves reproducibility
-```
-
-**Why this matters**: Seeded tests must produce identical results before/after migration.
-
-### Incremental Migration Strategy
-
-When refactoring large systems:
-
-1. **Plan the split** - identify domains and dependencies first
-2. **Create empty files** with exports
-3. **Migrate one domain at a time** (not all at once)
-4. **Test after each migration** with increasing tick counts:
-   - 100 ticks (basic functionality)
-   - 200 ticks (interactions)
-   - 500 ticks (stability)
-   - 1000 ticks (integration)
-5. **Use git commits** - one commit per system migration for easy rollback
-6. **Delete old file last** - only after full integration test passes
-
-Example test progression from PLAN-032:
-```bash
-npm run sim:test -- --seed 42 --ticks 100  # BusinessOpportunityService
-npm run sim:test -- --seed 42 --ticks 200  # + SupplyChainSystem
-npm run sim:test -- --seed 42 --ticks 300  # + PayrollSystem
-npm run sim:test -- --seed 42 --ticks 500  # + AgentEconomicSystem
-npm run sim:test -- --seed 42 --ticks 1000 # Final integration
-```
-
-### System Naming Conventions
-
-- **Systems**: End in `System.ts` (e.g., `PayrollSystem.ts`, `AgentSystem.ts`)
-- **Services**: End in `Service.ts` (e.g., `BusinessOpportunityService.ts`)
-- **Helpers**: End in `Helpers.ts` (e.g., `AgentStateHelpers.ts`)
-- **Analyzers**: End in `Analyzer.ts` (e.g., `DemandAnalyzer.ts`)
-
-**Systems** are called by the main simulation loop. **Services** are shared utilities called by multiple systems. **Helpers** provide pure functions for state transformations. **Analyzers** compute derived data.
+**Naming conventions:**
+- `*System.ts` - Called by main simulation loop
+- `*Service.ts` - Shared utilities for multiple systems
+- `*Helpers.ts` - Pure functions for state transformations
+- `*Analyzer.ts` - Compute derived data
 
 ## Behavior System
 
-Agent decisions are **data-driven** via `data/config/behaviors.json`. Each behavior has:
-- **conditions**: When the behavior can START (entry conditions)
-- **completionConditions**: When the behavior ENDS
-- **priority**: critical > high > normal > idle
-- **executor**: Function that runs each tick while active
+Data-driven via `data/config/behaviors.json`:
+- `conditions` - when behavior can START (checked only when selecting new behavior)
+- `completionConditions` - when behavior ENDS (checked every tick during behavior)
+- `priority` - critical > high > normal > idle (higher can interrupt lower)
+- `executor` - function that runs each tick
 
-**Critical concept**: Entry conditions are only checked when selecting a NEW behavior. Once a task starts, only completionConditions are checked. A task with `completionConditions: { never: true }` runs forever unless interrupted by higher priority.
+**Key rules:**
+- Entry conditions NOT re-checked after start. `completionConditions: { never: true }` runs forever unless interrupted.
+- Same-priority behaviors: first match in JSON wins.
+- Scope conditions narrowly: use `atLocationWithTag` for specialized behaviors (truckers, guards).
+- `hasEmployment: true` matches ALL employed agents, not specific jobs.
+- Use `setEmployment()` / `clearEmployment()` - they manage shift state cleanup.
 
-**Priority interrupts**: Critical can always interrupt. High can interrupt normal/idle. Same-priority behaviors are selected by JSON order (first match wins).
-
-**Common pattern**: Use completion conditions that mirror the inverse of entry conditions:
-```json
-"conditions": { "needsBelow": { "hunger": 50 } },
-"completionConditions": { "needsAbove": { "hunger": 50 } }
-```
-
-**Behavior Condition Best Practices**:
-- Always scope conditions as narrowly as possible to avoid unintended behavior matches
-- Use `atLocationWithTag` to restrict behaviors to specific location types (e.g., `"atLocationWithTag": "depot"` for logistics-only behaviors)
-- Test new behaviors by running headless sim and checking for unexpected warning spam
-- When adding specialized worker behaviors (truckers, security guards, etc.), gate them with location tag conditions
-- Remember: `hasEmployment: true` matches ALL employed agents, not just specific job types
-
-**Work Shift Best Practices**:
-- Work shifts prevent agent burnout by enforcing breaks (16 phases work, 8 phases rest)
-- Shifts are automatically staggered via randomized first shift duration
-- Always use `setEmployment()` / `clearEmployment()` - they manage shift state cleanup
-- Use `phasesSinceWorkShift` condition to enforce cooldown between shifts
-- Use `phasesWorkedThisShift` completion condition to end shifts after duration
-- Emergency exits (hunger > 80, fatigue > 90) force early shift end but cooldown still applies
-- Commuting behavior should respect cooldown to prevent wandering loops during breaks
-
-**Shift Staggering Pattern (Reusable)**:
-When adding scheduled behaviors (patrols, training, missions), use this pattern:
-1. Add state tracker to agent: `{ phasesInActivity, lastEndPhase, ...params }`
-2. Entry cooldown condition: `phasesSince<Activity>`
-3. Duration completion: `phases<Activity>ThisSession`
-4. Stagger first cycle: Initialize with `phasesInActivity = random(0, duration/2)`
-5. Config-driven: All durations/cooldowns in JSON
-
-## Economic Verticals
-
-The economy has separate supply chains (verticals):
-
-**Food Vertical (Sustenance):**
-```
-Provisions Factory → Retail Shop/Restaurant → Agent
-```
-
-**Alcohol Vertical (Discretionary):**
-```
-Brewery → Pub → Agent
-```
-
-**Knowledge Economy (B2B):**
-```
-Server Factory → Corporation (buys data_storage)
-                      ↓
-               Office/Lab (produces valuable_data using data_storage capacity)
-```
-- 1 data_storage = 10 valuable_data capacity (configurable in economy.json)
-- Production capped to available storage
-- Orgs buy more storage when 80% full
-
-Each vertical is independent. Adding a new vertical requires:
-1. Production location template (wholesale tag)
-2. Retail location template (retail tag + inventoryGood) - or null for B2B only
-3. Consumer/business behavior (when/why to buy)
-4. Restock logic (wholesale → retail) or procurement logic (B2B)
+**Shift staggering pattern** (work, patrols, missions):
+1. State: `{ phasesInActivity, lastEndPhase }`
+2. Entry: `phasesSince<Activity>` cooldown condition
+3. Exit: `phases<Activity>ThisSession` completion condition
+4. Stagger: Initialize `phasesInActivity = random(0, duration/2)`
 
 ## Agent State Management
 
@@ -331,88 +195,48 @@ See the helpers file for full documentation.
 
 ## Common Pitfalls
 
-### ID Generation (CRITICAL)
-**Never create location/org IDs manually** - always use IdGenerator:
+**ID Generation:**
+- Never create IDs manually. Always use `idGen.nextLocationId()` / `idGen.nextOrgId()`.
+- CityGenerator and runtime share same IdGenerator to prevent collisions.
 
-❌ **Bad (causes ID collisions):**
-```typescript
-let locationIdCounter = 0;
-function createLocation() {
-  return { id: `loc_${++locationIdCounter}`, ... };
-}
-```
+**State Management:**
+- Use `AgentStateHelpers` for agent state (never direct mutation).
+- Always return new state in tick processing (no mutations).
+- Revenue goes to org wallet, not agent.
 
-✅ **Good (unified ID generation):**
-```typescript
-function createLocation(idGen: IdGenerator) {
-  return { id: idGen.nextLocationId(), ... };
-}
-```
-
-**Why this matters**: CityGenerator and runtime both create entities. If they use separate counters, IDs will collide, causing runtime entities to replace city-gen entities, breaking all references and corrupting state.
-
-**Historical bug**: Before fix, Office 0 (created at runtime) got ID `loc_2`, which was already assigned to Grid Works (created during city gen). Office 0 replaced Grid Works in the locations array, but agents still referenced `loc_2`, causing workers to commute to the wrong workplace. This caused catastrophic business failures (0-33% survival rate). After unifying IdGenerator, success rate improved to 100%.
-
-### State Management
-- Directly modifying agent state fields (use `AgentStateHelpers`)
-- Mutations in tick processing (always return new state)
-- Revenue to wrong wallet (always org wallet, not agent)
-
-### Bidirectional Relationships (CRITICAL)
-When entities reference each other bidirectionally, **both sides MUST stay in sync**:
+**Bidirectional Relationships:**
+Must update both sides:
 - `org.locations[]` ↔ `location.owner`
 - `location.employees[]` ↔ `agent.employedAt`
 - `agent.residence` ↔ `location.residents[]`
 
-**Always update both sides** when modifying relationships:
-```typescript
-// ❌ Bad: Only updates one side
-agent.employedAt = locationId;
+Use `setEmployment()` / `clearEmployment()` to maintain sync. Enable invariant checking in `simulation.json`.
 
-// ✅ Good: Updates both sides
-agent = setEmployment(agent, locationId, orgId, salary);
-location.employees = [...location.employees, agentId];
-```
+**Behavior System:**
+- `completionConditions: { never: true }` needs escape route (blocks lower priorities).
+- Entry conditions not re-checked after start.
+- JSON order matters (first match wins at same priority).
+- Return updated locations/orgs from executors.
 
-**Use invariant checking** (`simulation.json` → `invariantChecking.enabled`) to catch desync bugs early. The checker validates all bidirectional relationships every tick.
+**System Organization:**
+- 800 line max. Split before unmaintainable.
+- One responsibility per system.
+- Circular deps? Extract to shared module.
+- Test incrementally during refactors.
+- Preserve module state initial values (seeded tests).
 
-### Behavior System
-- Using `completionConditions: { never: true }` without escape (blocks all lower-priority behaviors)
-- Forgetting that entry conditions aren't re-checked after task starts
-- Behavior order in JSON matters - first matching behavior wins at same priority
-- Not returning updated locations/orgs from executors (state gets lost)
-
-### System Organization
-- Letting systems grow beyond 800 lines (split before they become unmaintainable)
-- Mixing multiple responsibilities in one system (payroll + restocking + agent decisions = bad)
-- Creating circular dependencies between systems (extract to shared service instead)
-- Not testing after each migration step (incremental testing catches errors early)
-- Changing module-level state initial values during migration (breaks reproducibility)
-
-### General
-- Using hardcoded types instead of tags
-- Forgetting to log to ActivityLog
-- Adding unused template fields (YAGNI violation)
-- Hardcoding template names in CityGenerator (use dynamic lookup via `ownerOrgTemplate`)
+**General:**
+- Use tags, not hardcoded types.
+- Log significant events to ActivityLog.
+- No unused template fields (YAGNI).
+- Use dynamic template lookup (`ownerOrgTemplate`).
 
 ## Metrics Instrumentation
 
-Use the singleton pattern in `Metrics.ts` to track simulation events:
+Use `Metrics.ts` singleton to track events:
+- Sales: `trackRetailSale()` / `trackWholesaleSale()` / `trackB2BSale()`
+- Money: `trackWagePayment()` / `trackDividendPayment()`
+- Agents: `trackDeath()` / `trackHire()` / `trackFire()` / `trackImmigrant()`
+- Business: `trackBusinessOpened()` / `trackBusinessClosed()`
 
-```typescript
-import { trackRetailSale, trackB2BSale, trackDeath } from '../Metrics';
-
-// When a transaction happens:
-trackRetailSale('provisions');
-trackB2BSale('data_storage');
-trackDeath(agent.name, 'starvation');
-```
-
-Available tracking functions:
-- `trackRetailSale(good)` / `trackWholesaleSale(good)` / `trackB2BSale(good)`
-- `trackWagePayment(amount)` / `trackDividendPayment(amount)`
-- `trackDeath(name, cause)` / `trackHire()` / `trackFire()`
-- `trackBusinessOpened(name)` / `trackBusinessClosed(name)`
-- `trackImmigrant()`
-
-These are no-ops if metrics aren't active, so safe to call anywhere.
+Safe to call anywhere (no-ops if metrics inactive).
