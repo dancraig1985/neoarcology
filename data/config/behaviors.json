@@ -98,10 +98,7 @@
         "phasesSinceDeliveryShift": 8
       },
       "completionConditions": {
-        "or": [
-          { "phasesDeliveredThisShift": 64 },
-          { "needsAbove": { "hunger": 80 } }
-        ]
+        "needsAbove": { "hunger": 80 }
       },
       "params": {}
     },

@@ -1725,6 +1725,17 @@ function executeDeliverGoodsBehavior(
       };
     }
 
+    // Check if agent is too tired to start a new delivery (prevents mid-delivery interruption by urgent_rest)
+    if (agent.needs.fatigue >= 85) {
+      // Too tired - don't assign delivery, let them rest first
+      return {
+        agent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false, // Keep shift going but idle until rested
+      };
+    }
+
     // Assign first pending delivery to this driver
     deliveryRequest = pendingDeliveries[0]!;
     const availableVehicle = findAvailableVehicle(logisticsCompany, ctx.vehicles ?? []);
