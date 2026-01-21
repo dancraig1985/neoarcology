@@ -256,8 +256,7 @@ export function tryPlaceGoodsOrder(
     return null; // Don't place duplicate orders
   }
 
-  // Find orgs that have wholesale locations (factories/producers)
-  // Don't filter by current stock - seller will find stock during fulfillment
+  // Find orgs that have wholesale locations AND produce the needed good
   const wholesaleOrgs = orgs.filter((org) => {
     // Must own at least one wholesale location
     const hasWholesaleLocation = locations.some(
@@ -265,7 +264,16 @@ export function tryPlaceGoodsOrder(
     );
     // Don't order from yourself
     const isNotSelf = org.id !== buyerOrg.id;
-    return hasWholesaleLocation && isNotSelf;
+
+    // CRITICAL: Must have some inventory of this good type (or have produced it before)
+    // Check all org locations for this good type
+    const hasOrProducesGood = locations.some((loc) => {
+      if (!org.locations.includes(loc.id)) return false;
+      const stock = getGoodsCount(loc, goodType);
+      return stock > 0;
+    });
+
+    return hasWholesaleLocation && isNotSelf && hasOrProducesGood;
   });
 
   if (wholesaleOrgs.length === 0) {

@@ -1739,8 +1739,48 @@ function executeDeliverGoodsBehavior(
       };
     }
 
+    // CRITICAL: If agent is still in a vehicle from a previous delivery, exit it first
+    let currentAgent = agent;
+    let currentVehicles = ctx.vehicles ?? [];
+
+    if (agent.inVehicle) {
+      const oldVehicle = currentVehicles.find(v => v.id === agent.inVehicle);
+      if (oldVehicle) {
+        ActivityLog.warning(
+          ctx.phase,
+          'delivery',
+          `agent still in vehicle ${oldVehicle.id} from previous delivery - exiting before new assignment`,
+          agent.id,
+          agent.name
+        );
+
+        const exitResult = exitVehicle(oldVehicle, agent, ctx.buildings, ctx.phase);
+        if (exitResult.success) {
+          currentAgent = exitResult.agent;
+          currentVehicles = currentVehicles.map(v =>
+            v.id === oldVehicle.id ? exitResult.vehicle : v
+          );
+        } else {
+          // Can't exit old vehicle - can't assign new delivery
+          ActivityLog.warning(
+            ctx.phase,
+            'delivery',
+            `can't exit old vehicle ${oldVehicle.id} (${exitResult.reason}) - skipping assignment`,
+            agent.id,
+            agent.name
+          );
+          return {
+            agent,
+            locations: ctx.locations,
+            orgs: ctx.orgs,
+            complete: false,
+          };
+        }
+      }
+    }
+
     // Assign delivery
-    const assignedDelivery = assignDeliveryToDriver(deliveryRequest, agent, availableVehicle, ctx.phase);
+    const assignedDelivery = assignDeliveryToDriver(deliveryRequest, currentAgent, availableVehicle, ctx.phase);
     const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
       req.id === deliveryRequest!.id ? assignedDelivery : req
     );
@@ -1749,8 +1789,8 @@ function executeDeliverGoodsBehavior(
       ctx.phase,
       'delivery',
       `assigned to delivery ${assignedDelivery.id}, vehicle ${availableVehicle.id}`,
-      agent.id,
-      agent.name
+      currentAgent.id,
+      currentAgent.name
     );
 
     // Update task with delivery ID and next phase
@@ -1764,9 +1804,10 @@ function executeDeliverGoodsBehavior(
     };
 
     return {
-      agent: setTask(agent, updatedTask),
+      agent: setTask(currentAgent, updatedTask),
       locations: ctx.locations,
       orgs: ctx.orgs,
+      vehicles: currentVehicles,
       deliveryRequests: updatedDeliveryRequests,
       complete: false,
     };
@@ -1861,6 +1902,14 @@ function executeDeliverGoodsBehavior(
 
   // PHASE: boarding - Board the vehicle at depot
   if (deliveryPhase === 'boarding') {
+    ActivityLog.info(
+      ctx.phase,
+      'delivery',
+      `boarding vehicle ${assignedVehicle.id} for delivery ${deliveryId}`,
+      agent.id,
+      agent.name
+    );
+
     // Agent must board the vehicle as operator
     if (!agent.inVehicle) {
       const boardResult = boardVehicle(assignedVehicle, agent, true, ctx.phase);
@@ -1928,6 +1977,14 @@ function executeDeliverGoodsBehavior(
     // Check if vehicle is at pickup building
     if (assignedVehicle.currentBuilding === fromBuilding.id) {
       // Arrived - move to loading phase
+      ActivityLog.info(
+        ctx.phase,
+        'delivery',
+        `arrived at pickup building ${fromBuilding.name}, starting loading for delivery ${deliveryId}`,
+        agent.id,
+        agent.name
+      );
+
       const updatedTask: AgentTask = {
         ...task,
         params: { ...task.params, deliveryPhase: 'loading' },
@@ -1991,6 +2048,15 @@ function executeDeliverGoodsBehavior(
     }
 
     // Start vehicle travel to pickup building
+    const distance = Math.abs(currentBuilding.x - fromBuilding.x) + Math.abs(currentBuilding.y - fromBuilding.y);
+    ActivityLog.info(
+      ctx.phase,
+      'delivery',
+      `starting travel to pickup (${currentBuilding.name} → ${fromBuilding.name}, distance ${distance}) for delivery ${deliveryId}`,
+      agent.id,
+      agent.name
+    );
+
     const travelingVehicle = startVehicleTravel(
       assignedVehicle,
       currentBuilding,
@@ -2015,6 +2081,14 @@ function executeDeliverGoodsBehavior(
 
   // PHASE: loading - Exit vehicle, load goods, board again
   if (deliveryPhase === 'loading') {
+    ActivityLog.info(
+      ctx.phase,
+      'delivery',
+      `loading phase - agent.inVehicle=${agent.inVehicle}, vehicle.id=${assignedVehicle.id}, vehicle.operator=${assignedVehicle.operator}`,
+      agent.id,
+      agent.name
+    );
+
     // If in vehicle, exit first
     if (agent.inVehicle) {
       const exitResult = exitVehicle(assignedVehicle, agent, ctx.buildings, ctx.phase);
@@ -2023,12 +2097,42 @@ function executeDeliverGoodsBehavior(
           v.id === assignedVehicle.id ? exitResult.vehicle : v
         );
 
+        ActivityLog.info(
+          ctx.phase,
+          'delivery',
+          `exited vehicle to load cargo for delivery ${deliveryId}`,
+          agent.id,
+          agent.name
+        );
+
         return {
           agent: exitResult.agent,
           locations: ctx.locations,
           orgs: ctx.orgs,
           vehicles: updatedVehicles,
           complete: false,
+        };
+      } else {
+        // Failed to exit vehicle - fail delivery
+        ActivityLog.warning(
+          ctx.phase,
+          'delivery',
+          `failed to exit vehicle during loading (reason: ${exitResult.reason || 'unknown'}) - failing delivery ${deliveryId}`,
+          agent.id,
+          agent.name
+        );
+
+        const failedDelivery = failDelivery(deliveryRequest!, `cannot exit vehicle: ${exitResult.reason || 'unknown'}`, ctx.phase);
+        const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
+          req.id === deliveryRequest!.id ? failedDelivery : req
+        );
+
+        return {
+          agent: clearTask(agent),
+          locations: ctx.locations,
+          orgs: ctx.orgs,
+          deliveryRequests: updatedDeliveryRequests,
+          complete: true,
         };
       }
     }
