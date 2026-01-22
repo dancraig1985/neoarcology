@@ -172,6 +172,7 @@
         "needsAbove": { "leisure": 40 },
         "inventoryBelow": { "luxury_goods": 1 },
         "hasCreditsAbove": 249,
+        "marketHasGoods": "luxury_goods",
         "notTraveling": true
       },
       "completionConditions": {
