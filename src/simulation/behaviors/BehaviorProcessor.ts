@@ -11,6 +11,8 @@ import type { SimulationContext } from '../../types/SimulationContext';
 import { processTravel, isTraveling } from '../systems/TravelSystem';
 import { evaluateConditions, isTaskComplete, type EvaluationContext } from './ConditionEvaluator';
 import { executeBehavior, executeCurrentTask, type BehaviorContext } from './BehaviorRegistry';
+import { exitVehicle } from '../systems/VehicleSystem';
+import { ActivityLog } from '../ActivityLog';
 
 // Import executors to register them
 import './executors';
@@ -47,6 +49,47 @@ function canInterrupt(incomingPriority: TaskPriority, currentPriority: TaskPrior
  */
 function clearTask(agent: Agent): Agent {
   return { ...agent, currentTask: undefined };
+}
+
+/**
+ * Clear task with automatic vehicle exit if agent is in a vehicle
+ * Prevents agents from getting stuck with currentLocation=undefined
+ */
+function clearTaskSafely(
+  agent: Agent,
+  vehicles: Vehicle[],
+  buildings: Building[],
+  phase: number,
+  behaviorName?: string
+): { agent: Agent; vehicles: Vehicle[] } {
+  let cleanedAgent = agent;
+  let updatedVehicles = vehicles;
+
+  // Exit vehicle if agent is in one
+  if (cleanedAgent.inVehicle) {
+    const vehicle = vehicles.find(v => v.id === cleanedAgent.inVehicle);
+    if (vehicle) {
+      const exitResult = exitVehicle(vehicle, cleanedAgent, buildings, phase);
+      if (exitResult.success) {
+        cleanedAgent = exitResult.agent;
+        updatedVehicles = vehicles.map(v =>
+          v.id === vehicle.id ? exitResult.vehicle : v
+        );
+        ActivityLog.info(
+          phase,
+          'behavior',
+          `auto-exited ${vehicle.name} on task completion${behaviorName ? ` (${behaviorName})` : ''}`,
+          cleanedAgent.id,
+          cleanedAgent.name
+        );
+      }
+    }
+  }
+
+  return {
+    agent: clearTask(cleanedAgent),
+    vehicles: updatedVehicles
+  };
 }
 
 /**
@@ -247,7 +290,9 @@ export function processAgentBehavior(
 
     // Check if current task is complete
     if (currentBehavior && isTaskComplete(currentAgent, currentBehavior.completionConditions, evalCtx)) {
-      currentAgent = clearTask(currentAgent);
+      const clearResult = clearTaskSafely(currentAgent, currentVehicles, buildings, phase, currentBehavior.name);
+      currentAgent = clearResult.agent;
+      currentVehicles = clearResult.vehicles;
       // Fall through to find new task
     } else if (currentBehavior) {
       // Continue executing current task
@@ -264,8 +309,10 @@ export function processAgentBehavior(
         newOrg: result.newOrg,
       };
     } else {
-      // Unknown behavior - clear task
-      currentAgent = clearTask(currentAgent);
+      // Unknown behavior - clear task safely
+      const clearResult = clearTaskSafely(currentAgent, currentVehicles, buildings, phase);
+      currentAgent = clearResult.agent;
+      currentVehicles = clearResult.vehicles;
     }
   }
 
