@@ -87,7 +87,8 @@
     "medical": { "size": 0.2, "retailPrice": 40, "wholesalePrice": 25 },
     "raw_materials": { "size": 1, "retailPrice": 15, "wholesalePrice": 10 },
     "fuel": { "size": 0.5, "retailPrice": 30, "wholesalePrice": 20 },
-    "cyberware": { "size": 0.3, "retailPrice": 300, "wholesalePrice": 200 }
+    "cyberware": { "size": 0.3, "retailPrice": 300, "wholesalePrice": 200 },
+    "corpse": { "size": 5.0, "wholesalePrice": 0 }
   },
   "defaultGoodsSize": 1,
   "salary": {

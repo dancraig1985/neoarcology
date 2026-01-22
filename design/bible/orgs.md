@@ -29,6 +29,23 @@ This means:
 
 The system is flexible. Don't think of orgs as having a fixed "business type" - they're just financial containers that own locations.
 
+### Special Org Types
+
+**Logistics Companies:**
+- Template: `logistics_company`
+- Tags: `corporation`, `logistics`, `legal`
+- Owns depots and cargo trucks
+- Employs drivers who fulfill delivery requests
+- Revenue from delivery fees
+
+**Public Health Service (PLAN-039):**
+- Template: `public_health`
+- Tags: `corporation`, `public_service`, `legal`
+- Owns clinics and ambulances
+- Employs corpse collectors who patrol for deceased agents
+- Public service (no revenue, operates on fixed budget of 75k)
+- Single city-wide service (1 org, 1 clinic, 2 ambulances)
+
 ## The Business Lifecycle
 
 ### Birth

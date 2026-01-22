@@ -1,0 +1,26 @@
+{
+  "id": "clinic",
+  "name": "Public Health Clinic",
+  "description": "City clinic where corpses are collected and disposed of",
+  "tags": ["health", "industrial", "clinic"],
+  "spawnConstraints": {
+    "allowedZones": ["industrial", "commercial"],
+    "floorRange": [0, 2],
+    "preferGroundFloor": true,
+    "minDistanceFromCenter": 2,
+    "maxPerCity": 2
+  },
+  "balance": {
+    "openingCost": 1000,
+    "operatingCost": 0,
+    "employeeSlots": 5,
+    "salaryTier": "unskilled",
+    "startingInventory": 0,
+    "inventoryCapacity": 200
+  },
+  "generation": {
+    "count": { "min": 1, "max": 1 },
+    "spawnAtStart": true,
+    "ownerOrgTemplate": "public_health"
+  }
+}

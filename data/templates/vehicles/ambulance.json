@@ -1,0 +1,10 @@
+{
+  "id": "ambulance",
+  "name": "Health Service Vehicle",
+  "description": "Public health ambulance for corpse collection",
+  "cargoCapacity": 25,
+  "generation": {
+    "spawnAtStart": false,
+    "ownerOrgTemplate": "public_health"
+  }
+}

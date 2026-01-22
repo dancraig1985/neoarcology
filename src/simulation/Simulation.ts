@@ -13,7 +13,7 @@ import { createTransactionHistory } from '../types/Transaction';
 import { createTimeState, advancePhase, formatTime, type TimeState } from './TickEngine';
 import { ActivityLog } from './ActivityLog';
 import { createSeededRNG } from './SeededRandom';
-import { processAgentPhase, countLivingAgents, countDeadAgents } from './systems/AgentSystem';
+import { processAgentPhase, countLivingAgents, countDeadAgents, addCorpseToLocation } from './systems/AgentSystem';
 import { fixHomelessAgents } from './systems/AgentEconomicSystem';
 import { tryPlaceGoodsOrder, processGoodsOrders, getShopGoodsList } from './systems/SupplyChainSystem';
 import { processWeeklyEconomy } from './systems/PayrollSystem';
@@ -22,6 +22,7 @@ import { processFactoryProduction } from './systems/OrgSystem';
 import { processOrgBehaviors } from './systems/OrgBehaviorSystem';
 import { cleanupDeadEmployees, cleanupDeadResidents } from './systems/LocationSystem';
 import { checkImmigration } from './systems/ImmigrationSystem';
+import { processCorpseDisposal } from './systems/CorpseDisposalSystem';
 import { processVehicleTravel, cleanupAllVehicles } from './systems/VehicleSystem';
 import { cleanupOldDeliveries, cancelStaleGoodsOrders } from './systems/DeliverySystem';
 import { tickCleanup as coordinatorTickCleanup } from './systems/DeliveryCoordinator';
@@ -206,6 +207,14 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   }
 
   // 2. Process biological needs (hunger, eating, travel)
+  // Track agent locations before processing (for corpse spawning - PLAN-039)
+  const agentLocationsBeforeDeath = new Map<string, string>();
+  for (const agent of updatedAgents) {
+    if (agent.currentLocation && agent.status !== 'dead') {
+      agentLocationsBeforeDeath.set(agent.id, agent.currentLocation);
+    }
+  }
+
   updatedAgents = updatedAgents.map((agent) =>
     processAgentPhase(agent, newTime.currentPhase, config.agents, updatedLocations, context)
   );
@@ -215,6 +224,23 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
 
   // 2c. Clean up dead residents from apartment resident lists (frees apartments for rent)
   updatedLocations = cleanupDeadResidents(updatedLocations, updatedAgents, newTime.currentPhase);
+
+  // 2c2. Add corpses to locations where agents died (PLAN-039)
+  const agentsWhoJustDied = updatedAgents.filter(
+    a => a.status === 'dead' && a.destroyed === newTime.currentPhase
+  );
+  for (const deadAgent of agentsWhoJustDied) {
+    const deathLocationId = agentLocationsBeforeDeath.get(deadAgent.id);
+    if (deathLocationId) {
+      const deathLocation = updatedLocations.find(loc => loc.id === deathLocationId);
+      if (deathLocation) {
+        const updatedLocation = addCorpseToLocation(deathLocation, newTime.currentPhase);
+        updatedLocations = updatedLocations.map(loc =>
+          loc.id === updatedLocation.id ? updatedLocation : loc
+        );
+      }
+    }
+  }
 
   // 2d. Clean up dead agents from vehicles (operators and passengers)
   let updatedVehicles = cleanupAllVehicles(state.vehicles, updatedAgents, newTime.currentPhase);
@@ -360,6 +386,9 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
     // Start new week for metrics tracking
     startNewWeek(state.metrics, newTime.week);
   }
+
+  // 5. Corpse disposal at clinics (PLAN-039)
+  updatedLocations = processCorpseDisposal(updatedLocations, newTime.currentPhase);
 
   // Build updated state
   const updatedState: SimulationState = {

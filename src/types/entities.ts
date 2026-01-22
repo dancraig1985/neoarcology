@@ -112,6 +112,16 @@ export interface Agent extends Entity {
     };
   };
 
+  // Corpse collection shift state (PLAN-039, only present when employed at clinic)
+  corpseShiftState?: {
+    phasesWorked: number; // Phases worked in current corpse shift
+    lastShiftEndPhase: number; // When last shift ended (for cooldown)
+    shiftStartPhase: number; // When current shift started
+    currentPhase: 'scanning' | 'traveling_to_corpse' | 'loading' | 'returning'; // Current collection phase
+    targetLocationId?: string; // Location with corpse being collected
+    vehicleId?: string; // Ambulance being used
+  };
+
   // Pub visit state (only present when visiting pub)
   pubVisitState?: {
     phasesAtPub: number; // Phases spent at pub in current visit

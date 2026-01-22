@@ -55,7 +55,17 @@ Death is permanent. A dead agent:
 - No longer participates in the simulation
 - Loses all possessions (credits, inventory)
 - If they owned a business, it closes (see Organizations)
+- **Leaves a corpse** at their death location for public health collection (PLAN-039)
 - **Use `setDead()` from AgentStateHelpers** - it clears all state atomically
+
+**Corpse Collection System (PLAN-039):**
+When an agent dies, a corpse is added to the inventory of their current location. The public health service automatically:
+1. Scans for locations with corpses
+2. Dispatches ambulances to collect them (up to 5 per trip)
+3. Delivers corpses to the clinic
+4. Disposes of corpses at 5 per phase
+
+Public health workers operate on 16-phase shifts with 8-phase cooldowns, using simplified 3-phase collection cycles (scanning → loading → returning).
 
 ## Housing
 

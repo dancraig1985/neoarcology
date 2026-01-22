@@ -176,6 +176,17 @@ export function createLocationColumns(
       sortValue: (l) => l.inventory['provisions'] ?? 0,
     },
     {
+      key: 'inventory.corpse',
+      label: 'Corpses',
+      width: 60,
+      align: 'right',
+      render: (l) => {
+        const count = l.inventory['corpse'] ?? 0;
+        return count > 0 ? count.toString() : '-';
+      },
+      sortValue: (l) => l.inventory['corpse'] ?? 0,
+    },
+    {
       key: 'employees',
       label: 'Staff',
       width: 50,

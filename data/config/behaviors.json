@@ -103,6 +103,27 @@
       "params": {}
     },
     {
+      "id": "collecting_corpses",
+      "name": "Collecting Corpses",
+      "priority": "normal",
+      "executor": "collect_corpses",
+      "conditions": {
+        "hasEmployment": true,
+        "atWorkplace": true,
+        "atLocationWithTag": "clinic",
+        "needsBelow": { "hunger": 80, "fatigue": 90 },
+        "phasesSinceCorpseShift": 8
+      },
+      "completionConditions": {
+        "or": [
+          { "phasesCorpseShiftWorked": 16 },
+          { "needsAbove": { "hunger": 80 } },
+          { "needsAbove": { "fatigue": 90 } }
+        ]
+      },
+      "params": {}
+    },
+    {
       "id": "working",
       "name": "Working",
       "priority": "normal",

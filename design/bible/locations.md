@@ -71,6 +71,23 @@ Tagged with `depot`. These handle goods delivery:
 - Drivers use company trucks to pick up and deliver cargo
 - Delivery workflow: claim truck → drive to pickup → load cargo → drive to delivery → unload → return to depot
 
+### Public Health Locations (PLAN-039)
+Tagged with `clinic`. These handle corpse collection and disposal:
+- `clinic` - Public health clinic for corpse disposal
+  - Owned by public health service (special org type with 'public_service' tag)
+  - Employs corpse collectors who patrol the city
+  - Houses ambulances (vehicles parked at clinic building)
+  - 5 employee slots per clinic
+  - 200 inventory capacity for corpse storage
+  - Disposes corpses at 5 per phase
+
+**Clinic Employment:**
+- Only agents employed at clinics can collect corpses (gated by `atLocationWithTag: "clinic"` behavior condition)
+- Collectors use ambulances to transport corpses (capacity: 5 corpses per trip)
+- Collection workflow: scan for corpses → board ambulance → travel to location → load corpses → return to clinic → unload → repeat
+- Simplified 3-phase cycle (vs 6-phase delivery): scanning → loading → returning
+- 16-phase shifts with 8-phase cooldowns (vs 64-phase delivery shifts)
+
 ### Retail Locations
 Tagged with `retail`. These sell to consumers:
 - `retail_shop` - **Multi-product "corner store"** - Sells both provisions (survival) AND entertainment_media (leisure)

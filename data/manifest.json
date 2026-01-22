@@ -1,9 +1,10 @@
 {
-  "generated": "2026-01-22T15:28:14.417Z",
+  "generated": "2026-01-22T16:43:51.671Z",
   "templates": {
     "orgs": [
       "corporation.json",
       "logistics_company.json",
+      "public_health.json",
       "small_business.json"
     ],
     "agents": [
@@ -12,6 +13,7 @@
     "locations": [
       "apartment.json",
       "brewery.json",
+      "clinic.json",
       "depot.json",
       "laboratory.json",
       "luxury_boutique.json",

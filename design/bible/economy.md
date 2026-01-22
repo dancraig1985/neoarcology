@@ -45,6 +45,21 @@ media     both food   entertainment
           + media     (leisure need)
 ```
 
+### Corpse (Public Health Good - PLAN-039)
+```
+Agent Death → Public Health Service → Disposal
+      │              │                    │
+   spawns at      collects via        disposes at
+   location        ambulance           5/phase rate
+```
+
+**Non-commercial good for public health:**
+- Size: 5.0 (limits ambulance capacity to 5 corpses)
+- Price: 0 (public service, no commerce)
+- Generated automatically when agents die
+- Collected by public health workers using ambulances
+- Disposed at clinics at 5 corpses per phase
+
 **Middle-class leisure economy:**
 - Cheaper than luxury goods (15 credits retail vs 200)
 - Offices produce 2 entertainment_media per employee per cycle (16 phases)

@@ -183,6 +183,32 @@ function handleStarvation(agent: Agent, phase: number, context: SimulationContex
 }
 
 /**
+ * Add corpse to location inventory after agent death (PLAN-039)
+ */
+export function addCorpseToLocation(
+  location: Location,
+  phase: number
+): Location {
+  const currentCorpses = location.inventory['corpse'] ?? 0;
+
+  ActivityLog.warning(
+    phase,
+    'corpse',
+    `corpse added to inventory (total: ${currentCorpses + 1})`,
+    'system',
+    location.name
+  );
+
+  return {
+    ...location,
+    inventory: {
+      ...location.inventory,
+      corpse: currentCorpses + 1,
+    },
+  };
+}
+
+/**
  * Get count of living agents
  */
 export function countLivingAgents(agents: Agent[]): number {

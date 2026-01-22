@@ -1648,5 +1648,88 @@ export function generateCity(config: LoadedConfig, idGen: IdGenerator, seed: num
 
   console.log(`[CityGenerator] Spawned ${vehicles.length} vehicles for logistics companies`);
 
+  // PLAN-039: Spawn public health service with clinic and ambulances
+  const publicHealthTemplate = config.orgTemplates['public_health'];
+  const clinicTemplate = config.locationTemplates['clinic'];
+
+  if (publicHealthTemplate && clinicTemplate) {
+    const unemployed = agents.filter(a => a.status === 'available');
+    const leader = unemployed.find(a => !organizations.some(o => o.leader === a.id));
+
+    if (leader) {
+      const credits = 75000;
+      const orgName = "City Public Health Service";
+
+      const healthOrg = createOrgFromTemplate(
+        orgName,
+        publicHealthTemplate,
+        leader.id,
+        credits,
+        0,
+        rand,
+        idGen
+      );
+
+      if (publicHealthTemplate.generation?.leaderBecomesEmployed) {
+        leader.status = 'employed';
+        leader.employer = healthOrg.id;
+      }
+
+      organizations.push(healthOrg);
+
+      // Create clinic
+      const buildingPlacement = findBuildingForLocation(
+        buildings,
+        clinicTemplate.tags ?? [],
+        buildingOccupancy,
+        undefined,
+        grid,
+        rand
+      );
+
+      if (buildingPlacement) {
+        const clinic = createLocationFromTemplate(
+          `${orgName} Clinic`,
+          clinicTemplate,
+          buildingPlacement.building.x,
+          buildingPlacement.building.y,
+          buildingPlacement.floor,
+          healthOrg.id,
+          0,
+          idGen,
+          buildingPlacement
+        );
+
+        clinic.ownerType = 'org';
+        locations.push(clinic);
+        healthOrg.locations.push(clinic.id);
+
+        leader.currentLocation = clinic.id;
+        leader.employedAt = clinic.id;
+        clinic.employees.push(leader.id);
+
+        // Spawn 2 ambulances
+        for (let v = 0; v < 2; v++) {
+          const vehicleId = `vehicle_${healthOrg.id}_ambulance_${v}`;
+          const vehicleName = `${orgName} Ambulance #${v + 1}`;
+
+          const ambulance = createVehicle(
+            vehicleId,
+            vehicleName,
+            'ambulance',
+            healthOrg,
+            buildingPlacement.building,
+            25,
+            0
+          );
+
+          vehicles.push(ambulance);
+        }
+
+        console.log(`[CityGenerator] Created public health service with clinic and 2 ambulances`);
+      }
+    }
+  }
+
   return { grid, buildings, locations, organizations, agents, vehicles };
 }

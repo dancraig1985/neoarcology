@@ -2724,6 +2724,568 @@ function executeRelaxHomeBehavior(
 }
 
 // ============================================
+// Corpse Collection Executor (PLAN-039)
+// ============================================
+
+/**
+ * Corpse collection executor - handles corpse collection for public health workers
+ * Used by: collecting_corpses behavior
+ *
+ * Simplified 3-phase system:
+ * 1. scanning: Find corpses, board ambulance, travel to corpse location
+ * 2. loading: Load corpses into ambulance (instant)
+ * 3. returning: Return to clinic, unload (instant), repeat
+ *
+ * Shift duration: 16 phases (not 64 like delivery)
+ */
+function executeCorpseCollectionBehavior(
+  agent: Agent,
+  task: AgentTask,
+  ctx: BehaviorContext
+): TaskResult {
+  // Initialize corpse shift state if first time
+  if (!agent.corpseShiftState) {
+    const shiftDuration = 16;
+    const randomOffset = randomInt(0, 8, ctx.context.rng); // 0-8 phase offset
+
+    const newAgent = {
+      ...agent,
+      corpseShiftState: {
+        phasesWorked: randomOffset,
+        lastShiftEndPhase: 0,
+        shiftStartPhase: ctx.phase,
+        currentPhase: 'scanning' as const,
+      },
+    };
+
+    ActivityLog.info(
+      ctx.phase,
+      'corpse',
+      `started corpse collection shift (first shift reduced by ${randomOffset} phases)`,
+      agent.id,
+      agent.name
+    );
+
+    return {
+      agent: newAgent.currentTask ? newAgent : setTask(newAgent, task),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: false,
+    };
+  }
+
+  // Increment phases worked each tick
+  const updatedAgent = {
+    ...agent,
+    corpseShiftState: {
+      ...agent.corpseShiftState,
+      phasesWorked: agent.corpseShiftState.phasesWorked + 1,
+    },
+  };
+  agent = updatedAgent;
+
+  // Check if shift should end (16 phases, only when idle in scanning phase)
+  const shiftDuration = 16;
+  const currentPhase = agent.corpseShiftState.currentPhase;
+
+  if (agent.corpseShiftState.phasesWorked >= shiftDuration && currentPhase === 'scanning' && !agent.corpseShiftState.targetLocationId) {
+    // Shift complete
+    const finishedAgent = {
+      ...agent,
+      corpseShiftState: {
+        ...agent.corpseShiftState,
+        lastShiftEndPhase: ctx.phase,
+        phasesWorked: 0,
+      },
+    };
+
+    ActivityLog.info(
+      ctx.phase,
+      'corpse',
+      `completed corpse collection shift (${shiftDuration} phases)`,
+      agent.id,
+      agent.name
+    );
+
+    return {
+      agent: clearTask(finishedAgent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // Find the clinic (agent's workplace)
+  const clinic = ctx.locations.find(loc => loc.id === agent.employedAt);
+  if (!clinic) {
+    ActivityLog.warning(
+      ctx.phase,
+      'corpse',
+      `clinic not found - cannot collect corpses`,
+      agent.id,
+      agent.name
+    );
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // Find clinic's owner org to get ambulances
+  const healthOrg = ctx.orgs.find(org => org.id === clinic.owner);
+  if (!healthOrg) {
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // State machine
+  const phase = agent.corpseShiftState.currentPhase;
+
+  // SCANNING: Find corpses, board ambulance, start travel
+  if (phase === 'scanning') {
+    // Find locations with corpses
+    const locationsWithCorpses = ctx.locations.filter(
+      loc => (loc.inventory['corpse'] ?? 0) > 0
+    );
+
+    if (locationsWithCorpses.length === 0) {
+      // No corpses available - idle at clinic
+      if (ctx.phase % 10 === 0) {
+        ActivityLog.info(
+          ctx.phase,
+          'corpse',
+          `no corpses to collect, idling at clinic`,
+          agent.id,
+          agent.name
+        );
+      }
+      return {
+        agent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Find nearest location with corpses
+    const targetLocation = findNearestLocation(
+      agent,
+      ctx.locations,
+      loc => (loc.inventory['corpse'] ?? 0) > 0
+    );
+
+    if (!targetLocation) {
+      return {
+        agent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Find available ambulance
+    const availableVehicles = (ctx.vehicles ?? []).filter(
+      v => v.template === 'ambulance' && healthOrg.id === v.owner && !v.operator
+    );
+
+    if (availableVehicles.length === 0) {
+      // No ambulances available - wait
+      return {
+        agent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    const ambulance = availableVehicles[0]!;
+
+    // Board ambulance
+    const boardResult = boardVehicle(ambulance, agent, true, ctx.phase);
+    if (!boardResult.success) {
+      return {
+        agent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Start travel to corpse location
+    const targetBuilding = ctx.buildings.find(b => b.id === targetLocation.building);
+    const clinicBuilding = ctx.buildings.find(b => b.id === clinic.building);
+
+    if (!targetBuilding || !clinicBuilding) {
+      return {
+        agent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    const travelingVehicle = startVehicleTravel(
+      boardResult.vehicle,
+      clinicBuilding,
+      targetBuilding,
+      'truck',
+      ctx.transportConfig,
+      ctx.phase
+    );
+
+    ActivityLog.info(
+      ctx.phase,
+      'corpse',
+      `traveling to ${targetLocation.name} to collect corpses`,
+      agent.id,
+      agent.name
+    );
+
+    const updatedVehicles = (ctx.vehicles ?? []).map(v =>
+      v.id === ambulance.id ? travelingVehicle : v
+    );
+
+    const newAgent = {
+      ...boardResult.agent,
+      corpseShiftState: {
+        ...boardResult.agent.corpseShiftState!,
+        currentPhase: 'traveling_to_corpse' as const,
+        targetLocationId: targetLocation.id,
+        vehicleId: ambulance.id,
+      },
+    };
+
+    return {
+      agent: setTask(newAgent, task),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      vehicles: updatedVehicles,
+      complete: false,
+    };
+  }
+
+  // TRAVELING_TO_CORPSE: Wait for arrival
+  if (phase === 'traveling_to_corpse') {
+    const ambulance = (ctx.vehicles ?? []).find(v => v.id === agent.corpseShiftState?.vehicleId);
+    const targetLocation = ctx.locations.find(loc => loc.id === agent.corpseShiftState?.targetLocationId);
+
+    if (!ambulance || !targetLocation) {
+      // Lost vehicle or target - reset to scanning
+      const resetAgent = {
+        ...agent,
+        corpseShiftState: {
+          ...agent.corpseShiftState,
+          currentPhase: 'scanning' as const,
+          targetLocationId: undefined,
+          vehicleId: undefined,
+        },
+      };
+      return {
+        agent: resetAgent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Check if arrived
+    if (!ambulance.travelingToBuilding && ambulance.currentBuilding === targetLocation.building) {
+      // Arrived - move to loading phase
+      ActivityLog.info(
+        ctx.phase,
+        'corpse',
+        `arrived at ${targetLocation.name}, loading corpses`,
+        agent.id,
+        agent.name
+      );
+
+      const loadingAgent = {
+        ...agent,
+        corpseShiftState: {
+          ...agent.corpseShiftState,
+          currentPhase: 'loading' as const,
+        },
+      };
+
+      return {
+        agent: setTask(loadingAgent, task),
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Still traveling
+    return {
+      agent,
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: false,
+    };
+  }
+
+  // LOADING: Load corpses into ambulance
+  if (phase === 'loading') {
+    const ambulance = (ctx.vehicles ?? []).find(v => v.id === agent.corpseShiftState?.vehicleId);
+    const targetLocation = ctx.locations.find(loc => loc.id === agent.corpseShiftState?.targetLocationId);
+
+    if (!ambulance || !targetLocation) {
+      // Lost vehicle or target - reset to scanning
+      const resetAgent = {
+        ...agent,
+        corpseShiftState: {
+          ...agent.corpseShiftState,
+          currentPhase: 'scanning' as const,
+          targetLocationId: undefined,
+          vehicleId: undefined,
+        },
+      };
+      return {
+        agent: resetAgent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Load up to 5 corpses (ambulance capacity is 25, corpse size is 5.0)
+    const corpsesAtLocation = targetLocation.inventory['corpse'] ?? 0;
+    const corpseSize = ctx.economyConfig.goods['corpse']?.size ?? 5.0;
+    const maxCorpses = Math.floor(ambulance.cargoCapacity / corpseSize);
+    const corpsesToLoad = Math.min(corpsesAtLocation, maxCorpses);
+
+    if (corpsesToLoad <= 0) {
+      // No corpses to load - reset to scanning
+      ActivityLog.warning(
+        ctx.phase,
+        'corpse',
+        `no corpses at ${targetLocation.name} - returning to clinic`,
+        agent.id,
+        agent.name
+      );
+
+      const resetAgent = {
+        ...agent,
+        corpseShiftState: {
+          ...agent.corpseShiftState,
+          currentPhase: 'scanning' as const,
+          targetLocationId: undefined,
+          vehicleId: undefined,
+        },
+      };
+      return {
+        agent: resetAgent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Load corpses
+    const loadResult = loadCargo(
+      ambulance,
+      targetLocation.inventory,
+      'corpse',
+      corpsesToLoad,
+      corpseSize,
+      ctx.phase
+    );
+
+    const updatedLocation = {
+      ...targetLocation,
+      inventory: loadResult.locationInventory,
+    };
+
+    ActivityLog.info(
+      ctx.phase,
+      'corpse',
+      `loaded ${corpsesToLoad} corpse(s) from ${targetLocation.name}`,
+      agent.id,
+      agent.name
+    );
+
+    // Start return travel to clinic
+    const clinicBuilding = ctx.buildings.find(b => b.id === clinic.building);
+    const currentBuilding = ctx.buildings.find(b => b.id === loadResult.vehicle.currentBuilding);
+
+    if (!clinicBuilding || !currentBuilding) {
+      return {
+        agent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    const returningVehicle = startVehicleTravel(
+      loadResult.vehicle,
+      currentBuilding,
+      clinicBuilding,
+      'truck',
+      ctx.transportConfig,
+      ctx.phase
+    );
+
+    const updatedVehicles = (ctx.vehicles ?? []).map(v =>
+      v.id === ambulance.id ? returningVehicle : v
+    );
+
+    const updatedLocations = ctx.locations.map(loc =>
+      loc.id === targetLocation.id ? updatedLocation : loc
+    );
+
+    const returningAgent = {
+      ...agent,
+      corpseShiftState: {
+        ...agent.corpseShiftState,
+        currentPhase: 'returning' as const,
+      },
+    };
+
+    return {
+      agent: setTask(returningAgent, task),
+      locations: updatedLocations,
+      orgs: ctx.orgs,
+      vehicles: updatedVehicles,
+      complete: false,
+    };
+  }
+
+  // RETURNING: Travel back to clinic, unload
+  if (phase === 'returning') {
+    const ambulance = (ctx.vehicles ?? []).find(v => v.id === agent.corpseShiftState?.vehicleId);
+
+    if (!ambulance) {
+      // Lost vehicle - reset to scanning
+      const resetAgent = {
+        ...agent,
+        corpseShiftState: {
+          ...agent.corpseShiftState,
+          currentPhase: 'scanning' as const,
+          targetLocationId: undefined,
+          vehicleId: undefined,
+        },
+      };
+      return {
+        agent: resetAgent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Check if arrived at clinic
+    if (!ambulance.travelingToBuilding && ambulance.currentBuilding === clinic.building) {
+      // Arrived - unload corpses
+      const corpsesInVehicle = ambulance.cargo['corpse'] ?? 0;
+
+      if (corpsesInVehicle > 0) {
+        const corpseSize = ctx.economyConfig.goods['corpse']?.size ?? 5.0;
+        const unloadResult = unloadCargo(
+          ambulance,
+          clinic.inventory,
+          clinic.inventoryCapacity,
+          'corpse',
+          corpsesInVehicle,
+          corpseSize,
+          ctx.phase
+        );
+
+        const updatedClinic = {
+          ...clinic,
+          inventory: unloadResult.locationInventory,
+        };
+
+        ActivityLog.info(
+          ctx.phase,
+          'corpse',
+          `delivered ${corpsesInVehicle} corpse(s) to clinic`,
+          agent.id,
+          agent.name
+        );
+
+        const updatedVehicles = (ctx.vehicles ?? []).map(v =>
+          v.id === ambulance.id ? unloadResult.vehicle : v
+        );
+
+        const updatedLocations = ctx.locations.map(loc =>
+          loc.id === clinic.id ? updatedClinic : loc
+        );
+
+        // Reset to scanning for next collection
+        const scanningAgent = {
+          ...agent,
+          corpseShiftState: {
+            ...agent.corpseShiftState,
+            currentPhase: 'scanning' as const,
+            targetLocationId: undefined,
+            vehicleId: undefined,
+          },
+        };
+
+        return {
+          agent: setTask(scanningAgent, task),
+          locations: updatedLocations,
+          orgs: ctx.orgs,
+          vehicles: updatedVehicles,
+          complete: false,
+        };
+      } else {
+        // No corpses to unload - reset to scanning
+        const scanningAgent = {
+          ...agent,
+          corpseShiftState: {
+            ...agent.corpseShiftState,
+            currentPhase: 'scanning' as const,
+            targetLocationId: undefined,
+            vehicleId: undefined,
+          },
+        };
+
+        return {
+          agent: setTask(scanningAgent, task),
+          locations: ctx.locations,
+          orgs: ctx.orgs,
+          complete: false,
+        };
+      }
+    }
+
+    // Still traveling back
+    return {
+      agent,
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: false,
+    };
+  }
+
+  // Unknown phase - reset to scanning
+  const resetAgent = {
+    ...agent,
+    corpseShiftState: {
+      ...agent.corpseShiftState,
+      currentPhase: 'scanning' as const,
+      targetLocationId: undefined,
+      vehicleId: undefined,
+    },
+  };
+
+  return {
+    agent: resetAgent,
+    locations: ctx.locations,
+    orgs: ctx.orgs,
+    complete: false,
+  };
+}
+
+// ============================================
 // Register All Executors
 // ============================================
 
@@ -2745,6 +3307,7 @@ export function registerAllExecutors(): void {
   registerExecutor('visit_pub', executeVisitPubBehavior);
   registerExecutor('consume_entertainment', executeConsumeEntertainmentBehavior);
   registerExecutor('relax_home', executeRelaxHomeBehavior);
+  registerExecutor('collect_corpses', executeCorpseCollectionBehavior);
 }
 
 // Auto-register on import
