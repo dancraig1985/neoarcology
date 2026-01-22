@@ -2788,6 +2788,67 @@ function executeCorpseCollectionBehavior(
   const shiftDuration = 16;
   const currentPhase = agent.corpseShiftState.currentPhase;
 
+  // CRITICAL: Check for early termination due to hunger/fatigue (completion conditions from behavior.json)
+  // This handles the case where the behavior system ends the task but the executor needs to clean up
+  const earlyTerminationDueToNeeds = agent.needs.hunger >= 80 || agent.needs.fatigue >= 90;
+
+  if (earlyTerminationDueToNeeds) {
+    // Clean up agent state before ending shift
+    let cleanedAgent = agent;
+
+    // Exit vehicle if in one
+    if (cleanedAgent.inVehicle && ctx.vehicles) {
+      const ambulance = ctx.vehicles.find(v => v.id === cleanedAgent.inVehicle);
+      if (ambulance) {
+        const exitResult = exitVehicle(ambulance, cleanedAgent, ctx.buildings, ctx.phase);
+        if (exitResult.success) {
+          cleanedAgent = exitResult.agent;
+          const updatedVehicles = ctx.vehicles.map(v =>
+            v.id === ambulance.id ? exitResult.vehicle : v
+          );
+          ctx = { ...ctx, vehicles: updatedVehicles };
+
+          ActivityLog.info(
+            ctx.phase,
+            'corpse',
+            `exited ambulance due to ${agent.needs.hunger >= 80 ? 'hunger' : 'fatigue'} emergency`,
+            agent.id,
+            agent.name
+          );
+        }
+      }
+    }
+
+    // Clear shift state
+    const finishedAgent = {
+      ...cleanedAgent,
+      corpseShiftState: {
+        ...cleanedAgent.corpseShiftState!,
+        lastShiftEndPhase: ctx.phase,
+        phasesWorked: 0,
+        currentPhase: 'scanning' as const,
+        targetLocationId: undefined,
+        vehicleId: undefined,
+      },
+    };
+
+    ActivityLog.info(
+      ctx.phase,
+      'corpse',
+      `ended shift early due to ${agent.needs.hunger >= 80 ? 'hunger' : 'fatigue'}`,
+      agent.id,
+      agent.name
+    );
+
+    return {
+      agent: clearTask(finishedAgent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      vehicles: ctx.vehicles,
+      complete: true,
+    };
+  }
+
   if (agent.corpseShiftState.phasesWorked >= shiftDuration && currentPhase === 'scanning' && !agent.corpseShiftState.targetLocationId) {
     // Shift complete
     const finishedAgent = {

@@ -1673,6 +1673,9 @@ export function generateCity(config: LoadedConfig, idGen: IdGenerator, seed: num
       if (publicHealthTemplate.generation?.leaderBecomesEmployed) {
         leader.status = 'employed';
         leader.employer = healthOrg.id;
+        // Set salary based on clinic's salary tier (unskilled)
+        leader.salary = config.economy.salary.unskilled.min +
+          Math.floor(rand() * (config.economy.salary.unskilled.max - config.economy.salary.unskilled.min));
       }
 
       organizations.push(healthOrg);
