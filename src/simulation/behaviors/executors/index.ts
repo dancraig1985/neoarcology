@@ -2850,13 +2850,16 @@ function executeCorpseCollectionBehavior(
   }
 
   if (agent.corpseShiftState.phasesWorked >= shiftDuration && currentPhase === 'scanning' && !agent.corpseShiftState.targetLocationId) {
-    // Shift complete
+    // Shift complete - reset state for next shift
     const finishedAgent = {
       ...agent,
       corpseShiftState: {
         ...agent.corpseShiftState,
         lastShiftEndPhase: ctx.phase,
         phasesWorked: 0,
+        currentPhase: 'scanning' as const,
+        targetLocationId: undefined,
+        vehicleId: undefined,
       },
     };
 

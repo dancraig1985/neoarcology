@@ -116,7 +116,6 @@
       },
       "completionConditions": {
         "or": [
-          { "phasesCorpseShiftWorked": 16 },
           { "needsAbove": { "hunger": 80 } },
           { "needsAbove": { "fatigue": 90 } }
         ]

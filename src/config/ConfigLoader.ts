@@ -383,7 +383,6 @@ export interface BehaviorConditions {
   phasesSinceDeliveryShift?: number;        // Phases since last delivery shift ended
   phasesDeliveredThisShift?: number;        // Phases delivered in current shift
   phasesSinceCorpseShift?: number;          // Phases since last corpse shift ended (PLAN-039)
-  phasesCorpseShiftWorked?: number;         // Phases worked in current corpse shift (PLAN-039)
   phasesAtPub?: number;                     // Phases spent at pub in current visit
 }
 

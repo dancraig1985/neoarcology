@@ -272,14 +272,6 @@ export function evaluateConditions(
     }
   }
 
-  // phasesCorpseShiftWorked: 16 → agent.corpseShiftState.phasesWorked >= 16 (PLAN-039)
-  if (conditions.phasesCorpseShiftWorked !== undefined) {
-    const phasesWorked = agent.corpseShiftState?.phasesWorked ?? 0;
-    if (phasesWorked < conditions.phasesCorpseShiftWorked) {
-      return false; // Haven't worked long enough yet
-    }
-  }
-
   // marketHasGoods: "provisions" → at least one retail location has this good in stock
   if (conditions.marketHasGoods !== undefined) {
     const goodType = conditions.marketHasGoods;
