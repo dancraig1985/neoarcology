@@ -130,7 +130,7 @@
       "conditions": {
         "hasEmployment": true,
         "atWorkplace": true,
-        "notAtLocationWithTag": "depot",
+        "notAtLocationWithTags": ["depot", "clinic"],
         "needsBelow": { "hunger": 80, "fatigue": 90 },
         "phasesSinceWorkShift": 8
       },

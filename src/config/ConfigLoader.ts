@@ -375,6 +375,7 @@ export interface BehaviorConditions {
   atLocation?: string;                      // e.g., "employedAt", "residence"
   atLocationWithTag?: string;               // e.g., "depot", "retail", "public"
   notAtLocationWithTag?: string;            // e.g., "depot" - not at location with this tag
+  notAtLocationWithTags?: string[];         // e.g., ["depot", "clinic"] - not at location with ANY of these tags
   marketHasGoods?: string;                  // e.g., "provisions" - checks if any retail location has stock
   or?: BehaviorConditions[];                // OR logic for conditions
   never?: boolean;                          // Never completes (for continuous tasks)

@@ -217,6 +217,15 @@ export function evaluateConditions(
     if (hasTag) return false; // Fail if location HAS the tag
   }
 
+  // notAtLocationWithTags: ["depot", "clinic"] → current location does NOT have ANY of these tags
+  if (conditions.notAtLocationWithTags !== undefined) {
+    const currentLoc = ctx.locations.find(l => l.id === agent.currentLocation);
+    if (currentLoc) {
+      const hasAnyTag = conditions.notAtLocationWithTags.some(tag => currentLoc.tags.includes(tag));
+      if (hasAnyTag) return false; // Fail if location HAS any of the tags
+    }
+  }
+
   // phasesSinceWorkShift: 8 → (currentPhase - agent.shiftState?.lastShiftEndPhase) >= 8
   if (conditions.phasesSinceWorkShift !== undefined) {
     const lastShiftEnd = agent.shiftState?.lastShiftEndPhase ?? 0;
