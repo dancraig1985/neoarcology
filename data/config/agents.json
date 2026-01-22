@@ -15,11 +15,15 @@
     "forcedRestReset": 60
   },
   "leisure": {
-    "perPhase": 0.25,
+    "perPhase": 1.0,
     "threshold": 50,
     "max": 100,
+    "pubFee": 20,
     "pubSatisfaction": 40,
+    "pubDuration": 4,
     "parkSatisfactionPerPhase": 1,
+    "entertainmentMediaSatisfaction": 30,
+    "relaxAtHomeSatisfactionPerPhase": 5,
     "luxurySatisfaction": 70
   },
   "housing": {

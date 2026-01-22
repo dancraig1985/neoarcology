@@ -113,8 +113,12 @@ export interface AgentsConfig {
     perPhase: number;
     threshold: number;
     max: number;
+    pubFee: number;
     pubSatisfaction: number;
+    pubDuration: number;
     parkSatisfactionPerPhase: number;
+    entertainmentMediaSatisfaction: number;
+    relaxAtHomeSatisfactionPerPhase: number;
     luxurySatisfaction?: number;
   };
   housing: {
@@ -363,16 +367,22 @@ export interface BehaviorConditions {
   hasResidence?: boolean;
   atPublicSpace?: boolean;
   notAtPublicSpace?: boolean;
+  atResidence?: boolean;                    // At home (residence)
+  notAtResidence?: boolean;                 // Not at home
   isShopOwner?: boolean;
   shopNeedsStock?: boolean;
   shopHasStock?: boolean;
   atLocation?: string;                      // e.g., "employedAt", "residence"
   atLocationWithTag?: string;               // e.g., "depot", "retail", "public"
+  notAtLocationWithTag?: string;            // e.g., "depot" - not at location with this tag
   marketHasGoods?: string;                  // e.g., "provisions" - checks if any retail location has stock
   or?: BehaviorConditions[];                // OR logic for conditions
   never?: boolean;                          // Never completes (for continuous tasks)
   phasesSinceWorkShift?: number;            // Phases since last shift ended (cooldown)
   phasesWorkedThisShift?: number;           // Phases worked in current shift
+  phasesSinceDeliveryShift?: number;        // Phases since last delivery shift ended
+  phasesDeliveredThisShift?: number;        // Phases delivered in current shift
+  phasesAtPub?: number;                     // Phases spent at pub in current visit
 }
 
 /**

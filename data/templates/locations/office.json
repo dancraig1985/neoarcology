@@ -2,7 +2,7 @@
   "id": "office",
   "name": "Corporate Office",
   "description": "A corporate office where professionals generate valuable research data",
-  "tags": ["office", "corporate", "professional"],
+  "tags": ["office", "corporate", "professional", "wholesale"],
   "spawnConstraints": {
     "allowedZones": ["downtown", "commercial"],
     "floorRange": [1, 50],
@@ -24,6 +24,12 @@
         "amountPerEmployee": 1,
         "phasesPerCycle": 16,
         "requiresStorage": true
+      },
+      {
+        "good": "entertainment_media",
+        "amountPerEmployee": 2,
+        "phasesPerCycle": 16,
+        "requiresStorage": false
       }
     ]
   },

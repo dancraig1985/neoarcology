@@ -32,9 +32,11 @@ Tagged with `wholesale` and `production`. These create goods:
 - `brewery` - Produces alcohol
 - `server_factory` - Produces data_storage (B2B infrastructure)
 - `luxury_factory` - Produces luxury_goods
-- `office` - Produces valuable_data (knowledge economy)
+- `office` - Produces valuable_data (B2B) + entertainment_media (B2C) - **dual-purpose production**
 - `laboratory` - Produces valuable_data (faster than offices)
 - `prototype_factory` - Produces high_tech_prototypes (consumes valuable_data)
+
+**Note on offices:** Offices are tagged with both `office` and `wholesale`, allowing them to fulfill B2C entertainment_media orders to retail shops while also producing valuable_data for the knowledge economy.
 
 ### Storage Locations
 Tagged with `wholesale` and `storage`. These store bulk goods for distribution:
@@ -71,9 +73,16 @@ Tagged with `depot`. These handle goods delivery:
 
 ### Retail Locations
 Tagged with `retail`. These sell to consumers:
-- `retail_shop` - Sells provisions
-- `restaurant` - Sells provisions (food service)
+- `retail_shop` - **Multi-product "corner store"** - Sells both provisions (survival) AND entertainment_media (leisure)
+- `restaurant` - Sells provisions and entertainment_media (same as retail_shop)
 - `pub` - Sells alcohol (leisure venue, also has `leisure` tag)
+- `luxury_boutique` - Sells luxury_goods (also has `luxury` tag)
+
+**Multi-Product Retail:** General retail shops (without special tags like `leisure` or `luxury`) function as corner stores that stock multiple consumer goods. They automatically order:
+1. **Provisions** (survival priority) - from factories
+2. **Entertainment_media** (leisure) - from offices
+
+This creates one-stop shopping for agents, reducing travel and creating economic clustering around retail hubs.
 
 ### Residential Locations
 Tagged with `residential`. These house agents:

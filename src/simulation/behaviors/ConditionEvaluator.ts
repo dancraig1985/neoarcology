@@ -268,6 +268,28 @@ export function evaluateConditions(
     if (!hasMarketSupply) return false; // Skip behavior if no market supply
   }
 
+  // atResidence: true → agent.currentLocation === agent.residence
+  if (conditions.atResidence !== undefined) {
+    const atHome = agent.currentLocation !== undefined &&
+                   agent.currentLocation === agent.residence;
+    if (conditions.atResidence !== atHome) return false;
+  }
+
+  // notAtResidence: true → agent.currentLocation !== agent.residence (or no residence)
+  if (conditions.notAtResidence !== undefined) {
+    const atHome = agent.currentLocation !== undefined &&
+                   agent.currentLocation === agent.residence;
+    if (conditions.notAtResidence === atHome) return false;
+  }
+
+  // phasesAtPub: 4 → agent.pubVisitState.phasesAtPub >= 4
+  if (conditions.phasesAtPub !== undefined) {
+    const phasesAtPub = agent.pubVisitState?.phasesAtPub ?? 0;
+    if (phasesAtPub < conditions.phasesAtPub) {
+      return false; // Haven't been at pub long enough yet
+    }
+  }
+
   // All conditions passed
   return true;
 }

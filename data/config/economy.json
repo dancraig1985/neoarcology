@@ -58,6 +58,18 @@
         "retailTemplate": null
       }
     },
+    "entertainment_media": {
+      "size": 0.1,
+      "retailPrice": 15,
+      "wholesalePrice": 8,
+      "vertical": {
+        "demandType": "consumer",
+        "needsField": "leisure",
+        "needsThreshold": 40,
+        "productionTemplate": "office",
+        "retailTemplate": "retail_shop"
+      }
+    },
     "high_tech_prototypes": {
       "size": 1.0,
       "wholesalePrice": 10000,

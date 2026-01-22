@@ -112,6 +112,12 @@ export interface Agent extends Entity {
     };
   };
 
+  // Pub visit state (only present when visiting pub)
+  pubVisitState?: {
+    phasesAtPub: number; // Phases spent at pub in current visit
+    pubId: LocationRef; // Which pub being visited
+  };
+
   // Personal finances
   wallet: Wallet;
 

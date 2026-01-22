@@ -178,12 +178,85 @@
       "params": {}
     },
     {
-      "id": "seeking_leisure",
-      "name": "Seek Entertainment",
+      "id": "visiting_pub",
+      "name": "Drinking at Pub",
+      "priority": "normal",
+      "executor": "visit_pub",
+      "conditions": {
+        "needsAbove": { "leisure": 50 },
+        "hasCreditsAbove": 29,
+        "notAtResidence": true,
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "or": [
+          { "phasesAtPub": 4 },
+          { "needsBelow": { "leisure": 30 } },
+          { "needsAbove": { "hunger": 60 } }
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "consume_entertainment",
+      "name": "Enjoying Entertainment",
+      "priority": "normal",
+      "executor": "consume_entertainment",
+      "conditions": {
+        "inventoryAbove": { "entertainment_media": 0 },
+        "needsAbove": { "leisure": 35 },
+        "atResidence": true,
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "inventoryBelow": { "entertainment_media": 1 }
+      },
+      "params": {}
+    },
+    {
+      "id": "buy_entertainment",
+      "name": "Buy Entertainment Media",
+      "priority": "normal",
+      "executor": "purchase",
+      "conditions": {
+        "needsAbove": { "leisure": 40 },
+        "inventoryBelow": { "entertainment_media": 3 },
+        "hasCreditsAbove": 19,
+        "notTraveling": true,
+        "marketHasGoods": "entertainment_media"
+      },
+      "completionConditions": {
+        "inventoryAbove": { "entertainment_media": 2 }
+      },
+      "params": {
+        "goodsType": "entertainment_media",
+        "locationTag": "retail"
+      }
+    },
+    {
+      "id": "relax_at_home",
+      "name": "Relaxing at Home",
+      "priority": "normal",
+      "executor": "relax_home",
+      "conditions": {
+        "atResidence": true,
+        "needsAbove": { "leisure": 30 },
+        "inventoryBelow": { "entertainment_media": 1 },
+        "notTraveling": true
+      },
+      "completionConditions": {
+        "needsBelow": { "leisure": 20 }
+      },
+      "params": {}
+    },
+    {
+      "id": "hangout_at_public_space",
+      "name": "Hanging Out at Park",
       "priority": "normal",
       "executor": "leisure",
       "conditions": {
         "needsAbove": { "leisure": 50 },
+        "notAtResidence": true,
         "notTraveling": true,
         "notAtWorkplace": true
       },

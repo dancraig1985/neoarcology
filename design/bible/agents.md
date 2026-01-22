@@ -30,12 +30,19 @@ Agents **proactively seek rest** before hitting 100%:
 ### Leisure
 Agents accumulate a leisure need over time. Unlike hunger, low leisure doesn't kill - it's a quality of life metric.
 
-- **Leisure need accumulates** at 0.25/phase
-- **At 50%+**, agents seek entertainment (pub or park)
-- **At a pub**: Agent buys alcohol (if available), gets full satisfaction
-- **At a park**: Free but slower satisfaction
+- **Leisure need accumulates** at 1.0/phase (~50 phases to trigger basic leisure behaviors)
+- **Multiple leisure behaviors** based on location, wealth, and inventory
+- **Entertainment economy**: Offices produce entertainment_media → retail shops → agents consume at home
 
-**The alcohol economy**: When leisure need triggers, agents may visit pubs and purchase alcohol. This creates demand for the discretionary goods vertical (brewery → pub → agent).
+**Leisure behaviors** (in priority order):
+1. **Consume luxury goods** (40+ leisure, has luxury_goods) - Rich agents, instant satisfaction (70 points)
+2. **Visit pub** (50+ leisure, 30+ credits, away from home) - Social activity, costs 20 credits, 40 satisfaction
+3. **Consume entertainment media** (35+ leisure, at home, has media) - Watch/play at home, 30 satisfaction per item
+4. **Buy entertainment media** (40+ leisure, low stock, 20+ credits) - Shops stock provisions + entertainment_media
+5. **Relax at home** (30+ leisure, at home, broke) - Free, slow satisfaction (5/phase)
+6. **Hangout at public space** (50+ leisure, away from home, broke) - Park/plaza, free, slow satisfaction (1/phase)
+
+**Location matters**: At-home behaviors (consume entertainment, relax) vs away-from-home (pub, park). Agents naturally cycle between home (rest) and public spaces (work, shopping).
 
 ### Eating Priority
 When hungry, an agent will:

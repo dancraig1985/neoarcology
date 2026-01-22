@@ -2470,6 +2470,260 @@ function executeDeliverGoodsBehaviorNew(
 }
 
 // ============================================
+// Pub Visit Executor
+// ============================================
+
+/**
+ * Visit pub executor - agent travels to pub, pays fee, stays for duration
+ * Used by: visiting_pub behavior
+ */
+function executeVisitPubBehavior(
+  agent: Agent,
+  _task: AgentTask,
+  ctx: BehaviorContext
+): TaskResult {
+  // Find nearest pub (location with 'leisure' tag)
+  const pub = findNearestLocation(agent, ctx.locations, loc =>
+    loc.tags.includes('leisure')
+  );
+
+  if (!pub) {
+    // No pub available
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // Initialize pub visit state if needed
+  if (!agent.pubVisitState) {
+    agent.pubVisitState = {
+      phasesAtPub: 0,
+      pubId: pub.id,
+    };
+  }
+
+  // Travel to pub if not there yet
+  if (agent.currentLocation !== pub.id) {
+    if (isTraveling(agent)) {
+      // Already traveling, continue
+      return {
+        agent,
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: false,
+      };
+    }
+
+    // Start travel to pub
+    const travelingAgent = startTravel(agent, pub, ctx.locations, ctx.transportConfig);
+
+    ActivityLog.info(
+      ctx.phase,
+      'leisure',
+      `heading to ${pub.name}`,
+      agent.id,
+      agent.name
+    );
+
+    return {
+      agent: travelingAgent,
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: false,
+    };
+  }
+
+  // At pub - first phase: pay fee
+  if (agent.pubVisitState.phasesAtPub === 0) {
+    const pubFee = ctx.agentsConfig.leisure.pubFee ?? 20;
+
+    if (agent.wallet.credits < pubFee) {
+      // Can't afford - abort
+      const updatedAgent = { ...agent };
+      delete updatedAgent.pubVisitState;
+
+      ActivityLog.warning(
+        ctx.phase,
+        'leisure',
+        `can't afford pub fee (${pubFee} credits)`,
+        agent.id,
+        agent.name
+      );
+
+      return {
+        agent: clearTask(updatedAgent),
+        locations: ctx.locations,
+        orgs: ctx.orgs,
+        complete: true,
+      };
+    }
+
+    // Pay pub owner
+    const pubOrg = ctx.orgs.find(o => o.id === pub.owner);
+    if (!pubOrg) {
+      // No owner - still charge but money disappears
+      ActivityLog.warning(
+        ctx.phase,
+        'economy',
+        `pub has no owner, fee lost`,
+        agent.id,
+        agent.name
+      );
+    }
+
+    // Create and record transaction (service sale)
+    const transaction = createTransaction(
+      ctx.phase,
+      'sale',
+      agent.id,
+      pubOrg?.id ?? 'unknown',
+      pubFee,
+      pub.id,
+      { type: 'pub_visit', quantity: 1 }
+    );
+    recordTransaction(ctx.context.transactionHistory, transaction);
+
+    // Update wallet balances
+    agent.wallet.credits -= pubFee;
+    if (pubOrg) {
+      pubOrg.wallet.credits += pubFee;
+    }
+
+    ActivityLog.info(
+      ctx.phase,
+      'service',
+      `paid ${pubFee} credits at ${pub.name}`,
+      agent.id,
+      agent.name
+    );
+  }
+
+  // Stay at pub, increment counter
+  agent.pubVisitState.phasesAtPub++;
+
+  // Reduce leisure over time (40 total over 4 phases = 10 per phase)
+  const leisureReductionPerPhase = (ctx.agentsConfig.leisure.pubSatisfaction ?? 40) / 4;
+  const newLeisure = Math.max(0, agent.needs.leisure - leisureReductionPerPhase);
+
+  const updatedAgent: Agent = {
+    ...agent,
+    needs: { ...agent.needs, leisure: newLeisure },
+  };
+
+  // Check if visit is complete (handled by completion conditions)
+  // Just return updated state
+  return {
+    agent: clearTask(updatedAgent),
+    locations: ctx.locations,
+    orgs: ctx.orgs,
+    complete: false,
+  };
+}
+
+// ============================================
+// Consume Entertainment Executor
+// ============================================
+
+/**
+ * Consume entertainment executor - agent consumes entertainment_media from inventory
+ * Used by: consume_entertainment behavior
+ */
+function executeConsumeEntertainmentBehavior(
+  agent: Agent,
+  _task: AgentTask,
+  ctx: BehaviorContext
+): TaskResult {
+  // Check if agent has entertainment_media
+  const mediaCount = agent.inventory['entertainment_media'] ?? 0;
+
+  if (mediaCount <= 0) {
+    // No media to consume
+    return {
+      agent: clearTask(agent),
+      locations: ctx.locations,
+      orgs: ctx.orgs,
+      complete: true,
+    };
+  }
+
+  // Consume 1 entertainment_media
+  const newInventory = { ...agent.inventory };
+  newInventory['entertainment_media'] = mediaCount - 1;
+  if (newInventory['entertainment_media'] <= 0) {
+    delete newInventory['entertainment_media'];
+  }
+
+  // Apply leisure satisfaction
+  const mediaSatisfaction = ctx.agentsConfig.leisure.entertainmentMediaSatisfaction ?? 30;
+  const newLeisure = Math.max(0, agent.needs.leisure - mediaSatisfaction);
+
+  const updatedAgent: Agent = {
+    ...agent,
+    inventory: newInventory,
+    needs: { ...agent.needs, leisure: newLeisure },
+  };
+
+  ActivityLog.info(
+    ctx.phase,
+    'leisure',
+    `enjoyed entertainment media at home (leisure: ${agent.needs.leisure.toFixed(0)} → ${newLeisure.toFixed(0)})`,
+    agent.id,
+    agent.name
+  );
+
+  return {
+    agent: clearTask(updatedAgent),
+    locations: ctx.locations,
+    orgs: ctx.orgs,
+    complete: true,
+  };
+}
+
+// ============================================
+// Relax at Home Executor
+// ============================================
+
+/**
+ * Relax at home executor - agent slowly reduces leisure need while at home
+ * Used by: relax_at_home behavior
+ */
+function executeRelaxHomeBehavior(
+  agent: Agent,
+  _task: AgentTask,
+  ctx: BehaviorContext
+): TaskResult {
+  // Slow leisure reduction
+  const reduction = ctx.agentsConfig.leisure.relaxAtHomeSatisfactionPerPhase ?? 5;
+  const newLeisure = Math.max(0, agent.needs.leisure - reduction);
+
+  const updatedAgent: Agent = {
+    ...agent,
+    needs: { ...agent.needs, leisure: newLeisure },
+  };
+
+  // Log periodically (not every phase - too spammy)
+  if (ctx.phase % 10 === 0) {
+    ActivityLog.info(
+      ctx.phase,
+      'leisure',
+      `relaxing at home (leisure: ${agent.needs.leisure.toFixed(0)})`,
+      agent.id,
+      agent.name
+    );
+  }
+
+  return {
+    agent: clearTask(updatedAgent),
+    locations: ctx.locations,
+    orgs: ctx.orgs,
+    complete: false, // Continues until completion condition met
+  };
+}
+
+// ============================================
 // Register All Executors
 // ============================================
 
@@ -2488,6 +2742,9 @@ export function registerAllExecutors(): void {
   registerExecutor('consume_luxury', executeConsumeLuxuryBehavior);
   registerExecutor('purchase_orphaned', executePurchaseOrphanedLocationBehavior);
   registerExecutor('deliver_goods', executeDeliverGoodsBehavior);
+  registerExecutor('visit_pub', executeVisitPubBehavior);
+  registerExecutor('consume_entertainment', executeConsumeEntertainmentBehavior);
+  registerExecutor('relax_home', executeRelaxHomeBehavior);
 }
 
 // Auto-register on import

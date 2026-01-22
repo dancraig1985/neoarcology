@@ -36,6 +36,30 @@ Luxury Factory → Luxury Boutique → Wealthy Agent
 
 **Requires 250+ credits.** Provides ~1.75x leisure satisfaction vs alcohol. Agents only buy one at a time.
 
+### Entertainment Media Vertical (Consumer Leisure)
+```
+Office → Retail Shop → Agent
+   │          │           │
+produces  restocks    buys for at-home
+media     both food   entertainment
+          + media     (leisure need)
+```
+
+**Middle-class leisure economy:**
+- Cheaper than luxury goods (15 credits retail vs 200)
+- Offices produce 2 entertainment_media per employee per cycle (16 phases)
+- Retail shops are multi-product: stock **both provisions and entertainment_media**
+- Agents consume at home when leisure ≥ 35 (30 satisfaction per item)
+- Also triggers "relax at home" behavior (free, slow satisfaction when broke)
+
+**Multi-Product Retail Shops:**
+Retail shops now function as "corner stores" serving multiple needs:
+1. Order provisions when low (survival priority)
+2. Order entertainment_media when low (leisure goods)
+3. Agents can buy food and entertainment at the same shop
+
+This creates natural economic clustering around retail hubs.
+
 ### Knowledge Economy Verticals (B2B)
 ```
 Server Factory → Corporation (buys data_storage)

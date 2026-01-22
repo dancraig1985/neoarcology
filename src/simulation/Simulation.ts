@@ -15,7 +15,7 @@ import { ActivityLog } from './ActivityLog';
 import { createSeededRNG } from './SeededRandom';
 import { processAgentPhase, countLivingAgents, countDeadAgents } from './systems/AgentSystem';
 import { fixHomelessAgents } from './systems/AgentEconomicSystem';
-import { tryPlaceGoodsOrder, processGoodsOrders } from './systems/SupplyChainSystem';
+import { tryPlaceGoodsOrder, processGoodsOrders, getShopGoodsList } from './systems/SupplyChainSystem';
 import { processWeeklyEconomy } from './systems/PayrollSystem';
 import { processAgentBehavior } from './behaviors/BehaviorProcessor';
 import { processFactoryProduction } from './systems/OrgSystem';
@@ -174,25 +174,33 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
 
   // 1b. Goods Order Placement: Retail shops place orders for restocking
   // Creates Order entities with orderType='goods' for B2B commerce
+  // Shops can order multiple goods types (e.g., retail shops order both provisions and entertainment_media)
   let newGoodsOrders: Order[] = [];
   for (const org of updatedOrgs) {
     const orgRetailLocations = updatedLocations.filter(
       (loc) => org.locations.includes(loc.id) && loc.tags.includes('retail')
     );
     for (const retailLoc of orgRetailLocations) {
-      const order = tryPlaceGoodsOrder(
-        org,
-        retailLoc,
-        updatedLocations,
-        updatedOrgs,
-        state.deliveryRequests, // Check existing orders to avoid duplicates
-        config.economy,
-        config.thresholds,
-        newTime.currentPhase,
-        context
-      );
-      if (order) {
-        newGoodsOrders.push(order);
+      // Get the list of goods this shop should stock
+      const goodsList = getShopGoodsList(retailLoc);
+
+      // Try to order each good type (provisions first, then entertainment, etc.)
+      for (const goodType of goodsList) {
+        const order = tryPlaceGoodsOrder(
+          org,
+          retailLoc,
+          goodType,
+          updatedLocations,
+          updatedOrgs,
+          state.deliveryRequests, // Check existing orders to avoid duplicates
+          config.economy,
+          config.thresholds,
+          newTime.currentPhase,
+          context
+        );
+        if (order) {
+          newGoodsOrders.push(order);
+        }
       }
     }
   }

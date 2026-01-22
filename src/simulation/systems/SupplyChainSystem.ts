@@ -20,6 +20,21 @@ import { createTransaction, recordTransaction } from '../../types/Transaction';
 
 
 /**
+ * Determine what goods a shop should stock based on its tags
+ * Retail shops (general stores) stock multiple consumer goods
+ * Returns array of goods this shop should carry, in priority order
+ */
+export function getShopGoodsList(shop: Location): string[] {
+  // Special tags determine specific goods
+  if (shop.tags.includes('leisure')) return ['alcohol'];
+  if (shop.tags.includes('luxury')) return ['luxury_goods'];
+
+  // Retail shops (general stores) stock multiple consumer goods
+  // Provisions first (survival priority), then entertainment
+  return ['provisions', 'entertainment_media'];
+}
+
+/**
  * Org tries to restock their shop by buying wholesale from another org
  * Uses real supply chain: wholesale location → retail shop (B2B transaction)
  * Called automatically each phase for all orgs (not an agent behavior)
@@ -29,6 +44,7 @@ import { createTransaction, recordTransaction } from '../../types/Transaction';
 export function tryRestockFromWholesale(
   buyerOrg: Organization,
   shop: Location,
+  goodType: string,
   locations: Location[],
   orgs: Organization[],
   economyConfig: EconomyConfig,
@@ -37,14 +53,6 @@ export function tryRestockFromWholesale(
   context: SimulationContext
 ): { locations: Location[]; orgs: Organization[] } {
   const goodsSizes: GoodsSizes = { goods: economyConfig.goods, defaultGoodsSize: economyConfig.defaultGoodsSize };
-
-  // Determine what good this shop sells based on its tags
-  // Pubs (leisure tag) sell alcohol, luxury boutiques sell luxury_goods, others sell provisions
-  const goodType = shop.tags.includes('leisure')
-    ? 'alcohol'
-    : shop.tags.includes('luxury')
-      ? 'luxury_goods'
-      : 'provisions';
 
   const currentStock = getGoodsCount(shop, goodType);
   const restockThreshold = thresholdsConfig.inventory.restockThreshold;
@@ -218,6 +226,7 @@ export function placeGoodsOrder(
 export function tryPlaceGoodsOrder(
   buyerOrg: Organization,
   shop: Location,
+  goodType: string,
   locations: Location[],
   orgs: Organization[],
   existingOrders: Order[],
@@ -227,13 +236,6 @@ export function tryPlaceGoodsOrder(
   context: SimulationContext
 ): Order | null {
   const goodsSizes: GoodsSizes = { goods: economyConfig.goods, defaultGoodsSize: economyConfig.defaultGoodsSize };
-
-  // Determine what good this shop sells
-  const goodType = shop.tags.includes('leisure')
-    ? 'alcohol'
-    : shop.tags.includes('luxury')
-      ? 'luxury_goods'
-      : 'provisions';
 
   const currentStock = getGoodsCount(shop, goodType);
   const restockThreshold = thresholdsConfig.inventory.restockThreshold;
