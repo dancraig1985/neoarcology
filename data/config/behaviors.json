@@ -338,7 +338,8 @@
       "executor": "wander",
       "conditions": {
         "notAtPublicSpace": true,
-        "notTraveling": true
+        "notTraveling": true,
+        "notAtWorkplace": true
       },
       "completionConditions": {
         "atPublicSpace": true
