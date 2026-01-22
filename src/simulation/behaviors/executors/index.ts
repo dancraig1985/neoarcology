@@ -2479,7 +2479,7 @@ function executeDeliverGoodsBehaviorNew(
  */
 function executeVisitPubBehavior(
   agent: Agent,
-  _task: AgentTask,
+  task: AgentTask,
   ctx: BehaviorContext
 ): TaskResult {
   // Find nearest pub (location with 'leisure' tag)
@@ -2613,10 +2613,19 @@ function executeVisitPubBehavior(
     needs: { ...agent.needs, leisure: newLeisure },
   };
 
+  // Log pub stay activity
+  ActivityLog.info(
+    ctx.phase,
+    'leisure',
+    `enjoying time at ${pub.name} (phase ${agent.pubVisitState.phasesAtPub}/4, leisure: ${agent.needs.leisure.toFixed(0)} → ${newLeisure.toFixed(0)})`,
+    agent.id,
+    agent.name
+  );
+
   // Check if visit is complete (handled by completion conditions)
-  // Just return updated state
+  // Keep task active until completion conditions are met
   return {
-    agent: clearTask(updatedAgent),
+    agent: updatedAgent.currentTask ? updatedAgent : setTask(updatedAgent, task),
     locations: ctx.locations,
     orgs: ctx.orgs,
     complete: false,

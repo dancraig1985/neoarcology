@@ -86,6 +86,12 @@ function clearTaskSafely(
     }
   }
 
+  // Clean up pub visit state if present
+  if (cleanedAgent.pubVisitState) {
+    const { pubVisitState, ...agentWithoutPubState } = cleanedAgent;
+    cleanedAgent = agentWithoutPubState as Agent;
+  }
+
   return {
     agent: clearTask(cleanedAgent),
     vehicles: updatedVehicles
