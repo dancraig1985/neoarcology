@@ -128,6 +128,7 @@ export function completeDelivery(
 
 /**
  * Mark delivery as failed (driver couldn't complete it)
+ * NOTE: This only fails the logistics order. Use failDeliveryWithParent() to also fail the parent goods order.
  */
 export function failDelivery(
   request: DeliveryRequest,
@@ -149,6 +150,46 @@ export function failDelivery(
     status: 'failed',
     fulfilled: phase,
   };
+}
+
+/**
+ * Fail a logistics order AND its parent goods order (if exists)
+ * When a logistics delivery fails, the parent goods order should also fail
+ * since the buyer paid but goods never arrived.
+ */
+export function failDeliveryWithParent(
+  logisticsOrder: Order,
+  allOrders: Order[],
+  reason: string,
+  phase: number
+): Order[] {
+  // Fail the logistics order
+  const failedLogistics = failDelivery(logisticsOrder, reason, phase);
+
+  // Update orders array with failed logistics order
+  let updatedOrders = allOrders.map(o => o.id === logisticsOrder.id ? failedLogistics : o);
+
+  // If this logistics order has a parent goods order, fail that too
+  if (logisticsOrder.parentOrderId) {
+    const parentOrder = updatedOrders.find(o => o.id === logisticsOrder.parentOrderId);
+    if (parentOrder && parentOrder.orderType === 'goods' && parentOrder.status === 'ready') {
+      ActivityLog.warning(
+        phase,
+        'order',
+        `failing parent goods order ${parentOrder.id} due to logistics failure: ${reason}`,
+        parentOrder.buyer,
+        'SupplyChain'
+      );
+
+      updatedOrders = updatedOrders.map(o =>
+        o.id === parentOrder.id
+          ? { ...o, status: 'failed' as const, fulfilled: phase }
+          : o
+      );
+    }
+  }
+
+  return updatedOrders;
 }
 
 /**
@@ -232,8 +273,8 @@ export function cleanupOldDeliveries(
   maxAge: number = 560 // Keep failed orders for ~10 weeks at 8 phases/day
 ): DeliveryRequest[] {
   return requests.filter((req) => {
-    // Keep all active orders
-    if (req.status === 'pending' || req.status === 'assigned' || req.status === 'in_transit') {
+    // Keep all active orders (including 'ready' for goods awaiting delivery)
+    if (req.status === 'pending' || req.status === 'ready' || req.status === 'assigned' || req.status === 'in_transit') {
       return true;
     }
 
@@ -330,30 +371,56 @@ export function cleanupOrphanedDeliveries(
 export function cancelStaleGoodsOrders(
   orders: Order[],
   currentPhase: number,
-  maxPendingPhases: number = 560 // 10 weeks
+  maxPendingPhases: number = 560, // 10 weeks for pending orders
+  maxReadyPhases: number = 200 // ~3.5 weeks for ready orders (stuck in logistics)
 ): Order[] {
   return orders.map((order) => {
-    // Only check goods orders that are still pending
-    if (order.orderType !== 'goods' || order.status !== 'pending') {
+    // Only check goods orders
+    if (order.orderType !== 'goods') {
       return order;
     }
 
-    const pendingDuration = currentPhase - order.created;
+    // Cancel pending orders stuck for too long (seller can't fulfill)
+    if (order.status === 'pending') {
+      const pendingDuration = currentPhase - order.created;
 
-    if (pendingDuration > maxPendingPhases) {
-      ActivityLog.warning(
-        currentPhase,
-        'order',
-        `cancelling ${order.id} - pending for ${pendingDuration} phases (seller unable to fulfill)`,
-        order.buyer,
-        'OrderCleanup'
-      );
+      if (pendingDuration > maxPendingPhases) {
+        ActivityLog.warning(
+          currentPhase,
+          'order',
+          `cancelling ${order.id} - pending for ${pendingDuration} phases (seller unable to fulfill)`,
+          order.buyer,
+          'OrderCleanup'
+        );
 
-      return {
-        ...order,
-        status: 'cancelled' as const,
-        fulfilled: currentPhase,
-      };
+        return {
+          ...order,
+          status: 'cancelled' as const,
+          fulfilled: currentPhase,
+        };
+      }
+    }
+
+    // Fail ready orders stuck for too long (logistics failure)
+    // Note: Buyer already paid, but goods never arrived
+    if (order.status === 'ready') {
+      const readyDuration = currentPhase - order.created;
+
+      if (readyDuration > maxReadyPhases) {
+        ActivityLog.warning(
+          currentPhase,
+          'order',
+          `failing ${order.id} - ready for ${readyDuration} phases (logistics failure, goods paid but not delivered)`,
+          order.buyer,
+          'OrderCleanup'
+        );
+
+        return {
+          ...order,
+          status: 'failed' as const,
+          fulfilled: currentPhase,
+        };
+      }
     }
 
     return order;

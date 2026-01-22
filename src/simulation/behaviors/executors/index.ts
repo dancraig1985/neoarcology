@@ -20,7 +20,7 @@ import {
   exitVehicle,
   startVehicleTravel
 } from '../../systems/VehicleSystem';
-import { assignDeliveryToDriver, startDelivery, completeDelivery, failDelivery, findAvailableVehicle } from '../../systems/DeliverySystem';
+import { assignDeliveryToDriver, startDelivery, completeDelivery, failDelivery, failDeliveryWithParent, findAvailableVehicle } from '../../systems/DeliverySystem';
 import { createTransaction, recordTransaction } from '../../../types/Transaction';
 
 // ============================================
@@ -1559,21 +1559,35 @@ function executePurchaseOrphanedLocationBehavior(
 
 /**
  * Deliver goods executor - handles trucking deliveries
- * Uses robust vehicle system with board/exit mechanics and building-level travel
- * Used by: deliver_goods
+ * PHASE 5: Uses simplified 3-action system (legacy 6-phase code removed)
  *
- * Workflow:
- * 1. Find and assign a delivery request to this driver
- * 2. Board an available vehicle (as operator)
- * 3. Drive vehicle to pickup building
- * 4. Exit vehicle, enter location, load goods into vehicle
- * 5. Board vehicle again
- * 6. Drive vehicle to delivery building
- * 7. Exit vehicle, enter location, unload goods
- * 8. Complete delivery (pay logistics company)
- * 9. Exit vehicle (parked at destination)
+ * Actions:
+ * 1. traveling_to_pickup: Assign order, board vehicle, travel to pickup
+ * 2. loading_and_traveling: Load goods into vehicle, travel to delivery
+ * 3. unloading: Unload goods, complete order, pay logistics company
+ *
+ * State stored in agent.deliveryShiftState.activeDelivery (not task.params)
  */
 function executeDeliverGoodsBehavior(
+  agent: Agent,
+  task: AgentTask,
+  ctx: BehaviorContext
+): TaskResult {
+  // PHASE 5: All deliveries use new 3-action system
+  return executeDeliverGoodsBehaviorNew(agent, task, ctx);
+}
+
+/**
+ * NEW: Simplified 3-action delivery executor
+ * Replaces 6-phase state machine with atomic actions
+ * State stored in agent.deliveryShiftState.activeDelivery (not task.params)
+ *
+ * Actions:
+ * 1. traveling_to_pickup: Assign order, board vehicle, travel to pickup
+ * 2. loading_and_traveling: Load goods into vehicle, travel to delivery
+ * 3. unloading: Unload goods, complete order, pay logistics company
+ */
+function executeDeliverGoodsBehaviorNew(
   agent: Agent,
   task: AgentTask,
   ctx: BehaviorContext
@@ -1855,9 +1869,11 @@ function executeDeliverGoodsBehavior(
       agent.name
     );
 
-    const failedDelivery = failDelivery(deliveryRequest!, 'location not found', ctx.phase);
-    const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
-      req.id === deliveryRequest!.id ? failedDelivery : req
+    const updatedDeliveryRequests = failDeliveryWithParent(
+      deliveryRequest!,
+      ctx.deliveryRequests ?? [],
+      'location not found',
+      ctx.phase
     );
 
     return {
@@ -1874,9 +1890,11 @@ function executeDeliverGoodsBehavior(
 
   if (!assignedVehicle) {
     // Vehicle doesn't exist - fail delivery
-    const failedDelivery = failDelivery(deliveryRequest!, 'vehicle not found', ctx.phase);
-    const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
-      req.id === deliveryRequest!.id ? failedDelivery : req
+    const updatedDeliveryRequests = failDeliveryWithParent(
+      deliveryRequest!,
+      ctx.deliveryRequests ?? [],
+      'vehicle not found',
+      ctx.phase
     );
 
     return {
@@ -1894,9 +1912,11 @@ function executeDeliverGoodsBehavior(
 
   if (!fromBuilding || !toBuilding) {
     // Buildings don't exist - fail delivery
-    const failedDelivery = failDelivery(deliveryRequest!, 'building not found', ctx.phase);
-    const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
-      req.id === deliveryRequest!.id ? failedDelivery : req
+    const updatedDeliveryRequests = failDeliveryWithParent(
+      deliveryRequest!,
+      ctx.deliveryRequests ?? [],
+      'building not found',
+      ctx.phase
     );
 
     return {
@@ -1944,9 +1964,11 @@ function executeDeliverGoodsBehavior(
       }
 
       // Failed to board - fail delivery
-      const failedDelivery = failDelivery(deliveryRequest!, 'cannot board vehicle', ctx.phase);
-      const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
-        req.id === deliveryRequest!.id ? failedDelivery : req
+      const updatedDeliveryRequests = failDeliveryWithParent(
+        deliveryRequest!,
+        ctx.deliveryRequests ?? [],
+        'cannot board vehicle',
+        ctx.phase
       );
 
       return {
@@ -2019,9 +2041,11 @@ function executeDeliverGoodsBehavior(
         agent.name
       );
 
-      const failedDelivery = failDelivery(deliveryRequest!, 'vehicle has no location', ctx.phase);
-      const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
-        req.id === deliveryRequest!.id ? failedDelivery : req
+      const updatedDeliveryRequests = failDeliveryWithParent(
+        deliveryRequest!,
+        ctx.deliveryRequests ?? [],
+        'vehicle has no location',
+        ctx.phase
       );
 
       return {
@@ -2044,9 +2068,11 @@ function executeDeliverGoodsBehavior(
         agent.name
       );
 
-      const failedDelivery = failDelivery(deliveryRequest!, 'current building not found', ctx.phase);
-      const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
-        req.id === deliveryRequest!.id ? failedDelivery : req
+      const updatedDeliveryRequests = failDeliveryWithParent(
+        deliveryRequest!,
+        ctx.deliveryRequests ?? [],
+        'current building not found',
+        ctx.phase
       );
 
       return {
@@ -2133,9 +2159,11 @@ function executeDeliverGoodsBehavior(
           agent.name
         );
 
-        const failedDelivery = failDelivery(deliveryRequest!, `cannot exit vehicle: ${exitResult.reason || 'unknown'}`, ctx.phase);
-        const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
-          req.id === deliveryRequest!.id ? failedDelivery : req
+        const updatedDeliveryRequests = failDeliveryWithParent(
+          deliveryRequest!,
+          ctx.deliveryRequests ?? [],
+          `cannot exit vehicle: ${exitResult.reason || 'unknown'}`,
+          ctx.phase
         );
 
         return {
@@ -2180,9 +2208,11 @@ function executeDeliverGoodsBehavior(
     const boardResult = boardVehicle(updatedVehicle, agent, true, ctx.phase);
     if (!boardResult.success) {
       // Failed to board - fail delivery
-      const failedDelivery = failDelivery(deliveryRequest!, 'cannot reboard vehicle', ctx.phase);
-      const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
-        req.id === deliveryRequest!.id ? failedDelivery : req
+      const updatedDeliveryRequests = failDeliveryWithParent(
+        deliveryRequest!,
+        ctx.deliveryRequests ?? [],
+        'cannot reboard vehicle',
+        ctx.phase
       );
 
       return {
@@ -2263,9 +2293,11 @@ function executeDeliverGoodsBehavior(
         agent.name
       );
 
-      const failedDelivery = failDelivery(deliveryRequest!, 'vehicle has no location', ctx.phase);
-      const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
-        req.id === deliveryRequest!.id ? failedDelivery : req
+      const updatedDeliveryRequests = failDeliveryWithParent(
+        deliveryRequest!,
+        ctx.deliveryRequests ?? [],
+        'vehicle has no location',
+        ctx.phase
       );
 
       return {
@@ -2288,9 +2320,11 @@ function executeDeliverGoodsBehavior(
         agent.name
       );
 
-      const failedDelivery = failDelivery(deliveryRequest!, 'current building not found', ctx.phase);
-      const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
-        req.id === deliveryRequest!.id ? failedDelivery : req
+      const updatedDeliveryRequests = failDeliveryWithParent(
+        deliveryRequest!,
+        ctx.deliveryRequests ?? [],
+        'current building not found',
+        ctx.phase
       );
 
       return {
@@ -2419,9 +2453,11 @@ function executeDeliverGoodsBehavior(
   }
 
   // Unknown phase - fail delivery
-  const failedDelivery = failDelivery(deliveryRequest!, `unknown phase: ${deliveryPhase}`, ctx.phase);
-  const updatedDeliveryRequests = (ctx.deliveryRequests ?? []).map(req =>
-    req.id === deliveryRequest!.id ? failedDelivery : req
+  const updatedDeliveryRequests = failDeliveryWithParent(
+    deliveryRequest!,
+    ctx.deliveryRequests ?? [],
+    `unknown phase: ${deliveryPhase}`,
+    ctx.phase
   );
 
   return {

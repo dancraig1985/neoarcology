@@ -101,6 +101,15 @@ export interface Agent extends Entity {
     phasesDelivered: number; // Phases worked on deliveries in current shift
     lastShiftEndPhase: number; // When last shift ended (for cooldown)
     shiftStartPhase: number; // When current shift started
+
+    // Active delivery tracking (NEW - replaces task.params for delivery state)
+    activeDelivery?: {
+      orderId: string; // Which order being delivered
+      vehicleId: string; // Which vehicle being used
+      action: 'traveling_to_pickup' | 'loading_and_traveling' | 'unloading'; // Current action
+      actionStartPhase: number; // When this action started
+      expectedDuration: number; // How long action should take
+    };
   };
 
   // Personal finances

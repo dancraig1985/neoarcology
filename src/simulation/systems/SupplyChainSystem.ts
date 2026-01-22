@@ -243,17 +243,48 @@ export function tryPlaceGoodsOrder(
     return null;
   }
 
-  // Check if there's already a pending order for this shop
+  // Check if there's already a pending/ready order for this shop
+  // Don't place duplicate orders while goods are being fulfilled or delivered
+  // But allow new orders if previous order stuck in 'ready' for > 50 phases
+  let stuckReadyOrder: Order | undefined = undefined;
   const hasPendingOrder = existingOrders.some(
-    (order) =>
-      order.orderType === 'goods' &&
-      order.deliveryLocation === shop.id &&
-      order.good === goodType &&
-      (order.status === 'pending' || order.status === 'in_production' || order.status === 'ready' || order.status === 'in_transit')
+    (order) => {
+      if (order.orderType !== 'goods') return false;
+      if (order.deliveryLocation !== shop.id) return false;
+      if (order.good !== goodType) return false;
+
+      // Always block if pending or in production
+      if (order.status === 'pending' || order.status === 'in_production') {
+        return true;
+      }
+
+      // Block if ready and recent (< 50 phases old)
+      // Allow if ready but stuck for > 50 phases (logistics failure)
+      if (order.status === 'ready') {
+        const age = phase - order.created;
+        if (age >= 50) {
+          stuckReadyOrder = order; // Track for logging
+        }
+        return age < 50; // Block only recent ready orders
+      }
+
+      return false;
+    }
   );
 
   if (hasPendingOrder) {
     return null; // Don't place duplicate orders
+  }
+
+  // Log when placing new order despite stuck 'ready' order (recovery mode)
+  if (stuckReadyOrder) {
+    ActivityLog.warning(
+      phase,
+      'order',
+      `placing new order despite stuck ready order ${stuckReadyOrder.id} (age: ${phase - stuckReadyOrder.created} phases) - attempting recovery`,
+      buyerOrg.id,
+      buyerOrg.name
+    );
   }
 
   // Find orgs that have wholesale locations AND produce the needed good
@@ -315,6 +346,7 @@ export function tryPlaceGoodsOrder(
 /**
  * Process goods orders - check if wholesaler has produced the goods
  * When ready, mark order as ready and create a logistics delivery order
+ * PHASE 3: Payment now occurs at fulfillment (not delivery)
  * Returns updated orders array and any new logistics orders created
  */
 export function processGoodsOrders(
@@ -323,10 +355,13 @@ export function processGoodsOrders(
   orgs: Organization[],
   economyConfig: EconomyConfig,
   logisticsConfig: LogisticsConfig,
-  phase: number
-): { orders: Order[]; newLogisticsOrders: Order[] } {
+  phase: number,
+  context: SimulationContext
+): { orders: Order[]; orgs: Organization[]; locations: Location[]; newLogisticsOrders: Order[] } {
   const updatedOrders: Order[] = [];
   const newLogisticsOrders: Order[] = [];
+  let updatedOrgs = [...orgs];
+  let updatedLocations = [...locations];
 
   for (const order of orders) {
     // Only process goods orders that are pending
@@ -398,10 +433,62 @@ export function processGoodsOrders(
         continue;
       }
 
-      // Order is ready! Assign pickup location and create logistics order
+      // PHASE 3: Complete payment at fulfillment (not delivery)
+      // Transfer credits from buyer to seller NOW
+      const buyerOrg = updatedOrgs.find(o => o.id === order.buyer);
+      const totalPrice = order.totalPrice ?? 0;
+
+      if (!buyerOrg) {
+        // Buyer org no longer exists - cancel order
+        updatedOrders.push({
+          ...order,
+          status: 'cancelled',
+          fulfilled: phase,
+        });
+        continue;
+      }
+
+      if (buyerOrg.wallet.credits < totalPrice) {
+        // Can't afford - keep pending, will retry next phase
+        ActivityLog.warning(
+          phase,
+          'order',
+          `${buyerOrg.name} cannot afford order ${order.id} (${buyerOrg.wallet.credits}/${totalPrice} credits) - keeping pending`,
+          buyerOrg.id,
+          buyerOrg.name
+        );
+        updatedOrders.push(order);
+        continue;
+      }
+
+      // Transfer credits
+      const updatedBuyerOrg: Organization = {
+        ...buyerOrg,
+        wallet: {
+          ...buyerOrg.wallet,
+          credits: buyerOrg.wallet.credits - totalPrice,
+        },
+      };
+
+      const updatedSellerOrg: Organization = {
+        ...sellerOrg,
+        wallet: {
+          ...sellerOrg.wallet,
+          credits: sellerOrg.wallet.credits + totalPrice,
+        },
+      };
+
+      updatedOrgs = updatedOrgs.map(o => {
+        if (o.id === buyerOrg.id) return updatedBuyerOrg;
+        if (o.id === sellerOrg.id) return updatedSellerOrg;
+        return o;
+      });
+
+      // Order is fulfilled! Mark as ready and assign pickup location
+      // Payment happens now, goods will arrive via logistics delivery
       const updatedOrder: Order = {
         ...order,
-        status: 'ready',
+        status: 'ready', // Ready for logistics pickup (goods pending delivery)
         pickupLocation: pickupLoc.id, // Seller assigns pickup location
       };
 
@@ -433,26 +520,30 @@ export function processGoodsOrders(
       ActivityLog.info(
         phase,
         'order',
-        `${sellerOrg.name} fulfilled order ${order.id} - shipping ${quantity} ${goodType} from ${pickupLoc.name}`,
+        `${sellerOrg.name} fulfilled order ${order.id} - ${buyerOrg.name} paid ${totalPrice} credits, shipping ${quantity} ${goodType} from ${pickupLoc.name}`,
         order.seller,
         sellerOrg.name
       );
 
+      // Record wholesale sale in metrics (at fulfillment)
+      recordWholesaleSale(context.metrics, goodType);
+
       updatedOrders.push(updatedOrder);
       newLogisticsOrders.push(logisticsOrder);
-    } else {
+    } else{
       // Not ready yet - seller doesn't have stock in any single location
       // Keep pending (Option 2: wait for consolidation)
       updatedOrders.push(order);
     }
   }
 
-  return { orders: updatedOrders, newLogisticsOrders };
+  return { orders: updatedOrders, orgs: updatedOrgs, locations: updatedLocations, newLogisticsOrders };
 }
 
 /**
  * Complete a goods order - transfer credits from buyer to seller
- * Called when the logistics delivery for a goods order completes
+ * PHASE 3: Now a no-op since payment happens at fulfillment (not delivery)
+ * Kept for backward compatibility with legacy deliveries
  */
 export function completeGoodsOrder(
   logisticsOrder: Order,
@@ -471,6 +562,31 @@ export function completeGoodsOrder(
   const goodsOrder = allOrders.find(o => o.id === goodsOrderId);
   if (!goodsOrder || goodsOrder.orderType !== 'goods') {
     // Parent order not found or wrong type
+    return { orders: allOrders, orgs };
+  }
+
+  // PHASE 3: If order is 'ready', payment already happened at fulfillment
+  // Now mark it as 'delivered' since goods have physically arrived
+  if (goodsOrder.status === 'ready') {
+    const updatedOrders = allOrders.map(o =>
+      o.id === goodsOrder.id
+        ? { ...o, status: 'delivered' as const, fulfilled: phase }
+        : o
+    );
+
+    ActivityLog.info(
+      phase,
+      'order',
+      `goods order ${goodsOrder.id} delivered (payment already completed at fulfillment)`,
+      goodsOrder.buyer,
+      'SupplyChain'
+    );
+
+    return { orders: updatedOrders, orgs };
+  }
+
+  // If already delivered, nothing to do
+  if (goodsOrder.status === 'delivered') {
     return { orders: allOrders, orgs };
   }
 

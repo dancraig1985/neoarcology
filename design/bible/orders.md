@@ -37,9 +37,10 @@ interface Order {
 
 **Lifecycle**:
 1. **Pending**: Retail shop needs stock → places order
-2. **Ready**: Wholesaler has produced enough goods to fulfill
-3. **In Transit**: Logistics order created, trucker delivering
-4. **Delivered**: Goods arrived, credits transferred
+2. **Ready**: Wholesaler has produced enough goods to fulfill, **buyer pays seller immediately**, logistics order created
+3. **In Transit**: Logistics order executing, trucker delivering
+4. **Delivered**: Goods physically arrived at shop
+5. **Failed**: Logistics delivery failed (driver died, timeout, etc.) - order marked failed, buyer loses money but can place new order
 
 **Example**: Grocery store orders 30 provisions from factory.
 
@@ -102,10 +103,19 @@ orderQuantity = min(desiredAmount, affordableAmount)
 
 1. **Check wholesaler stock**: Does pickup location have enough inventory?
 2. **If yes → Mark as READY**:
+   - **Transfer credits**: Buyer org → Seller org (payment happens NOW, not at delivery)
    - Update order status to 'ready'
+   - Assign pickup location (warehouse or factory with stock)
    - Create logistics order (see below)
-   - Log: "goods order X ready - created logistics order for delivery"
+   - Track wholesale sale in metrics
+   - Log: "SellerOrg fulfilled order X - BuyerOrg paid Y credits, shipping Z goods from PickupLocation"
 3. **If no → Keep PENDING**: Wait for more production
+
+**Critical Design Decision**: Payment happens at fulfillment, NOT at delivery. This means:
+- Buyer pays when goods are ready to ship (not when they arrive)
+- If logistics fails, buyer loses money but can place a new order
+- More realistic business model (payment on shipment vs payment on delivery)
+- Prevents logistics failures from blocking shop operations
 
 **Automatic Logistics Order Creation**:
 
@@ -151,28 +161,71 @@ payment = max(10, totalGoods * 1 + distance * 0.5)
 
 **Trigger**: When a logistics order with a `parentOrderId` is marked 'delivered', `completeGoodsOrder` is called.
 
-**Process** (from EconomySystem.ts):
+**Process** (from SupplyChainSystem.ts):
 
 1. **Find parent goods order**: Using `parentOrderId`
-2. **Transfer credits**: buyer org → seller org (total price of goods, NOT delivery fee)
-3. **Mark goods order as 'delivered'**: Status update, set `fulfilled` phase
-4. **Log**: "goods order X completed - BuyerOrg paid Y credits to SellerOrg"
-5. **Track metrics**: `trackWholesaleSale(good)`
+2. **Mark goods order as 'delivered'**: Status update, set `fulfilled` phase
+3. **Log**: "goods order X completed - goods physically delivered"
 
-**Note**: The inventory transfer happened during logistics execution (load/unload steps). This function only handles the payment and status update.
+**Note**:
+- Payment ALREADY happened when order became 'ready' (see Order Fulfillment above)
+- Inventory transfer happens during logistics execution (load/unload steps)
+- This function only updates the status to track physical delivery completion
+
+## Logistics Order Failure Handling
+
+**Critical Behavior**: When a logistics order fails, the parent goods order MUST also fail to prevent orphaned orders.
+
+**Common Failure Scenarios**:
+- Driver dies mid-delivery (hunger, fatigue)
+- Vehicle becomes unavailable
+- Location/building deleted
+- Delivery timeout (stuck for >20 phases)
+
+**Cascading Failure Process** (from DeliverySystem.ts):
+
+1. **Logistics order fails**: Driver executor or coordinator detects failure
+2. **Call `failDeliveryWithParent()`**: Fails both logistics AND parent goods order
+3. **Both marked 'failed'**: Status updated, `fulfilled` phase set
+4. **Shop recovery**: After 50 phases, shop can place new order (duplicate prevention timeout)
+5. **Log**: "failing parent goods order X due to logistics failure: {reason}"
+
+**Why This Matters**:
+- Prevents goods orders from being stuck in 'ready' forever
+- Allows shops to recover from logistics failures
+- Buyer loses money (paid at fulfillment) but can reorder
+- Maintains economic flow despite logistics issues
+
+**Implementation**:
+- All failure paths in `behaviors/executors/index.ts` use `failDeliveryWithParent()`
+- Coordinator cleanup (every 10 ticks) validates state and fails stuck deliveries
+- Duplicate order prevention allows new orders after 50-phase timeout
 
 ## Order Lifecycle Summary
 
-### Goods Order Full Cycle:
+### Goods Order Full Cycle (Happy Path):
 ```
 Retail shop low on stock
   → placeGoodsOrder (status: pending)
     → Wholesaler produces goods
-      → processGoodsOrders (status: ready)
+      → processGoodsOrders (status: ready, CREDITS TRANSFERRED NOW)
         → Auto-create logistics order
           → Driver executes delivery
             → completeDelivery (logistics order: delivered)
-              → completeGoodsOrder (goods order: delivered, credits transferred)
+              → completeGoodsOrder (goods order: delivered)
+```
+
+### Goods Order Failure Path:
+```
+Retail shop low on stock
+  → placeGoodsOrder (status: pending)
+    → Wholesaler produces goods
+      → processGoodsOrders (status: ready, CREDITS TRANSFERRED NOW)
+        → Auto-create logistics order
+          → Driver claims delivery
+            → Driver dies / vehicle lost / timeout
+              → failDeliveryWithParent (BOTH orders: failed)
+                → Shop waits 50 phases, then can place new order
 ```
 
 ### Logistics Order Full Cycle:
@@ -187,23 +240,29 @@ Delivery requested (goods order ready, OR factory warehouse transfer)
               → If parentOrderId exists: completeGoodsOrder
 ```
 
-## Parallel Systems (Transition Phase)
+## Order System Evolution
 
-**Current State**: The simulation runs BOTH systems in parallel during Phase 2 testing:
+**Phase 1** (Pre-PLAN-028): Instant teleportation
+- Goods and credits transferred instantly
+- No realistic logistics or time delays
 
-1. **Instant Restocking** (`tryRestockFromWholesale`):
-   - Still runs every phase
-   - Instant inventory + credit transfer
-   - Used when shops are critically low on stock
+**Phase 2** (PLAN-028): Realistic logistics with instant fallback
+- Order-based system introduced
+- Instant restocking kept as safety net
+- Parallel systems during testing
 
-2. **Goods Orders** (`tryPlaceGoodsOrder`):
-   - Runs every phase
-   - Creates Order entities
-   - Realistic multi-phase fulfillment
+**Phase 3** (Current): Order-based only
+- Removed instant restocking
+- All commerce uses order system
+- Payment at fulfillment (not delivery)
+- Failure cascade prevents orphaned orders
+- 50-phase timeout allows recovery from logistics failures
 
-**Why**: Ensures economy stability while testing the new system.
-
-**Future (Phase 3)**: Gradually reduce instant restocking frequency, eventually disable for all but emergency hunger cases (hunger > 80%).
+**Key Improvements in Phase 3**:
+- Shops can recover from failed deliveries (no permanent deadlock)
+- Payment timing prevents logistics from blocking shop operations
+- Warehouse system accumulates buffer stock
+- Factory production continuous (not order-driven)
 
 ## Data Locations
 
@@ -222,10 +281,11 @@ SimulationState {
 
 **Code**:
 - `src/types/entities.ts`: Order interface definition
-- `src/simulation/systems/EconomySystem.ts`: Goods order placement, fulfillment, completion
-- `src/simulation/systems/DeliverySystem.ts`: Logistics order creation, management
-- `src/simulation/behaviors/executors/index.ts`: `executeDeliverGoodsBehavior` (logistics execution)
-- `src/simulation/Simulation.ts`: Tick loop integration (goods order processing)
+- `src/simulation/systems/SupplyChainSystem.ts`: Goods order placement (`tryPlaceGoodsOrder`), fulfillment (`processGoodsOrders`), completion
+- `src/simulation/systems/DeliverySystem.ts`: Logistics order creation, `failDelivery()`, `failDeliveryWithParent()`
+- `src/simulation/systems/DeliveryCoordinator.ts`: Centralized delivery state management, cleanup, stuck delivery detection
+- `src/simulation/behaviors/executors/index.ts`: `executeDeliverGoodsBehavior` (logistics execution with failure handling)
+- `src/simulation/Simulation.ts`: Tick loop integration (goods order processing, coordinator cleanup every 10 ticks)
 
 **UI**:
 - Orders tab in Nav panel
@@ -270,11 +330,11 @@ SimulationState {
 | **pending** | Order placed, awaiting fulfillment | Seller produces goods (goods order) or driver assigns (logistics) |
 | **assigned** | Driver claimed logistics order | Driver boards truck, travels to pickup |
 | **in_production** | (Future) Seller actively producing to fulfill | Production completes → 'ready' |
-| **ready** | Goods produced, awaiting pickup/delivery | Create logistics order |
+| **ready** | Goods produced, **buyer paid seller**, awaiting delivery | Create logistics order, driver picks up |
 | **in_transit** | Driver traveling with cargo | Driver completes delivery |
-| **delivered** | Successfully completed | Credits transfer, order archived |
-| **cancelled** | Order cancelled before completion | Usually due to buyer/seller org dissolved |
-| **failed** | Order failed during execution | Driver died, locations deleted, etc. |
+| **delivered** | Successfully completed | Goods physically arrived, order archived |
+| **cancelled** | Order cancelled before completion | Usually due to buyer/seller org dissolved before payment |
+| **failed** | Order failed during execution | **Logistics failed** - buyer paid but goods never arrived. Parent goods order also failed. Buyer can place new order after 50-phase timeout. |
 
 ## Future Enhancements (Not Yet Implemented)
 

@@ -23,7 +23,8 @@ import { processOrgBehaviors } from './systems/OrgBehaviorSystem';
 import { cleanupDeadEmployees, cleanupDeadResidents } from './systems/LocationSystem';
 import { checkImmigration } from './systems/ImmigrationSystem';
 import { processVehicleTravel, cleanupAllVehicles } from './systems/VehicleSystem';
-import { cleanupOldDeliveries, cleanupOrphanedDeliveries, cancelStaleGoodsOrders } from './systems/DeliverySystem';
+import { cleanupOldDeliveries, cancelStaleGoodsOrders } from './systems/DeliverySystem';
+import { tickCleanup as coordinatorTickCleanup } from './systems/DeliveryCoordinator';
 import { generateCity } from '../generation/CityGenerator';
 import { createMetrics, takeSnapshot, startNewWeek, type SimulationMetrics, type MetricsSnapshot } from './Metrics';
 import { InvariantChecker } from './validation/InvariantChecker';
@@ -213,13 +214,20 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   // 2e. Clean up old completed/failed delivery requests (keep for ~10 weeks)
   let updatedDeliveryRequests = cleanupOldDeliveries(state.deliveryRequests, newTime.currentPhase);
 
-  // 2f. Fail orphaned in_transit/assigned logistics orders (dead driver, missing vehicle, timeout)
-  updatedDeliveryRequests = cleanupOrphanedDeliveries(
-    updatedDeliveryRequests,
-    updatedAgents,
-    updatedVehicles,
-    newTime.currentPhase
-  );
+  // 2f. Coordinator-based cleanup (every 10 ticks) - detects stuck deliveries, validates state, releases resources
+  if (newTime.currentPhase % 10 === 0) {
+    const coordinatorResult = coordinatorTickCleanup(
+      updatedAgents,
+      updatedDeliveryRequests,
+      updatedVehicles,
+      updatedLocations,
+      newTime.currentPhase,
+      20 // 20-phase timeout for stuck deliveries
+    );
+    updatedAgents = coordinatorResult.agents;
+    updatedDeliveryRequests = coordinatorResult.orders;
+    updatedVehicles = coordinatorResult.vehicles;
+  }
 
   // 2g. Cancel stale pending goods orders (seller can't fulfill after 10 weeks)
   updatedDeliveryRequests = cancelStaleGoodsOrders(updatedDeliveryRequests, newTime.currentPhase);
@@ -286,15 +294,19 @@ export function tick(state: SimulationState, config: LoadedConfig): SimulationSt
   updatedDeliveryRequests = [...updatedDeliveryRequests, ...newGoodsOrders];
 
   // Process goods orders: check if ready and create logistics orders for delivery
+  // PHASE 3: Now also handles payment at fulfillment
   const goodsOrderResult = processGoodsOrders(
     updatedDeliveryRequests,
     updatedLocations,
     updatedOrgs,
     config.economy,
     config.logistics,
-    newTime.currentPhase
+    newTime.currentPhase,
+    context
   );
   updatedDeliveryRequests = goodsOrderResult.orders;
+  updatedOrgs = goodsOrderResult.orgs; // PHASE 3: Update orgs after payment
+  updatedLocations = goodsOrderResult.locations; // Update locations after goods transfer
   // Add new logistics orders created from ready goods orders
   updatedDeliveryRequests = [...updatedDeliveryRequests, ...goodsOrderResult.newLogisticsOrders];
 
